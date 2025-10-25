@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import nbformat as nbf
 from datetime import datetime
+from csfl_simulator.core.utils import ROOT
 
 
 def export_config_to_ipynb(config: dict, method_code: str, output_path: Path):
@@ -200,6 +201,9 @@ plt.plot([m['round'] for m in metrics],[m['accuracy'] for m in metrics], marker=
 plt.xlabel('Round'); plt.ylabel('Accuracy'); plt.title('FL Accuracy'); plt.grid(True)
 plt.show()
 """))
+    # Ensure output path is under project artifacts/exports when relative
+    if not output_path.is_absolute():
+        output_path = (ROOT / "artifacts" / "exports" / output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     nbf.write(nb, str(output_path))
     return str(output_path)

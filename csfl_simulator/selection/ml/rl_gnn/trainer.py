@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import asdict
 import torch
+from csfl_simulator.core.utils import ROOT
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
 from . import policy as pol
@@ -41,7 +42,7 @@ def train_policy(sim_cfg: SimConfig, episodes: int = 3, device: str = 'cpu') -> 
         loss.backward()
         optimizer.step()
         # Save checkpoint
-        out_dir = Path("CSFL-simulator") / "artifacts" / "checkpoints" / "ml.rl_gnn" / res["run_id"]
+        out_dir = ROOT / "artifacts" / "checkpoints" / "ml.rl_gnn" / res["run_id"]
         out_dir.mkdir(parents=True, exist_ok=True)
         ckpt_path = out_dir / "policy.pt"
         pol.save_checkpoint(str(ckpt_path))

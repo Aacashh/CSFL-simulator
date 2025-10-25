@@ -2,6 +2,7 @@ import streamlit as st
 from dataclasses import asdict
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
+from csfl_simulator.core.utils import ROOT
 
 st.set_page_config(page_title="CSFL Simulator", layout="wide")
 
@@ -27,7 +28,7 @@ with setup_tab:
         try:
             # quick validation
             compiled_code = compile(code, "<custom>", "exec")
-            module_file, presets_file = save_custom_method(Path("CSFL-simulator").resolve(), key_name, code)
+            module_file, presets_file = save_custom_method(ROOT, key_name, code)
             st.success(f"Saved custom method to {module_file} and registered in {presets_file}.")
         except Exception as e:
             st.error(f"Failed to save: {e}")
@@ -50,6 +51,18 @@ with st.sidebar:
     device_choice = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
     seed = st.number_input("Seed", 0, 10_000, 42)
     fast_mode = st.checkbox("Fast mode (few batches)", True)
+    pretrained = st.checkbox("Load pretrained (if available)", False)
+
+    with st.expander("Advanced (System & Privacy)"):
+        time_budget = st.number_input("Round time budget (seconds, 0=none)", 0.0, 1000000.0, 0.0, format="%.2f")
+        dp_sigma = st.number_input("DP Gaussian noise sigma (per-parameter)", 0.0, 10.0, 0.0, format="%.4f")
+        dp_eps = st.number_input("DP epsilon consumed per selection", 0.0, 100.0, 0.0, format="%.3f")
+        st.caption("Composite reward weights (optimization target)")
+        colw1, colw2, colw3, colw4 = st.columns(4)
+        w_acc = colw1.slider("w_acc", 0.0, 1.0, 0.6, 0.05)
+        w_time = colw2.slider("w_time", 0.0, 1.0, 0.2, 0.05)
+        w_fair = colw3.slider("w_fair", 0.0, 1.0, 0.1, 0.05)
+        w_dp = colw4.slider("w_dp", 0.0, 1.0, 0.1, 0.05)
 
     # Load methods dynamically
     from csfl_simulator.selection.registry import MethodRegistry
@@ -75,6 +88,14 @@ if init_btn:
         device=device_choice,
         seed=int(seed),
         fast_mode=fast_mode,
+        pretrained=pretrained,
+        time_budget=(float(time_budget) if 'time_budget' in locals() and time_budget > 0 else None),
+        dp_sigma=float(dp_sigma) if 'dp_sigma' in locals() else 0.0,
+        dp_epsilon_per_round=float(dp_eps) if 'dp_eps' in locals() else 0.0,
+        reward_weights={"acc": float(w_acc) if 'w_acc' in locals() else 0.6,
+                        "time": float(w_time) if 'w_time' in locals() else 0.2,
+                        "fair": float(w_fair) if 'w_fair' in locals() else 0.1,
+                        "dp": float(w_dp) if 'w_dp' in locals() else 0.1},
     )
     sim = FLSimulator(cfg)
     st.session_state.simulator = sim
@@ -132,8 +153,11 @@ with run_tab:
             st.write("Metrics (per round):")
             st.dataframe(res["metrics"]) 
             # Plots
-            from csfl_simulator.app.components.plots import plot_accuracy, plot_participation, plot_selection_heatmap, plot_dp_usage
+            from csfl_simulator.app.components.plots import plot_accuracy, plot_participation, plot_selection_heatmap, plot_dp_usage, plot_round_time, plot_fairness, plot_composite
             st.plotly_chart(plot_accuracy(res["metrics"]), use_container_width=True)
+            st.plotly_chart(plot_round_time(res["metrics"]), use_container_width=True)
+            st.plotly_chart(plot_fairness(res["metrics"]), use_container_width=True)
+            st.plotly_chart(plot_composite(res["metrics"]), use_container_width=True)
             # Build a lightweight client snapshot for plotting
             # Note: in this session, we use the simulator's current clients
             sim = st.session_state.simulator
@@ -154,21 +178,34 @@ with compare_tab:
         if go and picks:
             import plotly.graph_objects as gofig
             fig = gofig.Figure()
+            fig2 = gofig.Figure()
             for mkey in picks:
                 all_acc = []
+                all_comp = []
                 for r in range(int(repeats)):
                     sim = FLSimulator(SimConfig(**st.session_state.simulator.cfg.__dict__))
                     res = sim.run(mkey)
                     acc = [row["accuracy"] for row in res["metrics"]]
+                    comp = [row.get("composite", 0.0) for row in res["metrics"]]
                     all_acc.append(acc)
+                    all_comp.append(comp)
                 # pad to same length
                 maxlen = max(len(a) for a in all_acc)
                 for a in all_acc:
                     if len(a) < maxlen:
                         a.extend([a[-1]]*(maxlen-len(a)))
+                maxlen2 = max(len(a) for a in all_comp)
+                for a in all_comp:
+                    if len(a) < maxlen2 and len(a) > 0:
+                        a.extend([a[-1]]*(maxlen2-len(a)))
                 mean = [sum(x)/len(x) for x in zip(*all_acc)]
+                mean2 = [sum(x)/len(x) for x in zip(*all_comp)] if all_comp and all_comp[0] else []
                 fig.add_trace(gofig.Scatter(y=mean, mode='lines', name=mkey))
+                if mean2:
+                    fig2.add_trace(gofig.Scatter(y=mean2, mode='lines', name=mkey))
             st.plotly_chart(fig, use_container_width=True)
+            if len(fig2.data) > 0:
+                st.plotly_chart(fig2, use_container_width=True)
 
 with export_tab:
     st.subheader("Export to Notebook")
@@ -195,7 +232,7 @@ with export_tab:
         if st.button("Generate Notebook"):
             cfg = asdict(st.session_state.simulator.cfg)
             from pathlib import Path
-            out_dir = Path("CSFL-simulator").resolve() / "artifacts" / "exports"
+            out_dir = ROOT / "artifacts" / "exports"
             out_path = out_dir / f"export_{st.session_state.simulator.run_id}.ipynb"
             p = export_config_to_ipynb(cfg, code, out_path)
             st.success(f"Exported: {p}")

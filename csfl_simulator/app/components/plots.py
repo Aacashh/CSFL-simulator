@@ -124,3 +124,42 @@ def plot_dp_usage(clients):
     fig = go.Figure(data=[go.Bar(x=x, y=y)])
     fig.update_layout(title="Cumulative DP epsilon used per Client", xaxis_title="Client ID", yaxis_title="Sigma epsilon", template="plotly_white")
     return fig
+
+
+def plot_round_time(metrics):
+    ys = []
+    xs = []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("round_time", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='round_time'))
+    fig.update_layout(title="Estimated Round Time", xaxis_title="Round", yaxis_title="Time (a.u.)", template="plotly_white")
+    return fig
+
+
+def plot_fairness(metrics):
+    ys = []
+    xs = []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("fairness_var", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='fairness_var'))
+    fig.update_layout(title="Participation Fairness (variance)", xaxis_title="Round", yaxis_title="Variance", template="plotly_white")
+    return fig
+
+
+def plot_composite(metrics):
+    ys = []
+    xs = []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("composite", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='composite'))
+    fig.update_layout(title="Composite Score per Round", xaxis_title="Round", yaxis_title="Composite", template="plotly_white")
+    return fig

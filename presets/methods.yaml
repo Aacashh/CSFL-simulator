@@ -131,3 +131,21 @@ methods:
     params: {max_history: 5000, alpha: 0.0001, learning_rate: optimal}
     type: ml
     trainable: false
+  - key: ml.neural_linear_ucb
+    module: csfl_simulator.selection.ml.neural_linear_ucb
+    display_name: "NeuralLinear-UCB (tiny MLP + Bayesian head)"
+    params: {rep_dim: 32, alpha_ucb: 0.5, lr: 0.001}
+    type: ml
+    trainable: true
+  - key: ml.deepset_ranker
+    module: csfl_simulator.selection.ml.deepset_ranker
+    display_name: "DeepSets Ranker (permutation-invariant)"
+    params: {rep_dim: 32, lr: 0.001, fairness_alpha: 0.2, time_alpha: 0.2}
+    type: ml
+    trainable: true
+  - key: ml.rankformer_tiny
+    module: csfl_simulator.selection.ml.rankformer_tiny
+    display_name: "RankFormer-Tiny (1-layer Transformer)"
+    params: {d_model: 32, nhead: 2, layers: 1, lr: 0.001, exploration_dropout: 0.1}
+    type: ml
+    trainable: true

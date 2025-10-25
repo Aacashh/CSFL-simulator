@@ -1,0 +1,99 @@
+###############################
+# Python
+###############################
+__pycache__/
+*.py[cod]
+*$py.class
+
+###############################
+# Build / packaging
+###############################
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+wheels/
+parts/
+sdist/
+var/
+lib/
+lib64/
+pip-wheel-metadata/
+*.egg-info/
+*.egg
+MANIFEST
+
+###############################
+# Virtual environments / tools
+###############################
+.venv/
+venv/
+env/
+ENV/
+.conda/
+.python-version
+
+###############################
+# Tests / coverage / linters
+###############################
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pylint.d/
+.coverage
+.coverage.*
+.cache/
+coverage.xml
+nosetests.xml
+*.cover
+*.py,cover
+
+###############################
+# Jupyter
+###############################
+.ipynb_checkpoints/
+
+###############################
+# Streamlit
+###############################
+.streamlit/secrets.toml
+
+###############################
+# Project artifacts & data
+###############################
+artifacts/
+data/
+!data/.gitkeep
+
+###############################
+# Logs
+###############################
+logs/
+*.log
+
+###############################
+# Model checkpoints / weights
+###############################
+*.pt
+*.pth
+*.ckpt
+
+###############################
+# Editors / OS files
+###############################
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+###############################
+# Env files
+###############################
+.env
+.env.*
+.envrc
+

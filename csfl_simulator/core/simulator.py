@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Any, Tuple
+from dataclasses import dataclass, asdict, field
+from typing import Dict, List, Any, Tuple, Optional
 import random
 import time
 
@@ -36,6 +36,10 @@ class SimConfig:
     seed: int = 42
     fast_mode: bool = True
     pretrained: bool = False
+    time_budget: Optional[float] = None
+    dp_sigma: float = 0.0
+    dp_epsilon_per_round: float = 0.0
+    reward_weights: Dict[str, float] = field(default_factory=lambda: {"acc": 0.6, "time": 0.2, "fair": 0.1, "dp": 0.1})
 
 
 class FLSimulator:
@@ -109,10 +113,10 @@ class FLSimulator:
         save_json({"config": asdict(self.cfg), "device": self.device}, self.run_dir / "config.json")
 
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
+        import copy
         loader = self.client_loaders[cid]
-        model = type(self.model)() if hasattr(self.model, '__class__') else self.model
-        model = get_model(self.cfg.model, self.cfg.dataset, self.model.fc.out_features if hasattr(self.model, 'fc') else 10, device=self.device)
-        model.load_state_dict(self.model.state_dict())
+        # Deep-copy the current global model to preserve architecture/num_classes
+        model = copy.deepcopy(self.model).to(self.device)
         model.train()
         opt = optim.SGD(model.parameters(), lr=self.cfg.lr)
         last_loss = 0.0
@@ -142,6 +146,8 @@ class FLSimulator:
         base = eval_model(self.model, self.test_loader, self.device)
         base["round"] = -1
         metrics.append(base)
+        # Composite reward initialization
+        prev_composite = 0.0
         prev_acc = base["accuracy"]
         stopped_early = False
         for rnd in range(self.cfg.rounds):
@@ -150,8 +156,17 @@ class FLSimulator:
                 break
             simulate_round_env(self.clients, {}, rnd)
             # Selection
-            selector = self.registry.get(method_key)
-            ids, scores, state = selector(rnd, self.cfg.clients_per_round, self.clients, self.history, random, None, self.device)
+            # Pass time_budget to selector and preset params via registry
+            ids, scores, state = self.registry.invoke(
+                method_key,
+                rnd,
+                self.cfg.clients_per_round,
+                self.clients,
+                self.history,
+                random,
+                self.cfg.time_budget,
+                self.device,
+            )
             self.history["selected"].append(ids)
             # Update recency info on clients
             for cid in ids:
@@ -168,23 +183,71 @@ class FLSimulator:
                 self.clients[cid].last_loss = loss
                 self.clients[cid].grad_norm = gnorm
                 self.clients[cid].participation_count += 1
+                # Apply DP accounting per client
+                if self.cfg.dp_epsilon_per_round and self.cfg.dp_epsilon_per_round > 0:
+                    try:
+                        from . import dp as _dp
+                        _dp.consume_epsilon(self.clients[cid], float(self.cfg.dp_epsilon_per_round))
+                    except Exception:
+                        pass
                 updates.append(sd)
                 weights.append(n)
             # Aggregate
             if updates:
+                # Optional DP noise before aggregation
+                if self.cfg.dp_sigma and self.cfg.dp_sigma > 0:
+                    try:
+                        from .dp import apply_gaussian_noise as _dp_noise
+                        noisy_updates = []
+                        for sd in updates:
+                            nsd = {k: _dp_noise(v, float(self.cfg.dp_sigma)) if hasattr(v, 'shape') else v for k, v in sd.items()}
+                            noisy_updates.append(nsd)
+                        updates = noisy_updates
+                    except Exception:
+                        pass
                 new_sd = fedavg(updates, weights)
                 self.model.load_state_dict(new_sd)
             # Evaluate
             m = eval_model(self.model, self.test_loader, self.device)
             m["round"] = rnd
-            # Reward = accuracy improvement
-            reward = m["accuracy"] - prev_acc
+            # Measure round time proxy (number of local batches approximated by data size/speed)
+            round_time = sum(float(getattr(self.clients[cid], 'estimated_duration', 0.0) or 0.0) for cid in ids)
+            # Fairness: participation variance
+            try:
+                import numpy as _np
+                parts = _np.array([float(c.participation_count or 0.0) for c in self.clients], dtype=float)
+                fairness_var = float(_np.var(parts))
+            except Exception:
+                fairness_var = 0.0
+            # DP usage avg
+            dp_used_avg = float(sum(float(getattr(c, 'dp_epsilon_used', 0.0) or 0.0) for c in self.clients) / max(1, len(self.clients)))
+            # Composite metric per config weights
+            w = self.cfg.reward_weights or {"acc": 1.0}
+            acc_score = float(m.get("accuracy", 0.0))
+            time_score = 1.0 - (round_time / (round_time + 1.0))
+            fair_score = 1.0 - (fairness_var / (fairness_var + 1.0))
+            dp_score = 1.0 - (dp_used_avg / (dp_used_avg + 1.0))
+            composite = (
+                float(w.get("acc", 0.6)) * acc_score +
+                float(w.get("time", 0.2)) * time_score +
+                float(w.get("fair", 0.1)) * fair_score +
+                float(w.get("dp", 0.1)) * dp_score
+            )
+            # Reward = composite improvement
+            reward = composite - prev_composite
             self.history["state"]["last_reward"] = reward
+            prev_acc = m["accuracy"]
+            prev_composite = composite
+            # Log metrics
+            m["round_time"] = round_time
+            m["fairness_var"] = fairness_var
+            m["dp_used_avg"] = dp_used_avg
+            m["composite"] = composite
             prev_acc = m["accuracy"]
             metrics.append(m)
             if on_progress:
                 try:
-                    on_progress(rnd, {"accuracy": m["accuracy"], "metrics": m, "selected": ids, "reward": reward})
+                    on_progress(rnd, {"accuracy": m["accuracy"], "metrics": m, "selected": ids, "reward": reward, "composite": composite})
                 except Exception:
                     pass
         # Save metrics
