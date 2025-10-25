@@ -1,0 +1,16 @@
+defaults:
+  root: data
+
+datasets:
+  - name: MNIST
+    batch_size: 64
+    num_classes: 10
+  - name: Fashion-MNIST
+    batch_size: 64
+    num_classes: 10
+  - name: CIFAR-10
+    batch_size: 128
+    num_classes: 10
+  - name: CIFAR-100
+    batch_size: 128
+    num_classes: 100

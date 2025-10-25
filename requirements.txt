@@ -1,0 +1,17 @@
+streamlit
+streamlit-ace
+torch
+torchvision
+numpy
+pandas
+scikit-learn
+matplotlib
+plotly
+seaborn
+nbformat
+nbclient
+pyyaml
+rich
+tqdm
+networkx
+thop

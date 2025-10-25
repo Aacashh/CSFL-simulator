@@ -1,0 +1,7 @@
+models:
+  - name: CNN-MNIST
+    datasets: [MNIST, Fashion-MNIST]
+  - name: LightCNN
+    datasets: [CIFAR-10, CIFAR-100]
+  - name: ResNet18
+    datasets: [CIFAR-10, CIFAR-100]

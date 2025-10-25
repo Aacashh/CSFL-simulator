@@ -1,0 +1,31 @@
+from typing import List, Dict, Optional, Tuple
+import random
+from csfl_simulator.core.client import ClientInfo
+
+STATE = "bandit_epsg"
+
+
+def select_clients(round_idx: int, K: int, clients: List[ClientInfo], history: Dict, rng,
+                   time_budget=None, device=None) -> Tuple[List[int], Optional[List[float]], Optional[Dict]]:
+    st = history.get("state", {}).get(STATE, {"N": {}, "Q": {}, "epsilon": 0.1})
+    # Update with last reward
+    reward = history.get("state", {}).get("last_reward", 0.0)
+    last_sel = history.get("selected", [])[-1] if history.get("selected") else []
+    for cid in last_sel:
+        n = st["N"].get(cid, 0) + 1
+        q = st["Q"].get(cid, 0.0)
+        # incremental update
+        q = q + (reward - q) / n
+        st["N"][cid] = n
+        st["Q"][cid] = q
+    # Selection
+    eps = st.get("epsilon", 0.1)
+    ids = [c.id for c in clients]
+    if rng.random() < eps:
+        rng.shuffle(ids)
+        sel = ids[:K]
+    else:
+        ranked = sorted(ids, key=lambda cid: st["Q"].get(cid, 0.0), reverse=True)
+        sel = ranked[:K]
+    scores = [st["Q"].get(c.id, 0.0) for c in clients]
+    return sel, scores, {STATE: st}
