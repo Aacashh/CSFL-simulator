@@ -245,6 +245,13 @@ def plot_metric_compare_matplotlib(method_to_series: Dict[str, List[float]], met
     style = _resolve_mpl_style(style_name)
     with plt.style.context(style):
         fig, ax = plt.subplots(figsize=(6, 4))
+        # Force white backgrounds regardless of style to avoid tinted/yellowish hue
+        try:
+            fig.patch.set_alpha(1.0)
+            fig.patch.set_facecolor("white")
+            ax.set_facecolor("white")
+        except Exception:
+            pass
         for name, ys in method_to_series.items():
             xs = list(range(len(ys)))
             ax.plot(xs, ys, label=name)
@@ -262,6 +269,15 @@ def plot_multi_panel_matplotlib(metric_to_series: Dict[str, Dict[str, List[float
     style = _resolve_mpl_style(style_name)
     with plt.style.context(style):
         fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+        # Force white backgrounds for the whole figure and all subplots
+        try:
+            fig.patch.set_alpha(1.0)
+            fig.patch.set_facecolor("white")
+            for row in axes:
+                for ax in (row if isinstance(row, (list, tuple, np.ndarray)) else [row]):
+                    ax.set_facecolor("white")
+        except Exception:
+            pass
         wanted = [m for m in ["Accuracy", "F1", "Precision", "Recall"] if m in metric_to_series] or list(metric_to_series.keys())[:4]
         for idx, metric in enumerate(wanted):
             r, c = divmod(idx, 2)
