@@ -174,3 +174,10 @@ methods:
     params: {d_model: 32, nhead: 2, layers: 1, lr: 0.001, exploration_dropout: 0.1}
     type: ml
     trainable: true
+  - key: baseline.fedavg
+    module: csfl_simulator.selection.baseline.fedavg
+    display_name: "FedAvg"
+    origin: paper
+    params: {fraction: null}
+    type: baseline
+    trainable: false

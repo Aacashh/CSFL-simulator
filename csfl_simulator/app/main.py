@@ -73,6 +73,14 @@ with st.sidebar:
     method_label = st.selectbox("Selection method", label_list, index=default_idx)
     method = reg.key_from_label(method_label)
 
+    # Preselect multiple methods for later comparison runs
+    default_compare_labels = [method_label] if method_label in label_list else (label_list[:1] if label_list else [])
+    compare_labels = st.multiselect("Methods for comparison (preset)", label_list, default=default_compare_labels)
+    st.session_state.compare_methods = [reg.key_from_label(lbl) for lbl in compare_labels]
+    compare_repeats_val = int(st.session_state.get("compare_repeats", 1))
+    compare_repeats = st.number_input("Repeats per method (comparison)", 1, 10, compare_repeats_val)
+    st.session_state.compare_repeats = int(compare_repeats)
+
     init_btn = st.button("Initialize Simulator", use_container_width=True)
 
 if init_btn:
@@ -168,6 +176,106 @@ with run_tab:
             st.plotly_chart(plot_selection_heatmap(sim.history.get("selected", []), sim.cfg.total_clients), use_container_width=True)
             st.plotly_chart(plot_dp_usage(sim.clients), use_container_width=True)
 
+        # Comparison runner using preselected methods
+        with st.expander("Run Selected Methods (Comparison)"):
+            picks_keys = list(st.session_state.get("compare_methods", []) or [])
+            if not picks_keys:
+                st.info("Select methods in the Setup sidebar under 'Methods for comparison'.")
+            else:
+                # Style controls (same as Compare tab)
+                style_col1, style_col2, style_col3 = st.columns([1,1,1])
+                with style_col1:
+                    chart_style2 = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0, key="cmp_style_run")
+                with style_col2:
+                    if chart_style2.startswith("Interactive"):
+                        plotly_templates2 = ["plotly_white", "simple_white", "ggplot2", "seaborn", "presentation"]
+                        template_choice2 = st.selectbox("Plotly template", plotly_templates2, index=0, key="cmp_tmpl_run")
+                    else:
+                        try:
+                            import matplotlib.pyplot as _plt  # type: ignore
+                            mpl_styles2 = list(getattr(_plt.style, 'available', ["classic", "default", "ggplot", "seaborn"]))
+                        except Exception:
+                            mpl_styles2 = ["classic", "default", "ggplot", "seaborn"]
+                        style_choice2 = st.selectbox("Matplotlib style", mpl_styles2, index=0, key="cmp_mpl_run")
+                with style_col3:
+                    show_combined2 = st.checkbox("Show combined 2x2", value=True, key="cmp_combined_run")
+                repeats2 = st.number_input("Repeats per method", 1, 10, int(st.session_state.get("compare_repeats", 1)), key="cmp_repeats_run")
+                go2 = st.button("Run All Selected Methods")
+                if go2:
+                    # Build label map
+                    label_map = labels_map
+                    metric_names = ["accuracy", "f1", "precision", "recall"]
+                    pretty = {"accuracy": "Accuracy", "f1": "F1", "precision": "Precision", "recall": "Recall"}
+                    metric_to_series = {pretty[m]: {} for m in metric_names}
+
+                    base_seed = int(st.session_state.simulator.cfg.seed)
+
+                    # Progress UI
+                    prog2 = st.progress(0)
+                    status2 = st.empty()
+                    total2 = max(1, len(picks_keys) * int(repeats2))
+                    done2 = 0
+
+                    def extract_series(rows, key):
+                        ys = []
+                        for row in rows:
+                            try:
+                                ys.append(float(row.get(key, 0.0) or 0.0))
+                            except Exception:
+                                ys.append(0.0)
+                        return ys
+
+                    for mkey in picks_keys:
+                        per_metric_runs = {m: [] for m in metric_names}
+                        for r in range(int(repeats2)):
+                            cfg = SimConfig(**st.session_state.simulator.cfg.__dict__)
+                            cfg.seed = base_seed + r
+                            sim2 = FLSimulator(cfg)
+                            res2 = sim2.run(mkey)
+                            for m in metric_names:
+                                per_metric_runs[m].append(extract_series(res2["metrics"], m))
+                            done2 += 1
+                            pct2 = int(done2 / total2 * 100)
+                            label2 = next((lbl for lbl, k in label_map.items() if k == mkey), mkey)
+                            status2.write(f"[{done2}/{total2}] {label2} — repeat {r+1}")
+                            prog2.progress(min(100, pct2))
+                        for m in metric_names:
+                            runs = per_metric_runs[m]
+                            if not runs:
+                                continue
+                            maxlen = max(len(a) for a in runs)
+                            padded = []
+                            for a in runs:
+                                if len(a) < maxlen and len(a) > 0:
+                                    a = a + [a[-1]] * (maxlen - len(a))
+                                padded.append(a)
+                            mean = [sum(x) / len(x) for x in zip(*padded)]
+                            label = next((lbl for lbl, k in label_map.items() if k == mkey), mkey)
+                            metric_to_series[pretty[m]][label] = mean
+
+                    if chart_style2.startswith("Interactive"):
+                        from csfl_simulator.app.components.plots import (
+                            plot_metric_compare_plotly,
+                            plot_multi_panel_plotly,
+                        )
+                        for metric_display, series_map in metric_to_series.items():
+                            fig = plot_metric_compare_plotly(series_map, metric_display, template=template_choice2)
+                            st.plotly_chart(fig, use_container_width=True)
+                        if show_combined2:
+                            figc = plot_multi_panel_plotly(metric_to_series, template=template_choice2)
+                            st.plotly_chart(figc, use_container_width=True)
+                    else:
+                        from csfl_simulator.app.components.plots import (
+                            plot_metric_compare_matplotlib,
+                            plot_multi_panel_matplotlib,
+                        )
+                        for metric_display, series_map in metric_to_series.items():
+                            fig = plot_metric_compare_matplotlib(series_map, metric_display, style_name=style_choice2)
+                            st.pyplot(fig, clear_figure=True)
+                        if show_combined2:
+                            figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice2)
+                            st.pyplot(figc, clear_figure=True)
+
 with compare_tab:
     st.subheader("Compare Methods")
     if st.session_state.simulator is None:
@@ -202,6 +310,12 @@ with compare_tab:
             from collections import defaultdict
             base_seed = int(st.session_state.simulator.cfg.seed)
 
+            # Progress UI
+            prog = st.progress(0)
+            status = st.empty()
+            total = max(1, len(picks) * int(repeats))
+            done = 0
+
             def extract_series(rows, key):
                 ys = []
                 for row in rows:
@@ -225,6 +339,11 @@ with compare_tab:
                     res = sim.run(mkey)
                     for m in metric_names:
                         per_metric_runs[m].append(extract_series(res["metrics"], m))
+                    done += 1
+                    pct = int(done / total * 100)
+                    label = next((lbl for lbl, k in labels_map.items() if k == mkey), mkey)
+                    status.write(f"[{done}/{total}] {label} — repeat {r+1}")
+                    prog.progress(min(100, pct))
                 # pad each metric's runs to max len and take mean
                 for m in metric_names:
                     runs = per_metric_runs[m]
