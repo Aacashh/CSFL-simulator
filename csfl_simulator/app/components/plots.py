@@ -1,6 +1,18 @@
 from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
+from typing import Dict, List
+
+try:
+    # Optional import; only used when paper-style is selected
+    import matplotlib.pyplot as plt  # type: ignore
+except Exception:  # pragma: no cover
+    plt = None
+
+try:
+    from plotly.subplots import make_subplots
+except Exception:  # pragma: no cover
+    make_subplots = None
 
 
 def plot_accuracy(metrics_list, names=None):
@@ -162,4 +174,105 @@ def plot_composite(metrics):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='composite'))
     fig.update_layout(title="Composite Score per Round", xaxis_title="Round", yaxis_title="Composite", template="plotly_white")
+    return fig
+
+
+# --------- New comparison plotting helpers ---------
+
+def _safe_template(template: str) -> str:
+    # Accept known plotly templates; fall back to plotly_white
+    allowed = {
+        "plotly_white", "plotly", "simple_white", "ggplot2", "seaborn",
+        "presentation", "xgridoff", "ygridoff", "gridon", "none"
+    }
+    return template if template in allowed else "plotly_white"
+
+
+def plot_metric_compare_plotly(method_to_series: Dict[str, List[float]], metric_name: str, template: str = "plotly_white"):
+    fig = go.Figure()
+    tmpl = _safe_template(template)
+    for name, ys in method_to_series.items():
+        xs = list(range(len(ys)))
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name))
+    fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl)
+    return fig
+
+
+def plot_multi_panel_plotly(metric_to_series: Dict[str, Dict[str, List[float]]], template: str = "plotly_white"):
+    if make_subplots is None:
+        # Fallback: single figure by concatenating traces
+        flat = {}
+        for metric, mseries in metric_to_series.items():
+            for name, ys in mseries.items():
+                flat[f"{metric} — {name}"] = ys
+        return plot_metric_compare_plotly(flat, "Combined", template)
+    metrics = list(metric_to_series.keys())
+    # Ensure deterministic ordering and up to 4 panels
+    wanted = [m for m in ["Accuracy", "F1", "Precision", "Recall"] if m in metric_to_series] or metrics[:4]
+    rows, cols = 2, 2
+    fig = make_subplots(rows=rows, cols=cols, subplot_titles=wanted)
+    tmpl = _safe_template(template)
+    for idx, metric in enumerate(wanted):
+        r, c = (idx // cols) + 1, (idx % cols) + 1
+        for name, ys in metric_to_series[metric].items():
+            xs = list(range(len(ys)))
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, showlegend=(idx == 0)), row=r, col=c)
+        fig.update_xaxes(title_text="Round", row=r, col=c)
+        fig.update_yaxes(title_text=metric, row=r, col=c)
+    fig.update_layout(template=tmpl)
+    return fig
+
+
+def _resolve_mpl_style(style_name: str) -> str:
+    if plt is None:
+        return "classic"
+    try:
+        available = set(plt.style.available)
+    except Exception:
+        available = {"classic", "default"}
+    if style_name in available:
+        return style_name
+    # Common aliases
+    for candidate in ["classic", "default", "ggplot"]:
+        if candidate in available:
+            return candidate
+    return "classic"
+
+
+def plot_metric_compare_matplotlib(method_to_series: Dict[str, List[float]], metric_name: str, style_name: str = "classic"):
+    if plt is None:
+        raise RuntimeError("Matplotlib is not available")
+    style = _resolve_mpl_style(style_name)
+    with plt.style.context(style):
+        fig, ax = plt.subplots(figsize=(6, 4))
+        for name, ys in method_to_series.items():
+            xs = list(range(len(ys)))
+            ax.plot(xs, ys, label=name)
+        ax.set_title(f"{metric_name} per Round")
+        ax.set_xlabel("Round")
+        ax.set_ylabel(metric_name)
+        ax.legend()
+        fig.tight_layout()
+    return fig
+
+
+def plot_multi_panel_matplotlib(metric_to_series: Dict[str, Dict[str, List[float]]], style_name: str = "classic"):
+    if plt is None:
+        raise RuntimeError("Matplotlib is not available")
+    style = _resolve_mpl_style(style_name)
+    with plt.style.context(style):
+        fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+        wanted = [m for m in ["Accuracy", "F1", "Precision", "Recall"] if m in metric_to_series] or list(metric_to_series.keys())[:4]
+        for idx, metric in enumerate(wanted):
+            r, c = divmod(idx, 2)
+            ax = axes[r][c]
+            for name, ys in metric_to_series[metric].items():
+                xs = list(range(len(ys)))
+                ax.plot(xs, ys, label=name)
+            ax.set_title(metric)
+            ax.set_xlabel("Round")
+            ax.set_ylabel(metric)
+            if idx == 0:
+                ax.legend()
+        fig.tight_layout()
     return fig

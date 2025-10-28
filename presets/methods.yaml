@@ -2,150 +2,175 @@ methods:
   - key: heuristic.random
     module: csfl_simulator.selection.heuristic.random_select
     display_name: "Random"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.topk_loss
     module: csfl_simulator.selection.heuristic.topk_loss
     display_name: "Top-K Loss"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.proportional_data
     module: csfl_simulator.selection.heuristic.proportional_data
     display_name: "Proportional to Data Size"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.gradient_norm
     module: csfl_simulator.selection.heuristic.gradient_norm
     display_name: "Gradient Norm"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.fairness_adjusted
     module: csfl_simulator.selection.heuristic.fairness_adjusted
     display_name: "Fairness Adjusted"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.cluster_balanced
     module: csfl_simulator.selection.heuristic.cluster_balanced
     display_name: "Cluster Balanced"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: heuristic.round_robin
     module: csfl_simulator.selection.heuristic.round_robin
     display_name: "Round Robin"
+    origin: custom
     params: {}
     type: heuristic
     trainable: false
   - key: system_aware.fedcs
     module: csfl_simulator.selection.system_aware.fedcs
     display_name: "FedCS (deadline-aware)"
+    origin: paper
     params: {time_budget: null}
     type: system_aware
     trainable: false
   - key: system_aware.tifl
     module: csfl_simulator.selection.system_aware.tifl
     display_name: "TiFL (tiers)"
+    origin: paper
     params: {}
     type: system_aware
     trainable: false
   - key: system_aware.oort
     module: csfl_simulator.selection.system_aware.oort
     display_name: "Oort-style Utility"
+    origin: paper
     params: {}
     type: system_aware
     trainable: false
   - key: ml.bandit.epsilon_greedy
     module: csfl_simulator.selection.ml.bandit.epsilon_greedy
     display_name: "Bandit: Epsilon-Greedy"
+    origin: paper
     params: {epsilon: 0.1}
     type: ml
     trainable: false
   - key: ml.bandit.linucb
     module: csfl_simulator.selection.ml.bandit.linucb
     display_name: "Bandit: LinUCB"
+    origin: paper
     params: {}
     type: ml
     trainable: false
   - key: ml.rl_gnn
     module: csfl_simulator.selection.ml.rl_gnn.policy
     display_name: "RL-GNN Policy (GCN, demo)"
+    origin: custom
     params: {}
     type: ml
     trainable: true
   - key: ml.gt_ppcs
     module: csfl_simulator.selection.ml.gt_ppcs.selector
     display_name: "Graph Transformer (demo)"
+    origin: custom
     params: {}
     type: ml
     trainable: false
   - key: ml.gat
     module: csfl_simulator.selection.ml.gat.selector
     display_name: "GAT Selector (demo)"
+    origin: custom
     params: {}
     type: ml
     trainable: false
   - key: heuristic.mmr_diverse
     module: csfl_simulator.selection.heuristic.mmr_diverse
     display_name: "MMR Diverse (utility+diversity)"
+    origin: paper
     params: {lambda_relevance: 0.7}
     type: heuristic
     trainable: false
   - key: heuristic.label_coverage
     module: csfl_simulator.selection.heuristic.label_coverage
     display_name: "Label Coverage (greedy)"
+    origin: paper
     params: {scarcity_weighting: idf, mix_alpha: 0.2, require_histogram: false}
     type: heuristic
     trainable: false
   - key: heuristic.dp_budget_aware
     module: csfl_simulator.selection.heuristic.dp_budget_aware
     display_name: "DP-Budget Aware"
+    origin: custom
     params: {penalty_eta: 1.0, required_epsilon: null}
     type: heuristic
     trainable: false
   - key: system_aware.poc
     module: csfl_simulator.selection.system_aware.poc
     display_name: "Power-of-Choice (two-stage)"
+    origin: custom
     params: {over_sample_factor: 4.0, weights: {utility: 0.5, speed: 0.3, recency: 0.2}}
     type: system_aware
     trainable: false
   - key: system_aware.oort_plus
     module: csfl_simulator.selection.system_aware.oort_plus
     display_name: "Oort-Plus (fairness+recency)"
+    origin: custom
     params: {beta: 0.5, fairness_gamma: 0.3, recency_delta: 0.3, half_life_rounds: 10, alpha_ucb: 0.1, time_awareness: true}
     type: system_aware
     trainable: false
   - key: ml.bandit.rff_linucb
     module: csfl_simulator.selection.ml.rff_linucb
     display_name: "Bandit: RFF-LinUCB"
+    origin: paper
     params: {n_components: 128, rbf_gamma: 0.5, reg_lambda: 0.01, alpha_ucb: 1.0}
     type: ml
     trainable: false
   - key: ml.meta_ranker
     module: csfl_simulator.selection.ml.meta_ranker
     display_name: "Meta Ranker (SGDRegressor)"
+    origin: custom
     params: {max_history: 5000, alpha: 0.0001, learning_rate: optimal}
     type: ml
     trainable: false
   - key: ml.neural_linear_ucb
     module: csfl_simulator.selection.ml.neural_linear_ucb
     display_name: "NeuralLinear-UCB (tiny MLP + Bayesian head)"
+    origin: paper
     params: {rep_dim: 32, alpha_ucb: 0.5, lr: 0.001}
     type: ml
     trainable: true
   - key: ml.deepset_ranker
     module: csfl_simulator.selection.ml.deepset_ranker
     display_name: "DeepSets Ranker (permutation-invariant)"
+    origin: paper
     params: {rep_dim: 32, lr: 0.001, fairness_alpha: 0.2, time_alpha: 0.2}
     type: ml
     trainable: true
   - key: ml.rankformer_tiny
     module: csfl_simulator.selection.ml.rankformer_tiny
     display_name: "RankFormer-Tiny (1-layer Transformer)"
+    origin: custom
     params: {d_model: 32, nhead: 2, layers: 1, lr: 0.001, exploration_dropout: 0.1}
     type: ml
     trainable: true

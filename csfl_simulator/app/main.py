@@ -67,8 +67,11 @@ with st.sidebar:
     # Load methods dynamically
     from csfl_simulator.selection.registry import MethodRegistry
     reg = MethodRegistry(); reg.load_presets()
-    method_list = reg.list_methods()
-    method = st.selectbox("Selection method", method_list, index=0)
+    labels_map = reg.labels_map()
+    label_list = list(labels_map.keys())
+    default_idx = 0
+    method_label = st.selectbox("Selection method", label_list, index=default_idx)
+    method = reg.key_from_label(method_label)
 
     init_btn = st.button("Initialize Simulator", use_container_width=True)
 
@@ -172,40 +175,93 @@ with compare_tab:
     else:
         from csfl_simulator.selection.registry import MethodRegistry
         reg = MethodRegistry(); reg.load_presets()
-        picks = st.multiselect("Methods to compare", reg.list_methods(), default=[method])
+        labels_map = reg.labels_map()
+        label_list = list(labels_map.keys())
+        default_labels = [next((lbl for lbl,k in labels_map.items() if k==method), label_list[0])] if label_list else []
+        chosen_labels = st.multiselect("Methods to compare", label_list, default=default_labels)
+        picks = [reg.key_from_label(lbl) for lbl in chosen_labels]
         repeats = st.number_input("Repeats per method", 1, 10, 1)
+        style_col1, style_col2, style_col3 = st.columns([1,1,1])
+        with style_col1:
+            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0)
+        with style_col2:
+            if chart_style.startswith("Interactive"):
+                plotly_templates = ["plotly_white", "simple_white", "ggplot2", "seaborn", "presentation"]
+                template_choice = st.selectbox("Plotly template", plotly_templates, index=0)
+            else:
+                try:
+                    import matplotlib.pyplot as _plt  # type: ignore
+                    mpl_styles = list(getattr(_plt.style, 'available', ["classic", "default", "ggplot", "seaborn"]))
+                except Exception:
+                    mpl_styles = ["classic", "default", "ggplot", "seaborn"]
+                style_choice = st.selectbox("Matplotlib style", mpl_styles, index=0)
+        with style_col3:
+            show_combined = st.checkbox("Show combined 2x2", value=True)
         go = st.button("Run Comparison")
         if go and picks:
-            import plotly.graph_objects as gofig
-            fig = gofig.Figure()
-            fig2 = gofig.Figure()
+            from collections import defaultdict
+            base_seed = int(st.session_state.simulator.cfg.seed)
+
+            def extract_series(rows, key):
+                ys = []
+                for row in rows:
+                    try:
+                        ys.append(float(row.get(key, 0.0) or 0.0))
+                    except Exception:
+                        ys.append(0.0)
+                return ys
+
+            metric_names = ["accuracy", "f1", "precision", "recall"]
+            pretty = {"accuracy": "Accuracy", "f1": "F1", "precision": "Precision", "recall": "Recall"}
+            # metric -> {label -> mean_series}
+            metric_to_series = {pretty[m]: {} for m in metric_names}
+
             for mkey in picks:
-                all_acc = []
-                all_comp = []
+                per_metric_runs = {m: [] for m in metric_names}
                 for r in range(int(repeats)):
-                    sim = FLSimulator(SimConfig(**st.session_state.simulator.cfg.__dict__))
+                    cfg = SimConfig(**st.session_state.simulator.cfg.__dict__)
+                    cfg.seed = base_seed + r
+                    sim = FLSimulator(cfg)
                     res = sim.run(mkey)
-                    acc = [row["accuracy"] for row in res["metrics"]]
-                    comp = [row.get("composite", 0.0) for row in res["metrics"]]
-                    all_acc.append(acc)
-                    all_comp.append(comp)
-                # pad to same length
-                maxlen = max(len(a) for a in all_acc)
-                for a in all_acc:
-                    if len(a) < maxlen:
-                        a.extend([a[-1]]*(maxlen-len(a)))
-                maxlen2 = max(len(a) for a in all_comp)
-                for a in all_comp:
-                    if len(a) < maxlen2 and len(a) > 0:
-                        a.extend([a[-1]]*(maxlen2-len(a)))
-                mean = [sum(x)/len(x) for x in zip(*all_acc)]
-                mean2 = [sum(x)/len(x) for x in zip(*all_comp)] if all_comp and all_comp[0] else []
-                fig.add_trace(gofig.Scatter(y=mean, mode='lines', name=mkey))
-                if mean2:
-                    fig2.add_trace(gofig.Scatter(y=mean2, mode='lines', name=mkey))
-            st.plotly_chart(fig, use_container_width=True)
-            if len(fig2.data) > 0:
-                st.plotly_chart(fig2, use_container_width=True)
+                    for m in metric_names:
+                        per_metric_runs[m].append(extract_series(res["metrics"], m))
+                # pad each metric's runs to max len and take mean
+                for m in metric_names:
+                    runs = per_metric_runs[m]
+                    if not runs:
+                        continue
+                    maxlen = max(len(a) for a in runs)
+                    padded = []
+                    for a in runs:
+                        if len(a) < maxlen and len(a) > 0:
+                            a = a + [a[-1]] * (maxlen - len(a))
+                        padded.append(a)
+                    mean = [sum(x) / len(x) for x in zip(*padded)]
+                    label = next((lbl for lbl, k in labels_map.items() if k == mkey), mkey)
+                    metric_to_series[pretty[m]][label] = mean
+
+            if chart_style.startswith("Interactive"):
+                from csfl_simulator.app.components.plots import (
+                    plot_metric_compare_plotly,
+                    plot_multi_panel_plotly,
+                )
+                for metric_display, series_map in metric_to_series.items():
+                    fig = plot_metric_compare_plotly(series_map, metric_display, template=template_choice)
+                    st.plotly_chart(fig, use_container_width=True)
+                if show_combined:
+                    figc = plot_multi_panel_plotly(metric_to_series, template=template_choice)
+                    st.plotly_chart(figc, use_container_width=True)
+            else:
+                from csfl_simulator.app.components.plots import (
+                    plot_metric_compare_matplotlib,
+                    plot_multi_panel_matplotlib,
+                )
+                for metric_display, series_map in metric_to_series.items():
+                    fig = plot_metric_compare_matplotlib(series_map, metric_display, style_name=style_choice)
+                    st.pyplot(fig, clear_figure=True)
+                if show_combined:
+                    figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice)
+                    st.pyplot(figc, clear_figure=True)
 
 with export_tab:
     st.subheader("Export to Notebook")
@@ -217,8 +273,10 @@ with export_tab:
         from csfl_simulator.app.export import export_config_to_ipynb
         from csfl_simulator.selection.registry import MethodRegistry
         reg = MethodRegistry(); reg.load_presets()
-        method_names = reg.list_methods()
-        export_method = st.selectbox("Method to export", method_names)
+        labels_map = reg.labels_map()
+        label_list = list(labels_map.keys())
+        export_label = st.selectbox("Method to export", label_list)
+        export_method = reg.key_from_label(export_label)
         # try to locate source
         try:
             module_path = reg.methods.get(export_method, None)

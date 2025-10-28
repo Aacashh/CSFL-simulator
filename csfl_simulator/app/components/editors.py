@@ -38,6 +38,7 @@ def save_custom_method(project_root: Path, key: str, code: str) -> Tuple[Path, P
         "key": f"custom.{slug}",
         "module": f"csfl_simulator.selection.custom.{slug}",
         "display_name": key,
+        "origin": "custom",
         "params": {},
         "type": "custom",
         "trainable": False,

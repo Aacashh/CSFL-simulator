@@ -2667,6 +2667,14 @@ Notes
 - Pretrained weights: hooks are present; you can place weights under artifacts/checkpoints/pretrained/.
 - See csfl_simulator/selection/README.md for details on method behavior and parameters.
 
+Comparison tab (multi-method, shared parameters)
+- Select one or more methods and set the number of repeats.
+- Choose the chart style:
+  - Interactive (Plotly): select a template (plotly_white, seaborn, ggplot2, ...)
+  - Paper (Matplotlib): select a style (classic, ggplot, seaborn, ...)
+- Optionally enable the combined 2x2 figure for a consolidated panel of Accuracy, F1, Precision, and Recall.
+- Click "Run Comparison" to generate per-round curves averaged across repeats. Seeds are aligned across methods (base seed + repeat index) for fair comparisons.
+
 References
 - GRL-client-selection.ipynb (your latest work)
 - GT-PPCS.py
