@@ -213,6 +213,9 @@ with run_tab:
                     # Progress UI
                     prog2 = st.progress(0)
                     status2 = st.empty()
+                    prog2_rounds = st.progress(0)
+                    status2_round = st.empty()
+                    log2_box = st.empty()
                     total2 = max(1, len(picks_keys) * int(repeats2))
                     done2 = 0
 
@@ -231,7 +234,34 @@ with run_tab:
                             cfg = SimConfig(**st.session_state.simulator.cfg.__dict__)
                             cfg.seed = base_seed + r
                             sim2 = FLSimulator(cfg)
-                            res2 = sim2.run(mkey)
+                            # Reset round progress
+                            try:
+                                prog2_rounds.progress(0)
+                            except Exception:
+                                pass
+                            total_rounds2 = max(1, int(cfg.rounds))
+                            label2 = next((lbl for lbl, k in label_map.items() if k == mkey), mkey)
+                            log2_lines = []
+                            def on_prog_round2(rnd, info):
+                                try:
+                                    pct2r = int(((rnd + 1) / total_rounds2) * 100)
+                                    prog2_rounds.progress(min(100, max(0, pct2r)))
+                                except Exception:
+                                    pass
+                                acc = float(info.get("accuracy", 0.0) or 0.0)
+                                reward = float(info.get("reward", 0.0) or 0.0)
+                                comp = float(info.get("composite", 0.0) or 0.0)
+                                chosen = info.get("selected", [])
+                                try:
+                                    status2_round.write(f"{label2} | repeat {r+1}/{int(repeats2)} | round {rnd+1}/{total_rounds2} | acc={acc:.4f} | comp={comp:.4f} | reward={reward:+.4f} | selected={chosen}")
+                                except Exception:
+                                    pass
+                                try:
+                                    log2_lines.append(f"[{label2} rep {r+1}] round {rnd+1}: acc={acc:.4f} comp={comp:.4f} reward={reward:+.4f} selected={chosen}")
+                                    log2_box.code("\n".join(log2_lines[-200:]))
+                                except Exception:
+                                    pass
+                            res2 = sim2.run(mkey, on_progress=on_prog_round2)
                             for m in metric_names:
                                 per_metric_runs[m].append(extract_series(res2["metrics"], m))
                             done2 += 1
@@ -313,6 +343,10 @@ with compare_tab:
             # Progress UI
             prog = st.progress(0)
             status = st.empty()
+            # Per-run (rounds) progress and live log
+            prog_rounds = st.progress(0)
+            status_round = st.empty()
+            log_box = st.empty()
             total = max(1, len(picks) * int(repeats))
             done = 0
 
@@ -336,12 +370,38 @@ with compare_tab:
                     cfg = SimConfig(**st.session_state.simulator.cfg.__dict__)
                     cfg.seed = base_seed + r
                     sim = FLSimulator(cfg)
-                    res = sim.run(mkey)
+                    # Reset per-run progress
+                    try:
+                        prog_rounds.progress(0)
+                    except Exception:
+                        pass
+                    label = next((lbl for lbl, k in labels_map.items() if k == mkey), mkey)
+                    total_rounds = max(1, int(cfg.rounds))
+                    log_lines = []
+                    def on_prog_round(rnd, info):
+                        try:
+                            pct_r = int(((rnd + 1) / total_rounds) * 100)
+                            prog_rounds.progress(min(100, max(0, pct_r)))
+                        except Exception:
+                            pass
+                        acc = float(info.get("accuracy", 0.0) or 0.0)
+                        reward = float(info.get("reward", 0.0) or 0.0)
+                        comp = float(info.get("composite", 0.0) or 0.0)
+                        chosen = info.get("selected", [])
+                        try:
+                            status_round.write(f"{label} | repeat {r+1}/{int(repeats)} | round {rnd+1}/{total_rounds} | acc={acc:.4f} | comp={comp:.4f} | reward={reward:+.4f} | selected={chosen}")
+                        except Exception:
+                            pass
+                        try:
+                            log_lines.append(f"[{label} rep {r+1}] round {rnd+1}: acc={acc:.4f} comp={comp:.4f} reward={reward:+.4f} selected={chosen}")
+                            log_box.code("\n".join(log_lines[-200:]))
+                        except Exception:
+                            pass
+                    res = sim.run(mkey, on_progress=on_prog_round)
                     for m in metric_names:
                         per_metric_runs[m].append(extract_series(res["metrics"], m))
                     done += 1
                     pct = int(done / total * 100)
-                    label = next((lbl for lbl, k in labels_map.items() if k == mkey), mkey)
                     status.write(f"[{done}/{total}] {label} — repeat {r+1}")
                     prog.progress(min(100, pct))
                 # pad each metric's runs to max len and take mean

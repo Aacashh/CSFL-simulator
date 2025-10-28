@@ -88,5 +88,11 @@ class MethodRegistry:
         func = self.get(key)
         # Merge preset params, letting explicit kwargs override
         merged = self.get_params(key)
+        # Drop reserved positional names and None-valued entries to avoid collisions like time_budget
+        reserved = {"round_idx", "K", "clients", "history", "rng", "time_budget", "device"}
+        for k in list(merged.keys()):
+            if k in reserved or merged[k] is None:
+                merged.pop(k, None)
+        # Now apply explicit kwargs (non-None only)
         merged.update({k: v for k, v in kwargs.items() if v is not None})
         return func(*args, **merged)
