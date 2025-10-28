@@ -36,7 +36,23 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-3) (Optional) Install torch-geometric and companions for GNN presets
+3) (Optional) Download datasets locally
+
+By default, datasets are stored under `data/`. You can pre-download all supported datasets (MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100):
+
+```bash
+python scripts/download_data.py --all
+```
+
+Or choose specific ones:
+
+```bash
+python scripts/download_data.py --datasets mnist fashion-mnist
+```
+
+Note: The app will auto-download datasets on first use if they are missing.
+
+4) (Optional) Install torch-geometric and companions for GNN presets
 
 Refer to the official wheels (replace TORCH/CUDA tags):
 
@@ -46,13 +62,13 @@ pip install torch-sparse -f https://data.pyg.org/whl/torch-<TORCH>+<CUDA>.html
 pip install torch-geometric
 ```
 
-4) Launch the app
+5) Launch the app
 
 ```bash
 streamlit run csfl_simulator/app/main.py
 ```
 
-5) Smoke test
+6) Smoke test
 - Dataset: MNIST, IID
 - Model: CNN-MNIST
 - Rounds: 3, Clients: 10, K per round: 3
