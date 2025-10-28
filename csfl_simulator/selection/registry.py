@@ -1,5 +1,6 @@
 from __future__ import annotations
 import importlib
+import inspect
 from typing import Callable, Any, Tuple, Dict
 from pathlib import Path
 import yaml
@@ -95,4 +96,15 @@ class MethodRegistry:
                 merged.pop(k, None)
         # Now apply explicit kwargs (non-None only)
         merged.update({k: v for k, v in kwargs.items() if v is not None})
+        # Filter by function signature unless it accepts **kwargs
+        try:
+            sig = inspect.signature(func)
+            params = sig.parameters
+            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+            if not accepts_kwargs:
+                allowed = set(params.keys())
+                merged = {k: v for k, v in merged.items() if k in allowed}
+        except Exception:
+            # If introspection fails, fall back to current merged
+            pass
         return func(*args, **merged)
