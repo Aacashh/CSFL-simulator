@@ -68,9 +68,3 @@ Notes
 - Composite metric (optimization target): acc/time/fairness/DP weights can be configured in the Advanced sidebar.
 - Pretrained weights: hooks are present; you can place weights under artifacts/checkpoints/pretrained/.
 - See csfl_simulator/selection/README.md for details on method behavior and parameters.
-
-References
-- GRL-client-selection.ipynb (your latest work)
-- GT-PPCS.py
-- cifar10-gat.py
-- Related research PDFs in this directory
