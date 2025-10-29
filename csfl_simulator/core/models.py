@@ -6,14 +6,20 @@ from torchvision.models import resnet18
 
 
 class CNNMnist(nn.Module):
-    def __init__(self, num_classes: int = 10):
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv1 = nn.Conv2d(in_channels, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.fc1 = nn.Linear(320, 50)
+        # Determine flattened size dynamically for given input spatial size
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = F.max_pool2d(self.conv1(dummy), 2)
+            h = F.max_pool2d(self.conv2(h), 2)
+            flat_dim = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat_dim, 50)
         self.fc2 = nn.Linear(50, num_classes)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
         x = x.view(x.size(0), -1)
@@ -22,33 +28,55 @@ class CNNMnist(nn.Module):
 
 
 class LightCIFAR(nn.Module):
-    def __init__(self, num_classes: int = 10):
+    def __init__(self, num_classes: int = 10, in_channels: int = 3, image_size: int = 32):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, 3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(128 * 4 * 4, 256)
+        # Determine flattened size dynamically based on input size and channels
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = F.relu(self.conv1(dummy))
+            h = self.pool(F.relu(self.conv2(h)))
+            h = self.pool(F.relu(self.conv3(h)))
+            h = self.pool(h)
+            flat_dim = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat_dim, 256)
         self.fc2 = nn.Linear(256, num_classes)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(self.conv1(x))
         x = self.pool(F.relu(self.conv2(x)))
         x = self.pool(F.relu(self.conv3(x)))
-        x = self.pool(x)  # 4x4
+        x = self.pool(x)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
 
+def _dataset_image_spec(dataset: str) -> tuple[int, int]:
+    d = (dataset or "").lower()
+    if d in ("mnist", "fashion-mnist", "fashionmnist"):
+        return 1, 28
+    if d in ("cifar10", "cifar-10", "cifar100", "cifar-100"):
+        return 3, 32
+    # Fallback to common 3x32
+    return 3, 32
+
+
 def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pretrained: bool = False):
     name_l = name.lower()
+    in_ch, img_sz = _dataset_image_spec(dataset)
     if name_l in ("cnn-mnist", "cnn_mnist"):
-        model = CNNMnist(num_classes)
+        model = CNNMnist(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("lightcnn", "light-cifar"):
-        model = LightCIFAR(num_classes)
+        model = LightCIFAR(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l == "resnet18":
         m = resnet18(weights=None)
+        # Adapt first conv to dataset channels when needed
+        if in_ch != 3:
+            m.conv1 = nn.Conv2d(in_ch, 64, kernel_size=7, stride=2, padding=3, bias=False)
         m.fc = nn.Linear(m.fc.in_features, num_classes)
         model = m
     else:

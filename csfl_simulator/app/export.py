@@ -83,11 +83,16 @@ print('Partition done: clients=',num_clients)
     nb.cells.append(nbf.v4.new_markdown_cell("## Model"))
     nb.cells.append(nbf.v4.new_code_cell("""
 class CNNMnist(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, in_channels=1, image_size=28):
         super().__init__()
-        self.conv1 = nn.Conv2d(1,10,5)
+        self.conv1 = nn.Conv2d(in_channels,10,5)
         self.conv2 = nn.Conv2d(10,20,5)
-        self.fc1 = nn.Linear(320,50)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = F.max_pool2d(self.conv1(dummy), 2)
+            h = F.max_pool2d(self.conv2(h), 2)
+            flat = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat,50)
         self.fc2 = nn.Linear(50,num_classes)
     def forward(self,x):
         x=F.relu(F.max_pool2d(self.conv1(x),2))
@@ -97,13 +102,20 @@ class CNNMnist(nn.Module):
         return self.fc2(x)
 
 class LightCIFAR(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, in_channels=3, image_size=32):
         super().__init__()
-        self.conv1=nn.Conv2d(3,32,3,padding=1)
+        self.conv1=nn.Conv2d(in_channels,32,3,padding=1)
         self.conv2=nn.Conv2d(32,64,3,padding=1)
         self.conv3=nn.Conv2d(64,128,3,padding=1)
         self.pool=nn.MaxPool2d(2,2)
-        self.fc1=nn.Linear(128*4*4,256)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = F.relu(self.conv1(dummy))
+            h = self.pool(F.relu(self.conv2(h)))
+            h = self.pool(F.relu(self.conv3(h)))
+            h = self.pool(h)
+            flat = int(h.numel() // h.shape[0])
+        self.fc1=nn.Linear(flat,256)
         self.fc2=nn.Linear(256,num_classes)
     def forward(self,x):
         x=F.relu(self.conv1(x))
@@ -116,13 +128,15 @@ class LightCIFAR(nn.Module):
 
 name=CONFIG['model'].lower()
 num_classes = len(getattr(test_ds,'classes',[])) or 10
+ds = CONFIG['dataset'].lower()
+in_ch, img_sz = (1,28) if 'mnist' in ds and 'cifar' not in ds else (3,32)
 if name in ['cnn-mnist','cnn_mnist']:
-    model = CNNMnist(num_classes)
+    model = CNNMnist(num_classes, in_channels=in_ch, image_size=img_sz)
 elif name in ['lightcnn','light-cifar']:
-    model = LightCIFAR(num_classes)
+    model = LightCIFAR(num_classes, in_channels=in_ch, image_size=img_sz)
 else:
     # Fallback to CNNMnist for MNIST, LightCIFAR otherwise
-    model = CNNMnist(num_classes) if 'mnist' in CONFIG['dataset'].lower() else LightCIFAR(num_classes)
+    model = CNNMnist(num_classes, in_channels=in_ch, image_size=img_sz) if 'mnist' in ds and 'cifar' not in ds else LightCIFAR(num_classes, in_channels=in_ch, image_size=img_sz)
 
 device = 'cuda' if torch.cuda.is_available() and CONFIG.get('device','auto')!='cpu' else 'cpu'
 model = model.to(device)
