@@ -76,6 +76,23 @@ class FLSimulator:
         self.criterion = nn.CrossEntropyLoss()
         self.train_ds = train_ds
         self.test_loader = dset.make_loader(test_ds, batch_size=128, shuffle=False)
+        # Preflight: validate model <-> data compatibility early (channels, shapes, class count)
+        try:
+            xb, yb = next(iter(self.test_loader))
+            xb = xb.to(self.device)
+            with torch.no_grad():
+                out = self.model(xb)
+            # If class count mismatches, adjust final layer when possible
+            if out.dim() == 2 and out.shape[1] != num_classes:
+                try:
+                    if hasattr(self.model, 'fc2') and isinstance(self.model.fc2, nn.Linear):
+                        self.model.fc2 = nn.Linear(self.model.fc2.in_features, num_classes).to(self.device)
+                    elif hasattr(self.model, 'fc') and isinstance(self.model.fc, nn.Linear):
+                        self.model.fc = nn.Linear(self.model.fc.in_features, num_classes).to(self.device)
+                except Exception:
+                    pass
+        except Exception as e:
+            raise RuntimeError(f"Model/data preflight failed: {e}. This likely indicates a mismatch between dataset channels/size and the selected model.") from e
         # Build client loaders and infos
         self.client_loaders = {}
         self.clients: List[ClientInfo] = []
