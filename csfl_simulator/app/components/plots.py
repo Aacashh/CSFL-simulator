@@ -225,13 +225,16 @@ def plot_metric_compare_plotly(
         ys = method_to_series[name]
         ys = _smooth_series(ys, smoothing_window)
         xs = list(range(len(ys)))
-        fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}))
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}, legendgroup=name))
     legend = {}
     if legend_position == "top":
         legend = {"orientation": "h", "y": 1.02, "yanchor": "bottom", "x": 0.0, "xanchor": "left"}
     elif legend_position == "right":
         legend = {"orientation": "v", "y": 1.0, "yanchor": "top", "x": 1.02, "xanchor": "left"}
-    fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl, legend=legend)
+    # Enable linked legend toggling across subplots/figures
+    if isinstance(legend, dict):
+        legend["groupclick"] = "togglegroup"
+    fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl, legend=legend, uirevision="viz_static")
     fig.update_yaxes(type=y_axis_type)
     return fig
 
@@ -280,7 +283,7 @@ def plot_multi_panel_plotly(
                 continue
             ys = _smooth_series(ys, smoothing_window)
             xs = list(range(len(ys)))
-            fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}, showlegend=(idx == 0)), row=r, col=c)
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}, showlegend=(idx == 0), legendgroup=name), row=r, col=c)
         fig.update_xaxes(title_text="Round", row=r, col=c)
         fig.update_yaxes(title_text=metric, row=r, col=c)
     legend = {}
@@ -288,7 +291,9 @@ def plot_multi_panel_plotly(
         legend = {"orientation": "h", "y": 1.02, "yanchor": "bottom", "x": 0.0, "xanchor": "left"}
     elif legend_position == "right":
         legend = {"orientation": "v", "y": 1.0, "yanchor": "top", "x": 1.02, "xanchor": "left"}
-    fig.update_layout(template=tmpl, legend=legend)
+    if isinstance(legend, dict):
+        legend["groupclick"] = "togglegroup"
+    fig.update_layout(template=tmpl, legend=legend, uirevision="viz_static")
     fig.update_yaxes(type=y_axis_type)
     return fig
 

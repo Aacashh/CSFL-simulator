@@ -73,11 +73,30 @@ if "compare_ui" not in st.session_state:
         "line_width": 2.0,
         "show_combined": True,
     }
+if "visualize_data" not in st.session_state:
+    st.session_state.visualize_data = None
+if "visualize_ui" not in st.session_state:
+    st.session_state.visualize_ui = {
+        "source": "compare",
+        "chart_style": "Interactive (Plotly)",
+        "plotly_template": "plotly_white",
+        "mpl_style": "classic",
+        "methods": None,
+        "metrics": ["Accuracy", "F1", "Precision", "Recall"],
+        "smoothing": 0,
+        "y_scale": "linear",
+        "legend_position": "right",
+        "line_width": 2.0,
+        "show_combined": True,
+        "round_start": 0,
+        "round_end": None,
+        "lock_data": False,
+    }
 
 st.title("CSFL Simulator (Playground)")
 
 # Create tabs before referencing them
-setup_tab, run_tab, compare_tab, export_tab = st.tabs(["Setup", "Run", "Compare", "Export"]) 
+setup_tab, run_tab, compare_tab, visualize_tab, export_tab = st.tabs(["Setup", "Run", "Compare", "Visualize", "Export"]) 
 
 with setup_tab:
     st.subheader("Custom Method Editor")
@@ -503,7 +522,7 @@ with compare_tab:
         repeats = st.number_input("Repeats per method", 1, 10, 1)
         style_col1, style_col2, style_col3 = st.columns([1,1,1])
         with style_col1:
-            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0)
+            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0, key="cmp_style_main")
         with style_col2:
             if chart_style.startswith("Interactive"):
                 plotly_templates = ["plotly_white", "simple_white", "ggplot2", "seaborn", "presentation"]
@@ -516,7 +535,7 @@ with compare_tab:
                     mpl_styles = ["classic", "default", "ggplot", "seaborn"]
                 style_choice = st.selectbox("Matplotlib style", mpl_styles, index=0)
         with style_col3:
-            show_combined = st.checkbox("Show combined 2x2", value=True)
+            show_combined = st.checkbox("Show combined 2x2", value=True, key="cmp_combined_main")
         go = st.button("Run Comparison")
         if go and picks:
             from collections import defaultdict
@@ -649,7 +668,7 @@ with compare_tab:
                 # Post-hoc controls
                 methods_display = st.multiselect("Methods to display", st.session_state.compare_results["methods"], default=st.session_state.compare_results["methods"]) 
                 smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
-                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1), key="cmp_y_scale_plotly")
                 lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
                 legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
                 # Persist UI state
@@ -733,7 +752,7 @@ with compare_tab:
                     _counts_mpl_cmp_tab = None
                 methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=list(metric_to_series.get("Accuracy", {}).keys()))
                 smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
-                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1), key="cmp_y_scale_mpl")
                 legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
                 lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
                 st.session_state.compare_ui.update({
@@ -851,12 +870,18 @@ with compare_tab:
                     except Exception as e:
                         st.error(f"Failed to load snapshot: {e}")
 
+        # Bridge: open current comparison in Visualize
+        if st.session_state.compare_results:
+            if st.button("Open in Visualize", key="cmp_open_viz"):
+                st.session_state.visualize_data = {"kind": "compare", "data": st.session_state.compare_results}
+                st.info("Sent current comparison to Visualize tab. Switch to 'Visualize' to customize.")
+
         # Render last comparison if available (no fresh compute required)
         elif st.session_state.compare_results:
             metric_to_series = st.session_state.compare_results.get("metric_to_series", {})
             selection_counts = st.session_state.compare_results.get("selection_counts", {})
             # Use the same rendering controls as above
-            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0)
+            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0, key="cmp_style_mem")
             if chart_style.startswith("Interactive"):
                 from csfl_simulator.app.components.plots import (
                     plot_metric_compare_plotly,
@@ -865,7 +890,7 @@ with compare_tab:
                 )
                 methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=(st.session_state.compare_ui.get("methods_filter") or list(metric_to_series.get("Accuracy", {}).keys())))
                 smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
-                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1), key="cmp_y_scale_plotly_mem")
                 lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
                 legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
                 st.session_state.compare_ui.update({
@@ -890,7 +915,7 @@ with compare_tab:
                         legend_position=legend_pos,
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                if st.checkbox("Show combined 2x2", value=True):
+                if st.checkbox("Show combined 2x2", value=True, key="cmp_combined_mem_plotly"):
                     figc = _call_plot_func(
                         plot_multi_panel_plotly,
                         metric_to_series,
@@ -945,7 +970,7 @@ with compare_tab:
                     _counts_mpl_cmp_mem = None
                 methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=(st.session_state.compare_ui.get("methods_filter") or list(metric_to_series.get("Accuracy", {}).keys())))
                 smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
-                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1), key="cmp_y_scale_mpl_mem")
                 legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
                 lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
                 st.session_state.compare_ui.update({
@@ -972,7 +997,7 @@ with compare_tab:
                         st.pyplot(fig, clear_figure=True)
                     except Exception as e:
                         st.error(f"Matplotlib plotting failed for {metric_display}: {e}")
-                if st.checkbox("Show combined 2x2", value=True):
+                if st.checkbox("Show combined 2x2", value=True, key="cmp_combined_mem_mpl"):
                     try:
                         figc = _call_plot_func(
                             plot_multi_panel_matplotlib,
@@ -1019,6 +1044,178 @@ with compare_tab:
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
                     st.experimental_rerun()
+
+with visualize_tab:
+    st.subheader("Visualize Results")
+    viz_ui = st.session_state.visualize_ui
+    # Source selector
+    src_idx = (0 if viz_ui.get("source", "compare").lower() == "compare" else (1 if viz_ui.get("source") == "run" else 2))
+    src = st.radio("Source", ["Compare", "Run", "Snapshot"], index=src_idx, key="viz_src_radio")
+    viz_ui["source"] = src.lower()
+    viz_ui["lock_data"] = st.checkbox("Lock data source (prevent change)", value=bool(viz_ui.get("lock_data", False)), key="viz_lock")
+    data_obj = None
+    if viz_ui["source"] == "compare" and st.session_state.compare_results:
+        data_obj = {"kind": "compare", "data": st.session_state.compare_results}
+    elif viz_ui["source"] == "run" and st.session_state.run_data:
+        rd = st.session_state.run_data
+        series = {}
+        for key, pretty in [("accuracy","Accuracy"),("f1","F1"),("precision","Precision"),("recall","Recall"),("loss","Loss")]:
+            vals = []
+            for row in rd.get("metrics", []):
+                try:
+                    vals.append(float(row.get(key, 0.0) or 0.0))
+                except Exception:
+                    vals.append(0.0)
+            series.setdefault(pretty, {})["Run"] = vals
+        data_obj = {"kind": "compare", "data": {"metric_to_series": series, "selection_counts": {}, "methods": ["Run"]}}
+    elif viz_ui["source"] == "snapshot":
+        try:
+            from csfl_simulator.app.state import list_snapshots, load_compare, load_run
+            kind_choice = st.radio("Snapshot kind", ["compare", "run"], index=0, key="viz_snap_kind")
+            snaps = list_snapshots(kind=kind_choice)
+            pick = st.selectbox("Snapshot file", [str(p.name) for p in snaps], index=0 if snaps else None, key="viz_snap_pick")
+            if snaps and st.button("Load Snapshot", key="viz_snap_load"):
+                snap = next((p for p in snaps if p.name == pick), None)
+                if snap:
+                    if kind_choice == "compare":
+                        d, _ = load_compare(snap)
+                        st.session_state.visualize_data = {"kind": "compare", "data": d}
+                    else:
+                        d, _ = load_run(snap)
+                        series = {}
+                        for key, pretty in [("accuracy","Accuracy"),("f1","F1"),("precision","Precision"),("recall","Recall"),("loss","Loss")]:
+                            vals = []
+                            for row in d.get("metrics", []):
+                                try:
+                                    vals.append(float(row.get(key, 0.0) or 0.0))
+                                except Exception:
+                                    vals.append(0.0)
+                            series.setdefault(pretty, {})["Run"] = vals
+                        st.session_state.visualize_data = {"kind": "compare", "data": {"metric_to_series": series, "selection_counts": {}, "methods": ["Run"]}}
+                    st.success("Snapshot loaded into Visualize.")
+        except Exception as e:
+            st.error(f"Snapshot error: {e}")
+    # Effective data (prefer previously loaded)
+    data_obj = st.session_state.visualize_data or data_obj
+    if not data_obj:
+        st.info("No data available. Run a comparison, select Run, or load a snapshot.")
+    else:
+        mts = data_obj["data"].get("metric_to_series", {})
+        methods_all = list(next(iter(mts.values()), {}).keys())
+        col1, col2, col3 = st.columns([1,1,1])
+        with col1:
+            viz_ui["chart_style"] = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=(0 if viz_ui.get("chart_style","Interactive (Plotly)").startswith("Interactive") else 1), key="viz_style")
+        with col2:
+            if viz_ui["chart_style"].startswith("Interactive"):
+                viz_ui["plotly_template"] = st.selectbox("Plotly template", ["plotly_white","simple_white","ggplot2","seaborn","presentation"], index=0, key="viz_tpl")
+            else:
+                try:
+                    import matplotlib.pyplot as _plt  # type: ignore
+                    mpl_styles = list(getattr(_plt.style, 'available', ["classic","default","ggplot","seaborn"]))
+                except Exception:
+                    mpl_styles = ["classic","default","ggplot","seaborn"]
+                viz_ui["mpl_style"] = st.selectbox("Matplotlib style", mpl_styles, index=0, key="viz_mpl")
+        with col3:
+            viz_ui["show_combined"] = st.checkbox("Show combined 2x2", value=bool(viz_ui.get("show_combined", True)), key="viz_combined")
+        viz_ui["methods"] = st.multiselect("Methods", options=methods_all, default=(viz_ui.get("methods") or methods_all), key="viz_methods")
+        metrics_all = [m for m in ["Accuracy","F1","Precision","Recall","Loss"] if m in mts]
+        viz_ui["metrics"] = st.multiselect("Metrics", options=metrics_all, default=(viz_ui.get("metrics") or metrics_all), key="viz_metrics")
+        col4, col5, col6, col7 = st.columns([1,1,1,1])
+        viz_ui["smoothing"] = int(col4.slider("Smoothing", 0, 20, int(viz_ui.get("smoothing", 0)), key="viz_smooth"))
+        viz_ui["y_scale"] = col5.radio("Y scale", ["linear","log"], index=(0 if viz_ui.get("y_scale","linear") == "linear" else 1), key="viz_y")
+        viz_ui["legend_position"] = col6.selectbox("Legend", ["right","top","inside"], index=( ["right","top","inside"].index(viz_ui.get("legend_position","right")) ), key="viz_legend")
+        viz_ui["line_width"] = float(col7.slider("Line width", 1, 6, int(viz_ui.get("line_width", 2)), key="viz_lw"))
+        # Rounds
+        try:
+            first_metric = next(iter(mts.keys()))
+            first_method = next(iter(mts[first_metric].keys()))
+            max_len = len(mts[first_metric][first_method])
+        except Exception:
+            max_len = 0
+        colr1, colr2 = st.columns([1,1])
+        viz_ui["round_start"] = int(colr1.number_input("Round start", min_value=0, max_value=max(0, max_len-1), value=int(viz_ui.get("round_start", 0)), step=1, key="viz_r0"))
+        viz_ui["round_end"] = int(colr2.number_input("Round end", min_value=viz_ui["round_start"], max_value=max(0, max_len-1), value=int(viz_ui.get("round_end", max(0, max_len-1) if viz_ui.get("round_end") is None else viz_ui.get("round_end"))), step=1, key="viz_r1"))
+        # Build filtered data
+        filtered_mts = {}
+        for metric in viz_ui["metrics"]:
+            mm = {}
+            for mname, ys in (mts.get(metric, {}) or {}).items():
+                if viz_ui["methods"] and mname not in viz_ui["methods"]:
+                    continue
+                ys2 = list(ys[viz_ui["round_start"]:viz_ui["round_end"]+1]) if max_len > 0 else list(ys)
+                mm[mname] = ys2
+            filtered_mts[metric] = mm
+        # Render
+        if viz_ui["chart_style"].startswith("Interactive"):
+            from csfl_simulator.app.components.plots import plot_metric_compare_plotly, plot_multi_panel_plotly
+            for metric, series_map in filtered_mts.items():
+                fig = plot_metric_compare_plotly(series_map, metric, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                st.plotly_chart(fig, use_container_width=True)
+            if viz_ui["show_combined"] and filtered_mts:
+                figc = plot_multi_panel_plotly(filtered_mts, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                st.plotly_chart(figc, use_container_width=True)
+            # Export
+            try:
+                from datetime import datetime as _dt
+                figx = plot_multi_panel_plotly(filtered_mts, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                html = figx.to_html(include_plotlyjs="cdn")
+                st.download_button("Download HTML", data=html, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.html", mime="text/html", key="viz_dl_html")
+                try:
+                    buf = figx.to_image(format="png")
+                    st.download_button("Download PNG", data=buf, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.png", mime="image/png", key="viz_dl_png")
+                except Exception:
+                    st.caption("PNG export requires kaleido; install to enable.")
+            except Exception:
+                pass
+        else:
+            from csfl_simulator.app.components.plots import plot_metric_compare_matplotlib, plot_multi_panel_matplotlib
+            for metric in viz_ui["metrics"]:
+                fig = plot_metric_compare_matplotlib(filtered_mts.get(metric, {}), metric, style_name=viz_ui["mpl_style"], methods_filter=viz_ui["methods"], legend_position=viz_ui["legend_position"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"])
+                st.pyplot(fig, clear_figure=True)
+            if viz_ui["show_combined"] and filtered_mts:
+                figc = plot_multi_panel_matplotlib(filtered_mts, style_name=viz_ui["mpl_style"], methods_filter=viz_ui["methods"], legend_position=viz_ui["legend_position"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"])
+                st.pyplot(figc, clear_figure=True)
+
+        # Presets & CSV export
+        with st.expander("Presets & Export"):
+            from pathlib import Path as _Path
+            from csfl_simulator.core.utils import ROOT as _ROOT
+            import json as _json
+            import io as _io
+            import csv as _csv
+            preset_dir = (_ROOT / "artifacts" / "checkpoints" / "visualize_presets").resolve()
+            preset_dir.mkdir(parents=True, exist_ok=True)
+            colp1, colp2 = st.columns([1,1])
+            name = colp1.text_input("Preset name", value="default", key="viz_preset_name")
+            if colp1.button("Save UI Preset", key="viz_preset_save"):
+                try:
+                    (_Path(preset_dir) / f"{name}.json").write_text(_json.dumps(viz_ui, indent=2))
+                    st.success("Preset saved.")
+                except Exception as e:
+                    st.error(f"Preset save failed: {e}")
+            files = list(preset_dir.glob("*.json"))
+            pickp = colp2.selectbox("Load preset", [f.name for f in files], index=0 if files else None, key="viz_preset_pick")
+            if colp2.button("Load UI Preset", key="viz_preset_load") and files:
+                try:
+                    p = next((f for f in files if f.name == pickp), None)
+                    if p:
+                        st.session_state.visualize_ui = _json.loads(p.read_text())
+                        st.success("Preset loaded. Adjust controls above if needed.")
+                except Exception as e:
+                    st.error(f"Preset load failed: {e}")
+            # CSV export of filtered data
+            if filtered_mts:
+                try:
+                    sio = _io.StringIO()
+                    writer = _csv.writer(sio)
+                    writer.writerow(["metric", "round", "method", "value"])
+                    for metric, series_map in filtered_mts.items():
+                        for method, ys in (series_map or {}).items():
+                            for i, v in enumerate(ys):
+                                writer.writerow([metric, viz_ui["round_start"] + i, method, float(v)])
+                    st.download_button("Download CSV", data=sio.getvalue(), file_name="viz_series.csv", mime="text/csv", key="viz_dl_csv")
+                except Exception as e:
+                    st.error(f"CSV export failed: {e}")
 
 with export_tab:
     st.subheader("Export to Notebook")
