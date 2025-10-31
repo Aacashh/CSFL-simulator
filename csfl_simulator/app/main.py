@@ -377,11 +377,18 @@ with run_tab:
                             figsc = plot_selection_counts_compare_plotly(selection_counts, template=template_choice2)
                             st.plotly_chart(figsc, use_container_width=True)
                     else:
-                        from csfl_simulator.app.components.plots import (
-                            plot_metric_compare_matplotlib,
-                            plot_multi_panel_matplotlib,
-                            plot_selection_counts_compare_matplotlib,
-                        )
+                        try:
+                            from csfl_simulator.app.components.plots import (
+                                plot_metric_compare_matplotlib,
+                                plot_multi_panel_matplotlib,
+                                plot_selection_counts_compare_matplotlib as _counts_mpl_run_tab,
+                            )
+                        except Exception:
+                            from csfl_simulator.app.components.plots import (
+                                plot_metric_compare_matplotlib,
+                                plot_multi_panel_matplotlib,
+                            )
+                            _counts_mpl_run_tab = None
                         for metric_display, series_map in metric_to_series.items():
                             fig = plot_metric_compare_matplotlib(series_map, metric_display, style_name=style_choice2)
                             st.pyplot(fig, clear_figure=True)
@@ -389,8 +396,11 @@ with run_tab:
                             figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice2)
                             st.pyplot(figc, clear_figure=True)
                         if selection_counts:
-                            figsc = plot_selection_counts_compare_matplotlib(selection_counts, style_name=style_choice2)
-                            st.pyplot(figsc, clear_figure=True)
+                            if _counts_mpl_run_tab is not None:
+                                figsc = _counts_mpl_run_tab(selection_counts, style_name=style_choice2)
+                                st.pyplot(figsc, clear_figure=True)
+                            else:
+                                st.info("Selection counts (matplotlib) plot not available on this setup.")
 
                     # Show failures summary (Run tab expander)
                     if failures_run_tab:
@@ -573,11 +583,18 @@ with compare_tab:
                     figsc = plot_selection_counts_compare_plotly(selection_counts, template=template_choice, methods_filter=methods_display)
                     st.plotly_chart(figsc, use_container_width=True)
             else:
-                from csfl_simulator.app.components.plots import (
-                    plot_metric_compare_matplotlib,
-                    plot_multi_panel_matplotlib,
-                    plot_selection_counts_compare_matplotlib,
-                )
+                try:
+                    from csfl_simulator.app.components.plots import (
+                        plot_metric_compare_matplotlib,
+                        plot_multi_panel_matplotlib,
+                        plot_selection_counts_compare_matplotlib as _counts_mpl_cmp_tab,
+                    )
+                except Exception:
+                    from csfl_simulator.app.components.plots import (
+                        plot_metric_compare_matplotlib,
+                        plot_multi_panel_matplotlib,
+                    )
+                    _counts_mpl_cmp_tab = None
                 methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=list(metric_to_series.get("Accuracy", {}).keys()))
                 smoothing = st.slider("Smoothing window (rounds)", 0, 20, 0)
                 y_axis = st.radio("Y scale", ["linear", "log"], index=0)
@@ -591,8 +608,11 @@ with compare_tab:
                     figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out, smoothing_window=int(smoothing), y_axis_type=y_axis, line_width=float(lw))
                     st.pyplot(figc, clear_figure=True)
                 if selection_counts:
-                    figsc = plot_selection_counts_compare_matplotlib(selection_counts, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out)
-                    st.pyplot(figsc, clear_figure=True)
+                    if _counts_mpl_cmp_tab is not None:
+                        figsc = _counts_mpl_cmp_tab(selection_counts, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out)
+                        st.pyplot(figsc, clear_figure=True)
+                    else:
+                        st.info("Selection counts (matplotlib) plot not available on this setup.")
 
             # Failures summary (Compare tab)
             if failures_compare_tab:
