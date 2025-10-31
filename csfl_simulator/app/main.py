@@ -1,5 +1,6 @@
 import streamlit as st
 from dataclasses import asdict
+import traceback
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
 from csfl_simulator.core.utils import ROOT
@@ -261,6 +262,7 @@ with run_tab:
                     pretty = {"accuracy": "Accuracy", "f1": "F1", "precision": "Precision", "recall": "Recall", "loss": "Loss"}
                     metric_to_series = {pretty[m]: {} for m in metric_names}
                     selection_counts = {}
+                    failures_run_tab: dict[str, list[str]] = {}
 
                     base_seed = int(st.session_state.simulator.cfg.seed)
 
@@ -315,7 +317,17 @@ with run_tab:
                                     log2_box.code("\n".join(log2_lines[-200:]))
                                 except Exception:
                                     pass
-                            res2 = sim2.run(mkey, on_progress=on_prog_round2)
+                            try:
+                                res2 = sim2.run(mkey, on_progress=on_prog_round2)
+                            except Exception as e:
+                                label2 = next((lbl for lbl, k in label_map.items() if k == mkey), mkey)
+                                err_msg = f"{type(e).__name__}: {e}\n" + traceback.format_exc()
+                                failures_run_tab.setdefault(label2, []).append(err_msg)
+                                done2 += 1
+                                pct2 = int(done2 / total2 * 100)
+                                status2.write(f"[{done2}/{total2}] {label2} — repeat {r+1} (FAILED)")
+                                prog2.progress(min(100, pct2))
+                                continue
                             for m in metric_names:
                                 per_metric_runs[m].append(extract_series(res2["metrics"], m))
                             try:
@@ -380,6 +392,14 @@ with run_tab:
                             figsc = plot_selection_counts_compare_matplotlib(selection_counts, style_name=style_choice2)
                             st.pyplot(figsc, clear_figure=True)
 
+                    # Show failures summary (Run tab expander)
+                    if failures_run_tab:
+                        st.warning("Some methods failed during comparison. See details below.")
+                        for lbl, errs in failures_run_tab.items():
+                            with st.expander(f"{lbl} — {len(errs)} failure(s)"):
+                                for i, em in enumerate(errs, 1):
+                                    st.code(em)
+
 with compare_tab:
     st.subheader("Compare Methods")
     if st.session_state.simulator is None:
@@ -438,6 +458,7 @@ with compare_tab:
             # metric -> {label -> mean_series}
             metric_to_series = {pretty[m]: {} for m in metric_names}
             selection_counts = {}
+            failures_compare_tab: dict[str, list[str]] = {}
 
             for mkey in picks:
                 per_metric_runs = {m: [] for m in metric_names}
@@ -472,7 +493,17 @@ with compare_tab:
                             log_box.code("\n".join(log_lines[-200:]))
                         except Exception:
                             pass
-                    res = sim.run(mkey, on_progress=on_prog_round)
+                    try:
+                        res = sim.run(mkey, on_progress=on_prog_round)
+                    except Exception as e:
+                        label = next((lbl for lbl, k in labels_map.items() if k == mkey), mkey)
+                        err_msg = f"{type(e).__name__}: {e}\n" + traceback.format_exc()
+                        failures_compare_tab.setdefault(label, []).append(err_msg)
+                        done += 1
+                        pct = int(done / total * 100)
+                        status.write(f"[{done}/{total}] {label} — repeat {r+1} (FAILED)")
+                        prog.progress(min(100, pct))
+                        continue
                     for m in metric_names:
                         per_metric_runs[m].append(extract_series(res["metrics"], m))
                     # accumulate selection counts
@@ -562,6 +593,14 @@ with compare_tab:
                 if selection_counts:
                     figsc = plot_selection_counts_compare_matplotlib(selection_counts, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out)
                     st.pyplot(figsc, clear_figure=True)
+
+            # Failures summary (Compare tab)
+            if failures_compare_tab:
+                st.warning("Some methods failed during comparison. See details below.")
+                for lbl, errs in failures_compare_tab.items():
+                    with st.expander(f"{lbl} — {len(errs)} failure(s)"):
+                        for i, em in enumerate(errs, 1):
+                            st.code(em)
 
             # Manual snapshot controls (Comparison)
             with st.expander("Snapshot (Comparison)"):
