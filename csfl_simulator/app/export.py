@@ -182,28 +182,30 @@ for rnd in range(rounds):
     # Local train
     updates=[]; weights=[]
     for cid in ids:
-        local=type(model)() if hasattr(model,'__class__') else model
-        local=type(model)(*[]) if False else copy.deepcopy(model)
-        local=local.to(device)
-        local.load_state_dict(model.state_dict())
+        local = copy.deepcopy(model)
         local.train()
-        last_loss=0.0
+        last_loss = 0.0
+        opt_l = optim.SGD(local.parameters(), lr=float(CONFIG['lr']))
         for e in range(int(CONFIG['local_epochs'])):
             for bi,(x,y) in enumerate(client_loaders[cid]):
                 x,y=x.to(device), y.to(device)
-                opt_l=optim.SGD(local.parameters(), lr=float(CONFIG['lr']))
                 opt_l.zero_grad()
                 loss=criterion(local(x),y)
                 loss.backward(); opt_l.step()
                 last_loss=float(loss.item())
                 if fast and bi>1: break
-        updates.append(copy.deepcopy(local.state_dict())); weights.append(len(client_loaders[cid].dataset))
+        updates.append({k: v.detach().clone() for k,v in local.state_dict().items()}); weights.append(len(client_loaders[cid].dataset))
     # FedAvg
     if updates:
-        new_sd=copy.deepcopy(model.state_dict())
-        total=sum(weights)
-        for k in new_sd.keys():
-            new_sd[k]=sum( (sd[k]*(w/total) for sd,w in zip(updates,weights) ) )
+        total = sum(weights)
+        scales = [w/total for w in weights] if total>0 else [1.0/len(weights)]*len(weights)
+        new_sd = {}
+        with torch.no_grad():
+            for k in model.state_dict().keys():
+                acc = updates[0][k].detach().clone().mul_(scales[0])
+                for i in range(1, len(updates)):
+                    acc.add_(updates[i][k], alpha=scales[i])
+                new_sd[k] = acc
         model.load_state_dict(new_sd)
     acc=evaluate(model)
     metrics.append({"round": rnd, "accuracy": acc})
