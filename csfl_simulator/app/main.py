@@ -1130,6 +1130,17 @@ with visualize_tab:
     else:
         mts = data_obj["data"].get("metric_to_series", {})
         methods_all = list(next(iter(mts.values()), {}).keys())
+        # Sanitize UI selections to current data
+        if methods_all:
+            prev_methods = (st.session_state.get("viz_methods") or viz_ui.get("methods") or [])
+            valid_methods = [m for m in (prev_methods or []) if m in methods_all]
+            if not valid_methods:
+                valid_methods = methods_all
+            viz_ui["methods"] = valid_methods
+            try:
+                st.session_state["viz_methods"] = valid_methods
+            except Exception:
+                pass
         col1, col2, col3 = st.columns([1,1,1])
         with col1:
             viz_ui["chart_style"] = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=(0 if viz_ui.get("chart_style","Interactive (Plotly)").startswith("Interactive") else 1), key="viz_style")
@@ -1147,6 +1158,16 @@ with visualize_tab:
             viz_ui["show_combined"] = st.checkbox("Show combined 2x2", value=bool(viz_ui.get("show_combined", True)), key="viz_combined")
         viz_ui["methods"] = st.multiselect("Methods", options=methods_all, default=(viz_ui.get("methods") or methods_all), key="viz_methods")
         metrics_all = [m for m in ["Accuracy","F1","Precision","Recall","Loss"] if m in mts]
+        if metrics_all:
+            prev_metrics = (st.session_state.get("viz_metrics") or viz_ui.get("metrics") or [])
+            valid_metrics = [m for m in (prev_metrics or []) if m in metrics_all]
+            if not valid_metrics:
+                valid_metrics = metrics_all
+            viz_ui["metrics"] = valid_metrics
+            try:
+                st.session_state["viz_metrics"] = valid_metrics
+            except Exception:
+                pass
         viz_ui["metrics"] = st.multiselect("Metrics", options=metrics_all, default=(viz_ui.get("metrics") or metrics_all), key="viz_metrics")
         col4, col5, col6, col7 = st.columns([1,1,1,1])
         viz_ui["smoothing"] = int(col4.slider("Smoothing", 0, 20, int(viz_ui.get("smoothing", 0)), key="viz_smooth"))
@@ -1161,17 +1182,32 @@ with visualize_tab:
         except Exception:
             max_len = 0
         colr1, colr2 = st.columns([1,1])
-        viz_ui["round_start"] = int(colr1.number_input("Round start", min_value=0, max_value=max(0, max_len-1), value=int(viz_ui.get("round_start", 0)), step=1, key="viz_r0"))
+        max_index = max(0, max_len - 1)
+        # Clamp any persisted widget state before rendering
+        try:
+            if isinstance(st.session_state.get("viz_r0"), (int, float)):
+                st.session_state["viz_r0"] = int(min(max(0, int(st.session_state.get("viz_r0", 0))), max_index))
+            if isinstance(st.session_state.get("viz_r1"), (int, float)):
+                st.session_state["viz_r1"] = int(min(max(int(st.session_state.get("viz_r0", 0)), int(st.session_state.get("viz_r1", max_index))), max_index))
+        except Exception:
+            pass
+        _start_default = viz_ui.get("round_start", 0)
+        try:
+            _start_default = int(_start_default)
+        except Exception:
+            _start_default = 0
+        _start_default = min(max(0, _start_default), max_index)
+        viz_ui["round_start"] = int(colr1.number_input("Round start", min_value=0, max_value=max_index, value=_start_default, step=1, key="viz_r0"))
         _end_default = viz_ui.get("round_end")
         if _end_default is None:
-            _end_default = max(0, max_len - 1)
+            _end_default = max_index
         else:
             try:
                 _end_default = int(_end_default)
             except Exception:
-                _end_default = max(0, max_len - 1)
-        _end_default = min(max(_end_default, viz_ui["round_start"]), max(0, max_len - 1))
-        viz_ui["round_end"] = int(colr2.number_input("Round end", min_value=viz_ui["round_start"], max_value=max(0, max_len-1), value=_end_default, step=1, key="viz_r1"))
+                _end_default = max_index
+        _end_default = min(max(_end_default, viz_ui["round_start"]), max_index)
+        viz_ui["round_end"] = int(colr2.number_input("Round end", min_value=viz_ui["round_start"], max_value=max_index, value=_end_default, step=1, key="viz_r1"))
         # Build filtered data
         filtered_mts = {}
         for metric in viz_ui["metrics"]:
