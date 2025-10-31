@@ -5,6 +5,25 @@ import torch.nn.functional as F
 from torchvision.models import resnet18
 
 
+def _match_channels(x: torch.Tensor, expected: int) -> torch.Tensor:
+    c = x.shape[1]
+    if c == expected:
+        return x
+    if expected == 1 and c >= 3:
+        # Simple luminance; fall back to mean if fewer than 3 channels
+        r, g, b = x[:, 0:1], x[:, 1:2], x[:, 2:3]
+        gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        return gray
+    if expected == 3 and c == 1:
+        return x.repeat(1, 3, 1, 1)
+    # General fallback: trim or repeat to match expected channels
+    if c > expected:
+        return x[:, :expected]
+    rep = (expected + c - 1) // c
+    x_rep = x.repeat(1, rep, 1, 1)
+    return x_rep[:, :expected]
+
+
 class CNNMnist(nn.Module):
     def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
         super().__init__()
@@ -20,6 +39,7 @@ class CNNMnist(nn.Module):
         self.fc2 = nn.Linear(50, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
         x = x.view(x.size(0), -1)
@@ -46,6 +66,7 @@ class LightCIFAR(nn.Module):
         self.fc2 = nn.Linear(256, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
         x = F.relu(self.conv1(x))
         x = self.pool(F.relu(self.conv2(x)))
         x = self.pool(F.relu(self.conv3(x)))

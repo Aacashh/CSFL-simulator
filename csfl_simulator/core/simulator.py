@@ -76,6 +76,25 @@ class FLSimulator:
         self.criterion = nn.CrossEntropyLoss()
         self.train_ds = train_ds
         self.test_loader = dset.make_loader(test_ds, batch_size=128, shuffle=False)
+        # Adjust model to actual data shape (channels, image size) to avoid FC and channel mismatches
+        try:
+            xb0, yb0 = next(iter(self.test_loader))
+            c0, h0, w0 = int(xb0.shape[1]), int(xb0.shape[2]), int(xb0.shape[3])
+            name_l = self.cfg.model.lower()
+            if name_l in ("cnn-mnist", "cnn_mnist"):
+                from .models import CNNMnist
+                self.model = CNNMnist(num_classes=num_classes, in_channels=c0, image_size=h0).to(self.device)
+            elif name_l in ("lightcnn", "light-cifar"):
+                from .models import LightCIFAR
+                self.model = LightCIFAR(num_classes=num_classes, in_channels=c0, image_size=h0).to(self.device)
+            elif name_l == "resnet18" and c0 != 3:
+                try:
+                    # Rebuild conv1 for grayscale inputs
+                    self.model.conv1 = nn.Conv2d(c0, 64, kernel_size=7, stride=2, padding=3, bias=False).to(self.device)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         # Preflight: validate model <-> data compatibility early (channels, shapes, class count)
         try:
             xb, yb = next(iter(self.test_loader))
