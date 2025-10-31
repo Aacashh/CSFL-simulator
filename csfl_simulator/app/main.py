@@ -23,6 +23,22 @@ def _call_plot_func(func, *args, **kwargs):
         # Last resort: try positional-only
         return func(*args)
 
+# Safe render helpers
+def _safe_plotly(plot_func, *args, **kwargs):
+    try:
+        fig = _call_plot_func(plot_func, *args, **kwargs)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Plotly rendering failed: {e}")
+
+
+def _safe_mpl(plot_func, *args, **kwargs):
+    try:
+        fig = _call_plot_func(plot_func, *args, **kwargs)
+        st.pyplot(fig, clear_figure=True)
+    except Exception as e:
+        st.error(f"Matplotlib rendering failed: {e}")
+
 if "simulator" not in st.session_state:
     st.session_state.simulator = None
 if "last_result" not in st.session_state:
@@ -31,6 +47,32 @@ if "cancel_run" not in st.session_state:
     st.session_state.cancel_run = False
 if "compare_results" not in st.session_state:
     st.session_state.compare_results = None
+if "run_data" not in st.session_state:
+    st.session_state.run_data = None
+if "run_ui" not in st.session_state:
+    st.session_state.run_ui = {
+        "show_accuracy": True,
+        "show_loss": True,
+        "show_time": True,
+        "show_fair": True,
+        "show_composite": True,
+    }
+if "compare_data" not in st.session_state:
+    st.session_state.compare_data = None
+if "compare_ui" not in st.session_state:
+    st.session_state.compare_ui = {
+        "chart_style": "Interactive (Plotly)",
+        "plotly_template": "plotly_white",
+        "mpl_style": "classic",
+        "methods_filter": None,
+        "metrics_filter": None,
+        "smoothing": 0,
+        "y_scale": "linear",
+        "legend_position": "right",
+        "legend_cols": 1,
+        "line_width": 2.0,
+        "show_combined": True,
+    }
 
 st.title("CSFL Simulator (Playground)")
 
@@ -174,11 +216,12 @@ with run_tab:
                 log_lines.append(f"[Round {rnd+1}] acc={acc:.4f} reward={reward:+.4f} selected={info.get('selected', [])}")
                 log_box.code("\n".join(log_lines[-200:]))
             res = st.session_state.simulator.run(method_key=method, on_progress=on_progress, is_cancelled=lambda: st.session_state.cancel_run)
+            st.session_state.run_data = res
             st.session_state.last_result = res
             # Autosave latest run snapshot
             try:
-                from csfl_simulator.app.state import save_snapshot
-                save_snapshot(None, {"type": "run", **res})
+                from csfl_simulator.app.state import save_run
+                save_run(st.session_state.run_data, st.session_state.run_ui, None)
             except Exception:
                 pass
             if res.get("stopped_early"):
@@ -188,23 +231,37 @@ with run_tab:
             st.json({"run_id": res["run_id"], "device": res["device"], "config": res["config"]})
             st.write("Metrics (per round):")
             st.dataframe(res["metrics"]) 
+            try:
+                from csfl_simulator.app.state import SCHEMA_VERSION
+                st.caption(f"Snapshot schema v{SCHEMA_VERSION}. Plot UI is decoupled from data; toggling controls will not reset results.")
+            except Exception:
+                pass
             # Plots
             from csfl_simulator.app.components.plots import plot_accuracy, plot_participation, plot_selection_heatmap, plot_dp_usage, plot_round_time, plot_fairness, plot_composite, plot_loss
             with st.expander("Plot Controls", expanded=True):
-                show_acc = st.checkbox("Show Accuracy", value=True)
-                show_loss = st.checkbox("Show Loss", value=True)
-                show_time = st.checkbox("Show Round Time", value=True)
-                show_fair = st.checkbox("Show Fairness", value=True)
-                show_comp = st.checkbox("Show Composite", value=True)
-            if show_acc:
+                ui = st.session_state.run_ui
+                ui["show_accuracy"] = st.checkbox("Show Accuracy", value=bool(ui.get("show_accuracy", True)))
+                ui["show_loss"] = st.checkbox("Show Loss", value=bool(ui.get("show_loss", True)))
+                ui["show_time"] = st.checkbox("Show Round Time", value=bool(ui.get("show_time", True)))
+                ui["show_fair"] = st.checkbox("Show Fairness", value=bool(ui.get("show_fair", True)))
+                ui["show_composite"] = st.checkbox("Show Composite", value=bool(ui.get("show_composite", True)))
+                col_reset, col_clear = st.columns([1,1])
+                if col_reset.button("Reset Plot UI"):
+                    st.session_state.run_ui = {"show_accuracy": True, "show_loss": True, "show_time": True, "show_fair": True, "show_composite": True}
+                    st.experimental_rerun()
+                if col_clear.button("Clear Results"):
+                    st.session_state.run_data = None
+                    st.session_state.last_result = None
+                    st.experimental_rerun()
+            if st.session_state.run_ui.get("show_accuracy", True):
                 st.plotly_chart(plot_accuracy(res["metrics"]), use_container_width=True)
-            if show_loss:
+            if st.session_state.run_ui.get("show_loss", True):
                 st.plotly_chart(plot_loss(res["metrics"]), use_container_width=True)
-            if show_time:
+            if st.session_state.run_ui.get("show_time", True):
                 st.plotly_chart(plot_round_time(res["metrics"]), use_container_width=True)
-            if show_fair:
+            if st.session_state.run_ui.get("show_fair", True):
                 st.plotly_chart(plot_fairness(res["metrics"]), use_container_width=True)
-            if show_comp:
+            if st.session_state.run_ui.get("show_composite", True):
                 st.plotly_chart(plot_composite(res["metrics"]), use_container_width=True)
             # Build a lightweight client snapshot for plotting
             # Note: in this session, we use the simulator's current clients
@@ -219,30 +276,26 @@ with run_tab:
                 col_s1, col_s2 = st.columns([1,1])
                 if col_s1.button("Save Snapshot"):
                     try:
-                        from csfl_simulator.app.state import save_snapshot
-                        save_snapshot(snap_name if snap_name else None, {"type": "run", **st.session_state.last_result})
+                        from csfl_simulator.app.state import save_run
+                        save_run(st.session_state.run_data or st.session_state.last_result, st.session_state.run_ui, snap_name if snap_name else None)
                         st.success("Snapshot saved.")
                     except Exception as e:
                         st.error(f"Failed to save snapshot: {e}")
                 with col_s2:
                     try:
-                        from csfl_simulator.app.state import list_snapshots, load_snapshot
-                        snaps = list_snapshots()
+                        from csfl_simulator.app.state import list_snapshots, load_run
+                        snaps = list_snapshots(kind='run')
                         pick = st.selectbox("Load snapshot", [str(p.name) for p in snaps], index=0 if snaps else None)
+                        apply_ui = st.checkbox("Apply UI from snapshot (overwrite current)", value=False)
                         if st.button("Load Selected Snapshot") and snaps:
                             snap = next((p for p in snaps if p.name == pick), None)
                             if snap:
-                                data = load_snapshot(snap)
-                                if data.get("type") == "run":
-                                    st.session_state.last_result = {
-                                        "run_id": data.get("run_id", "loaded"),
-                                        "metrics": data.get("metrics") or [],
-                                        "config": data.get("config") or {},
-                                        "device": data.get("device", ""),
-                                    }
-                                    st.success("Run snapshot loaded.")
-                                else:
-                                    st.warning("Selected snapshot is not a run.")
+                                data, ui_loaded = load_run(snap)
+                                st.session_state.run_data = data
+                                st.session_state.last_result = data
+                                if apply_ui and ui_loaded:
+                                    st.session_state.run_ui = ui_loaded
+                                st.success("Run snapshot loaded.")
                     except Exception as e:
                         st.error(f"Failed to load snapshot: {e}")
 
@@ -574,15 +627,16 @@ with compare_tab:
                     metric_to_series[pretty[m]][label] = mean
 
             # Store results for post-hoc rendering and autosave snapshot
-            st.session_state.compare_results = {
+            st.session_state.compare_data = {
                 "metric_to_series": metric_to_series,
                 "selection_counts": selection_counts,
                 "labels_map": labels_map,
                 "methods": list(metric_to_series.get("Accuracy", {}).keys()),
             }
+            st.session_state.compare_results = st.session_state.compare_data
             try:
-                from csfl_simulator.app.state import save_snapshot
-                save_snapshot(None, {"type": "compare", **st.session_state.compare_results})
+                from csfl_simulator.app.state import save_compare
+                save_compare(st.session_state.compare_data, st.session_state.compare_ui, None)
             except Exception:
                 pass
 
@@ -594,9 +648,21 @@ with compare_tab:
                 )
                 # Post-hoc controls
                 methods_display = st.multiselect("Methods to display", st.session_state.compare_results["methods"], default=st.session_state.compare_results["methods"]) 
-                smoothing = st.slider("Smoothing window (rounds)", 0, 20, 0)
-                y_axis = st.radio("Y scale", ["linear", "log"], index=0)
-                lw = st.slider("Line width", 1, 6, 2)
+                smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
+                legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
+                # Persist UI state
+                st.session_state.compare_ui.update({
+                    "chart_style": "Interactive (Plotly)",
+                    "plotly_template": template_choice,
+                    "methods_filter": methods_display,
+                    "smoothing": int(smoothing),
+                    "y_scale": y_axis,
+                    "legend_position": legend_pos,
+                    "line_width": float(lw),
+                    "show_combined": bool(show_combined),
+                })
                 st.caption("Tip: Click legend items in Plotly to toggle series; use smoothing to reduce noise.")
                 for metric_display, series_map in metric_to_series.items():
                     fig = _call_plot_func(
@@ -608,6 +674,7 @@ with compare_tab:
                         smoothing_window=int(smoothing),
                         y_axis_type=y_axis,
                         line_width=float(lw),
+                        legend_position=legend_pos,
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 if show_combined:
@@ -619,6 +686,7 @@ with compare_tab:
                         smoothing_window=int(smoothing),
                         y_axis_type=y_axis,
                         line_width=float(lw),
+                        legend_position=legend_pos,
                     )
                     st.plotly_chart(figc, use_container_width=True)
                 if selection_counts:
@@ -629,6 +697,27 @@ with compare_tab:
                         methods_filter=methods_display,
                     )
                     st.plotly_chart(figsc, use_container_width=True)
+                # Reset/Clear controls
+                col_rc1, col_rc2 = st.columns([1,1])
+                if col_rc1.button("Reset Plot UI (Compare)"):
+                    st.session_state.compare_ui = {
+                        "chart_style": "Interactive (Plotly)",
+                        "plotly_template": "plotly_white",
+                        "mpl_style": "classic",
+                        "methods_filter": st.session_state.compare_results.get("methods", []),
+                        "metrics_filter": None,
+                        "smoothing": 0,
+                        "y_scale": "linear",
+                        "legend_position": "right",
+                        "legend_cols": 1,
+                        "line_width": 2.0,
+                        "show_combined": True,
+                    }
+                    st.experimental_rerun()
+                if col_rc2.button("Clear Comparison Results"):
+                    st.session_state.compare_data = None
+                    st.session_state.compare_results = None
+                    st.experimental_rerun()
             else:
                 try:
                     from csfl_simulator.app.components.plots import (
@@ -643,10 +732,20 @@ with compare_tab:
                     )
                     _counts_mpl_cmp_tab = None
                 methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=list(metric_to_series.get("Accuracy", {}).keys()))
-                smoothing = st.slider("Smoothing window (rounds)", 0, 20, 0)
-                y_axis = st.radio("Y scale", ["linear", "log"], index=0)
-                legend_out = st.checkbox("Legend outside (right)", value=True)
-                lw = st.slider("Line width", 1, 6, 2)
+                smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
+                lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
+                st.session_state.compare_ui.update({
+                    "chart_style": "Paper (Matplotlib)",
+                    "mpl_style": style_choice,
+                    "methods_filter": methods_display,
+                    "smoothing": int(smoothing),
+                    "y_scale": y_axis,
+                    "legend_position": legend_pos,
+                    "line_width": float(lw),
+                    "show_combined": bool(show_combined),
+                })
                 st.caption("Paper-style: legend moved outside to avoid overlap; adjust line width and smoothing as needed.")
                 for metric_display, series_map in metric_to_series.items():
                     try:
@@ -656,7 +755,7 @@ with compare_tab:
                             metric_display,
                             style_name=style_choice,
                             methods_filter=methods_display,
-                            legend_outside=legend_out,
+                            legend_position=legend_pos,
                             smoothing_window=int(smoothing),
                             y_axis_type=y_axis,
                             line_width=float(lw),
@@ -671,7 +770,7 @@ with compare_tab:
                             metric_to_series,
                             style_name=style_choice,
                             methods_filter=methods_display,
-                            legend_outside=legend_out,
+                            legend_position=legend_pos,
                             smoothing_window=int(smoothing),
                             y_axis_type=y_axis,
                             line_width=float(lw),
@@ -687,13 +786,33 @@ with compare_tab:
                                 selection_counts,
                                 style_name=style_choice,
                                 methods_filter=methods_display,
-                                legend_outside=legend_out,
+                                legend_position=legend_pos,
                             )
                             st.pyplot(figsc, clear_figure=True)
                         except Exception as e:
                             st.error(f"Matplotlib selection counts plotting failed: {e}")
                     else:
                         st.info("Selection counts (matplotlib) plot not available on this setup.")
+                col_rc3, col_rc4 = st.columns([1,1])
+                if col_rc3.button("Reset Plot UI (Compare)"):
+                    st.session_state.compare_ui = {
+                        "chart_style": "Interactive (Plotly)",
+                        "plotly_template": "plotly_white",
+                        "mpl_style": "classic",
+                        "methods_filter": list(metric_to_series.get("Accuracy", {}).keys()),
+                        "metrics_filter": None,
+                        "smoothing": 0,
+                        "y_scale": "linear",
+                        "legend_position": "right",
+                        "legend_cols": 1,
+                        "line_width": 2.0,
+                        "show_combined": True,
+                    }
+                    st.experimental_rerun()
+                if col_rc4.button("Clear Comparison Results"):
+                    st.session_state.compare_data = None
+                    st.session_state.compare_results = None
+                    st.experimental_rerun()
 
             # Failures summary (Compare tab)
             if failures_compare_tab:
@@ -709,27 +828,197 @@ with compare_tab:
                 col_s3, col_s4 = st.columns([1,1])
                 if col_s3.button("Save Snapshot", key="cmp_save_btn"):
                     try:
-                        from csfl_simulator.app.state import save_snapshot
-                        save_snapshot(snap_name2 if snap_name2 else None, {"type": "compare", **st.session_state.compare_results})
+                        from csfl_simulator.app.state import save_compare
+                        save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name2 if snap_name2 else None)
                         st.success("Snapshot saved.")
                     except Exception as e:
                         st.error(f"Failed to save snapshot: {e}")
                 with col_s4:
                     try:
-                        from csfl_simulator.app.state import list_snapshots, load_snapshot
-                        snaps2 = list_snapshots()
+                        from csfl_simulator.app.state import list_snapshots, load_compare
+                        snaps2 = list_snapshots(kind='compare')
                         pick2 = st.selectbox("Load snapshot", [str(p.name) for p in snaps2], index=0 if snaps2 else None, key="cmp_snap_pick")
+                        apply_ui2 = st.checkbox("Apply UI from snapshot (overwrite current)", value=False, key="cmp_apply_ui")
                         if st.button("Load Selected Snapshot", key="cmp_load_btn") and snaps2:
                             snap2 = next((p for p in snaps2 if p.name == pick2), None)
                             if snap2:
-                                data2 = load_snapshot(snap2)
-                                if data2.get("type") == "compare":
-                                    st.session_state.compare_results = data2
-                                    st.success("Comparison snapshot loaded. Rerun the controls to render.")
-                                else:
-                                    st.warning("Selected snapshot is not a comparison.")
+                                data2, ui2 = load_compare(snap2)
+                                st.session_state.compare_data = data2
+                                st.session_state.compare_results = data2
+                                if apply_ui2 and ui2:
+                                    st.session_state.compare_ui = ui2
+                                st.success("Comparison snapshot loaded. Rerun the controls to render.")
                     except Exception as e:
                         st.error(f"Failed to load snapshot: {e}")
+
+        # Render last comparison if available (no fresh compute required)
+        elif st.session_state.compare_results:
+            metric_to_series = st.session_state.compare_results.get("metric_to_series", {})
+            selection_counts = st.session_state.compare_results.get("selection_counts", {})
+            # Use the same rendering controls as above
+            chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0)
+            if chart_style.startswith("Interactive"):
+                from csfl_simulator.app.components.plots import (
+                    plot_metric_compare_plotly,
+                    plot_multi_panel_plotly,
+                    plot_selection_counts_compare_plotly,
+                )
+                methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=(st.session_state.compare_ui.get("methods_filter") or list(metric_to_series.get("Accuracy", {}).keys())))
+                smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
+                legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
+                st.session_state.compare_ui.update({
+                    "chart_style": "Interactive (Plotly)",
+                    "plotly_template": "plotly_white",
+                    "methods_filter": methods_display,
+                    "smoothing": int(smoothing),
+                    "y_scale": y_axis,
+                    "legend_position": legend_pos,
+                    "line_width": float(lw),
+                })
+                for metric_display, series_map in metric_to_series.items():
+                    fig = _call_plot_func(
+                        plot_metric_compare_plotly,
+                        series_map,
+                        metric_display,
+                        template="plotly_white",
+                        methods_filter=methods_display,
+                        smoothing_window=int(smoothing),
+                        y_axis_type=y_axis,
+                        line_width=float(lw),
+                        legend_position=legend_pos,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                if st.checkbox("Show combined 2x2", value=True):
+                    figc = _call_plot_func(
+                        plot_multi_panel_plotly,
+                        metric_to_series,
+                        template="plotly_white",
+                        methods_filter=methods_display,
+                        smoothing_window=int(smoothing),
+                        y_axis_type=y_axis,
+                        line_width=float(lw),
+                        legend_position=legend_pos,
+                    )
+                    st.plotly_chart(figc, use_container_width=True)
+                if selection_counts:
+                    figsc = _call_plot_func(
+                        plot_selection_counts_compare_plotly,
+                        selection_counts,
+                        template="plotly_white",
+                        methods_filter=methods_display,
+                    )
+                    st.plotly_chart(figsc, use_container_width=True)
+                col_rc5, col_rc6 = st.columns([1,1])
+                if col_rc5.button("Reset Plot UI (Compare)"):
+                    st.session_state.compare_ui = {
+                        "chart_style": "Interactive (Plotly)",
+                        "plotly_template": "plotly_white",
+                        "mpl_style": "classic",
+                        "methods_filter": list(metric_to_series.get("Accuracy", {}).keys()),
+                        "metrics_filter": None,
+                        "smoothing": 0,
+                        "y_scale": "linear",
+                        "legend_position": "right",
+                        "legend_cols": 1,
+                        "line_width": 2.0,
+                        "show_combined": True,
+                    }
+                    st.experimental_rerun()
+                if col_rc6.button("Clear Comparison Results"):
+                    st.session_state.compare_data = None
+                    st.session_state.compare_results = None
+                    st.experimental_rerun()
+            else:
+                try:
+                    from csfl_simulator.app.components.plots import (
+                        plot_metric_compare_matplotlib,
+                        plot_multi_panel_matplotlib,
+                        plot_selection_counts_compare_matplotlib as _counts_mpl_cmp_mem,
+                    )
+                except Exception:
+                    from csfl_simulator.app.components.plots import (
+                        plot_metric_compare_matplotlib,
+                        plot_multi_panel_matplotlib,
+                    )
+                    _counts_mpl_cmp_mem = None
+                methods_display = st.multiselect("Methods to display", list(metric_to_series.get("Accuracy", {}).keys()), default=(st.session_state.compare_ui.get("methods_filter") or list(metric_to_series.get("Accuracy", {}).keys())))
+                smoothing = st.slider("Smoothing window (rounds)", 0, 20, int(st.session_state.compare_ui.get("smoothing", 0)))
+                y_axis = st.radio("Y scale", ["linear", "log"], index=(0 if st.session_state.compare_ui.get("y_scale", "linear") == "linear" else 1))
+                legend_pos = st.selectbox("Legend position", ["right", "top", "inside"], index=( ["right","top","inside"].index(st.session_state.compare_ui.get("legend_position","right")) ))
+                lw = st.slider("Line width", 1, 6, int(st.session_state.compare_ui.get("line_width", 2)))
+                st.session_state.compare_ui.update({
+                    "chart_style": "Paper (Matplotlib)",
+                    "methods_filter": methods_display,
+                    "smoothing": int(smoothing),
+                    "y_scale": y_axis,
+                    "legend_position": legend_pos,
+                    "line_width": float(lw),
+                })
+                for metric_display, series_map in metric_to_series.items():
+                    try:
+                        fig = _call_plot_func(
+                            plot_metric_compare_matplotlib,
+                            series_map,
+                            metric_display,
+                            style_name="classic",
+                            methods_filter=methods_display,
+                            legend_position=legend_pos,
+                            smoothing_window=int(smoothing),
+                            y_axis_type=y_axis,
+                            line_width=float(lw),
+                        )
+                        st.pyplot(fig, clear_figure=True)
+                    except Exception as e:
+                        st.error(f"Matplotlib plotting failed for {metric_display}: {e}")
+                if st.checkbox("Show combined 2x2", value=True):
+                    try:
+                        figc = _call_plot_func(
+                            plot_multi_panel_matplotlib,
+                            metric_to_series,
+                            style_name="classic",
+                            methods_filter=methods_display,
+                            legend_position=legend_pos,
+                            smoothing_window=int(smoothing),
+                            y_axis_type=y_axis,
+                            line_width=float(lw),
+                        )
+                        st.pyplot(figc, clear_figure=True)
+                    except Exception as e:
+                        st.error(f"Matplotlib multi-panel plotting failed: {e}")
+                if selection_counts and _counts_mpl_cmp_mem is not None:
+                    try:
+                        figsc = _call_plot_func(
+                            _counts_mpl_cmp_mem,
+                            selection_counts,
+                            style_name="classic",
+                            methods_filter=methods_display,
+                            legend_position=legend_pos,
+                        )
+                        st.pyplot(figsc, clear_figure=True)
+                    except Exception as e:
+                        st.error(f"Matplotlib selection counts plotting failed: {e}")
+                col_rc7, col_rc8 = st.columns([1,1])
+                if col_rc7.button("Reset Plot UI (Compare)"):
+                    st.session_state.compare_ui = {
+                        "chart_style": "Interactive (Plotly)",
+                        "plotly_template": "plotly_white",
+                        "mpl_style": "classic",
+                        "methods_filter": list(metric_to_series.get("Accuracy", {}).keys()),
+                        "metrics_filter": None,
+                        "smoothing": 0,
+                        "y_scale": "linear",
+                        "legend_position": "right",
+                        "legend_cols": 1,
+                        "line_width": 2.0,
+                        "show_combined": True,
+                    }
+                    st.experimental_rerun()
+                if col_rc8.button("Clear Comparison Results"):
+                    st.session_state.compare_data = None
+                    st.session_state.compare_results = None
+                    st.experimental_rerun()
 
 with export_tab:
     st.subheader("Export to Notebook")

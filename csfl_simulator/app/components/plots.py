@@ -214,6 +214,7 @@ def plot_metric_compare_plotly(
     smoothing_window: int = 0,
     y_axis_type: str = "linear",
     line_width: float = 2.0,
+    legend_position: str = "right",
 ) -> go.Figure:
     fig = go.Figure()
     tmpl = _safe_template(template)
@@ -225,7 +226,12 @@ def plot_metric_compare_plotly(
         ys = _smooth_series(ys, smoothing_window)
         xs = list(range(len(ys)))
         fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}))
-    fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl)
+    legend = {}
+    if legend_position == "top":
+        legend = {"orientation": "h", "y": 1.02, "yanchor": "bottom", "x": 0.0, "xanchor": "left"}
+    elif legend_position == "right":
+        legend = {"orientation": "v", "y": 1.0, "yanchor": "top", "x": 1.02, "xanchor": "left"}
+    fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl, legend=legend)
     fig.update_yaxes(type=y_axis_type)
     return fig
 
@@ -250,6 +256,7 @@ def plot_multi_panel_plotly(
     smoothing_window: int = 0,
     y_axis_type: str = "linear",
     line_width: float = 2.0,
+    legend_position: str = "right",
 ):
     if make_subplots is None:
         # Fallback: single figure by concatenating traces
@@ -276,7 +283,12 @@ def plot_multi_panel_plotly(
             fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}, showlegend=(idx == 0)), row=r, col=c)
         fig.update_xaxes(title_text="Round", row=r, col=c)
         fig.update_yaxes(title_text=metric, row=r, col=c)
-    fig.update_layout(template=tmpl)
+    legend = {}
+    if legend_position == "top":
+        legend = {"orientation": "h", "y": 1.02, "yanchor": "bottom", "x": 0.0, "xanchor": "left"}
+    elif legend_position == "right":
+        legend = {"orientation": "v", "y": 1.0, "yanchor": "top", "x": 1.02, "xanchor": "left"}
+    fig.update_layout(template=tmpl, legend=legend)
     fig.update_yaxes(type=y_axis_type)
     return fig
 
@@ -303,6 +315,7 @@ def plot_metric_compare_matplotlib(
     style_name: str = "classic",
     methods_filter: Optional[List[str]] = None,
     legend_outside: bool = True,
+    legend_position: Optional[str] = None,
     legend_cols: int = 1,
     smoothing_window: int = 0,
     y_axis_type: str = "linear",
@@ -334,8 +347,10 @@ def plot_metric_compare_matplotlib(
             ax.set_yscale(y_axis_type)
         except Exception:
             pass
-        if legend_outside:
-            # place legend to the right, avoid covering the plot
+        pos = legend_position
+        if pos is None:
+            pos = "right" if legend_outside else "inside"
+        if pos == "right":
             lg = ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=max(1, int(legend_cols)))
             try:
                 lg.set_frame_on(True)
@@ -344,6 +359,12 @@ def plot_metric_compare_matplotlib(
             # leave room on the right for legend
             try:
                 fig.tight_layout(rect=[0.0, 0.0, 0.80, 1.0])
+            except Exception:
+                fig.tight_layout()
+        elif pos == "top":
+            fig.legend(loc='upper center', ncol=max(1, int(legend_cols)))
+            try:
+                fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.90])
             except Exception:
                 fig.tight_layout()
         else:
@@ -357,6 +378,7 @@ def plot_multi_panel_matplotlib(
     style_name: str = "classic",
     methods_filter: Optional[List[str]] = None,
     legend_outside: bool = True,
+    legend_position: Optional[str] = None,
     legend_cols: int = 1,
     smoothing_window: int = 0,
     y_axis_type: str = "linear",
@@ -396,10 +418,19 @@ def plot_multi_panel_matplotlib(
                 pass
         # Put a single shared legend
         handles, labels = axes[0][0].get_legend_handles_labels()
-        if legend_outside:
+        pos = legend_position
+        if pos is None:
+            pos = "right" if legend_outside else "inside"
+        if pos == "right":
             fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=max(1, int(legend_cols)))
             try:
                 fig.tight_layout(rect=[0.0, 0.0, 0.80, 1.0])
+            except Exception:
+                fig.tight_layout()
+        elif pos == "top":
+            fig.legend(handles, labels, loc='upper center', ncol=max(1, int(legend_cols)))
+            try:
+                fig.tight_layout(rect=[0.0, 0.0, 1.0, 0.90])
             except Exception:
                 fig.tight_layout()
         else:
