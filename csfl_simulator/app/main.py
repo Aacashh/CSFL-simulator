@@ -1200,15 +1200,43 @@ with visualize_tab:
         if viz_ui["chart_style"].startswith("Interactive"):
             from csfl_simulator.app.components.plots import plot_metric_compare_plotly, plot_multi_panel_plotly
             for metric, series_map in filtered_mts.items():
-                fig = plot_metric_compare_plotly(series_map, metric, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                fig = _call_plot_func(
+                    plot_metric_compare_plotly,
+                    series_map,
+                    metric,
+                    template=viz_ui["plotly_template"],
+                    methods_filter=viz_ui["methods"],
+                    smoothing_window=viz_ui["smoothing"],
+                    y_axis_type=viz_ui["y_scale"],
+                    line_width=viz_ui["line_width"],
+                    legend_position=viz_ui["legend_position"],
+                )
                 st.plotly_chart(fig, use_container_width=True)
             if viz_ui["show_combined"] and filtered_mts:
-                figc = plot_multi_panel_plotly(filtered_mts, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                figc = _call_plot_func(
+                    plot_multi_panel_plotly,
+                    filtered_mts,
+                    template=viz_ui["plotly_template"],
+                    methods_filter=viz_ui["methods"],
+                    smoothing_window=viz_ui["smoothing"],
+                    y_axis_type=viz_ui["y_scale"],
+                    line_width=viz_ui["line_width"],
+                    legend_position=viz_ui["legend_position"],
+                )
                 st.plotly_chart(figc, use_container_width=True)
             # Export
             try:
                 from datetime import datetime as _dt
-                figx = plot_multi_panel_plotly(filtered_mts, template=viz_ui["plotly_template"], methods_filter=viz_ui["methods"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"], legend_position=viz_ui["legend_position"])
+                figx = _call_plot_func(
+                    plot_multi_panel_plotly,
+                    filtered_mts,
+                    template=viz_ui["plotly_template"],
+                    methods_filter=viz_ui["methods"],
+                    smoothing_window=viz_ui["smoothing"],
+                    y_axis_type=viz_ui["y_scale"],
+                    line_width=viz_ui["line_width"],
+                    legend_position=viz_ui["legend_position"],
+                )
                 html = figx.to_html(include_plotlyjs="cdn")
                 st.download_button("Download HTML", data=html, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.html", mime="text/html", key="viz_dl_html")
                 try:
@@ -1221,10 +1249,29 @@ with visualize_tab:
         else:
             from csfl_simulator.app.components.plots import plot_metric_compare_matplotlib, plot_multi_panel_matplotlib
             for metric in viz_ui["metrics"]:
-                fig = plot_metric_compare_matplotlib(filtered_mts.get(metric, {}), metric, style_name=viz_ui["mpl_style"], methods_filter=viz_ui["methods"], legend_position=viz_ui["legend_position"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"])
+                fig = _call_plot_func(
+                    plot_metric_compare_matplotlib,
+                    filtered_mts.get(metric, {}),
+                    metric,
+                    style_name=viz_ui["mpl_style"],
+                    methods_filter=viz_ui["methods"],
+                    legend_position=viz_ui["legend_position"],
+                    smoothing_window=viz_ui["smoothing"],
+                    y_axis_type=viz_ui["y_scale"],
+                    line_width=viz_ui["line_width"],
+                )
                 st.pyplot(fig, clear_figure=True)
             if viz_ui["show_combined"] and filtered_mts:
-                figc = plot_multi_panel_matplotlib(filtered_mts, style_name=viz_ui["mpl_style"], methods_filter=viz_ui["methods"], legend_position=viz_ui["legend_position"], smoothing_window=viz_ui["smoothing"], y_axis_type=viz_ui["y_scale"], line_width=viz_ui["line_width"])
+                figc = _call_plot_func(
+                    plot_multi_panel_matplotlib,
+                    filtered_mts,
+                    style_name=viz_ui["mpl_style"],
+                    methods_filter=viz_ui["methods"],
+                    legend_position=viz_ui["legend_position"],
+                    smoothing_window=viz_ui["smoothing"],
+                    y_axis_type=viz_ui["y_scale"],
+                    line_width=viz_ui["line_width"],
+                )
                 st.pyplot(figc, clear_figure=True)
 
         # Presets & CSV export
