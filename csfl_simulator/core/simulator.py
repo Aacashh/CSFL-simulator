@@ -97,6 +97,49 @@ class FLSimulator:
                     self.model.conv1 = nn.Conv2d(c0, 64, kernel_size=7, stride=2, padding=3, bias=False).to(self.device)
                 except Exception:
                     pass
+            # Generic safety: ensure the very first Conv2d matches input channels
+            try:
+                def _first_conv_and_parent(m: nn.Module):
+                    parent = None
+                    attr_name = None
+                    for n, mod in m.named_modules():
+                        if isinstance(mod, nn.Conv2d):
+                            # find parent via attribute walk
+                            parts = n.split(".")
+                            p = m
+                            for part in parts[:-1]:
+                                p = getattr(p, part)
+                            return p, parts[-1], mod
+                    return None, None, None
+                p, aname, conv = _first_conv_and_parent(self.model)
+                if conv is not None and int(conv.in_channels) != c0:
+                    new_conv = nn.Conv2d(c0, conv.out_channels, kernel_size=conv.kernel_size, stride=conv.stride,
+                                         padding=conv.padding, dilation=conv.dilation, groups=conv.groups,
+                                         bias=(conv.bias is not None), padding_mode=conv.padding_mode).to(self.device)
+                    # Initialize new weights by tiling/averaging to preserve scale
+                    with torch.no_grad():
+                        w_old = conv.weight.data
+                        in_old = int(w_old.shape[1])
+                        if c0 == in_old:
+                            new_conv.weight.copy_(w_old)
+                        elif c0 > in_old:
+                            reps = (c0 + in_old - 1) // in_old
+                            w_rep = w_old.repeat(1, reps, 1, 1)[:, :c0]
+                            # scale to keep variance roughly similar
+                            w_rep = w_rep * (in_old / float(c0))
+                            new_conv.weight.copy_(w_rep)
+                        else:  # c0 < in_old
+                            # average first in_old -> c0 groups
+                            step = in_old / float(c0)
+                            idxs = [int(i * step) for i in range(c0)]
+                            w_sel = w_old[:, idxs, :, :].clone()
+                            new_conv.weight.copy_(w_sel)
+                        if new_conv.bias is not None and conv.bias is not None:
+                            new_conv.bias.copy_(conv.bias.data)
+                    if p is not None and aname is not None:
+                        setattr(p, aname, new_conv)
+            except Exception:
+                pass
         except Exception:
             pass
         # Preflight: validate model <-> data compatibility early (channels, shapes, class count)
