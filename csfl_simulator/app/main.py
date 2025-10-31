@@ -39,6 +39,25 @@ def _safe_mpl(plot_func, *args, **kwargs):
     except Exception as e:
         st.error(f"Matplotlib rendering failed: {e}")
 
+
+def _get_state_module():
+    """Import snapshot state module robustly across environments."""
+    try:
+        from csfl_simulator.app import state as _state  # type: ignore
+        return _state
+    except Exception:
+        try:
+            import importlib.util  # type: ignore
+            from pathlib import Path as _Path  # type: ignore
+            _p = _Path(__file__).resolve().parent / "state.py"
+            spec = importlib.util.spec_from_file_location("csfl_simulator.app.state", _p)
+            module = importlib.util.module_from_spec(spec)  # type: ignore
+            assert spec and spec.loader
+            spec.loader.exec_module(module)  # type: ignore
+            return module
+        except Exception:
+            return None
+
 if "simulator" not in st.session_state:
     st.session_state.simulator = None
 if "last_result" not in st.session_state:
@@ -239,8 +258,9 @@ with run_tab:
             st.session_state.last_result = res
             # Autosave latest run snapshot
             try:
-                from csfl_simulator.app.state import save_run
-                save_run(st.session_state.run_data, st.session_state.run_ui, None)
+                _state_mod = _get_state_module()
+                if _state_mod:
+                    _state_mod.save_run(st.session_state.run_data, st.session_state.run_ui, None)
             except Exception:
                 pass
             if res.get("stopped_early"):
@@ -251,8 +271,9 @@ with run_tab:
             st.write("Metrics (per round):")
             st.dataframe(res["metrics"]) 
             try:
-                from csfl_simulator.app.state import SCHEMA_VERSION
-                st.caption(f"Snapshot schema v{SCHEMA_VERSION}. Plot UI is decoupled from data; toggling controls will not reset results.")
+                _state_mod = _get_state_module()
+                if _state_mod:
+                    st.caption(f"Snapshot schema v{_state_mod.SCHEMA_VERSION}. Plot UI is decoupled from data; toggling controls will not reset results.")
             except Exception:
                 pass
             # Plots
@@ -295,21 +316,24 @@ with run_tab:
                 col_s1, col_s2 = st.columns([1,1])
                 if col_s1.button("Save Snapshot"):
                     try:
-                        from csfl_simulator.app.state import save_run
-                        save_run(st.session_state.run_data or st.session_state.last_result, st.session_state.run_ui, snap_name if snap_name else None)
-                        st.success("Snapshot saved.")
+                        _state_mod = _get_state_module()
+                        if _state_mod:
+                            _state_mod.save_run(st.session_state.run_data or st.session_state.last_result, st.session_state.run_ui, snap_name if snap_name else None)
+                            st.success("Snapshot saved.")
+                        else:
+                            st.error("Failed to save snapshot: state module unavailable")
                     except Exception as e:
                         st.error(f"Failed to save snapshot: {e}")
                 with col_s2:
                     try:
-                        from csfl_simulator.app.state import list_snapshots, load_run
-                        snaps = list_snapshots(kind='run')
+                        _state_mod = _get_state_module()
+                        snaps = _state_mod.list_snapshots(kind='run') if _state_mod else []
                         pick = st.selectbox("Load snapshot", [str(p.name) for p in snaps], index=0 if snaps else None)
                         apply_ui = st.checkbox("Apply UI from snapshot (overwrite current)", value=False)
                         if st.button("Load Selected Snapshot") and snaps:
                             snap = next((p for p in snaps if p.name == pick), None)
-                            if snap:
-                                data, ui_loaded = load_run(snap)
+                            if snap and _state_mod:
+                                data, ui_loaded = _state_mod.load_run(snap)
                                 st.session_state.run_data = data
                                 st.session_state.last_result = data
                                 if apply_ui and ui_loaded:
@@ -654,8 +678,9 @@ with compare_tab:
             }
             st.session_state.compare_results = st.session_state.compare_data
             try:
-                from csfl_simulator.app.state import save_compare
-                save_compare(st.session_state.compare_data, st.session_state.compare_ui, None)
+                _state_mod = _get_state_module()
+                if _state_mod:
+                    _state_mod.save_compare(st.session_state.compare_data, st.session_state.compare_ui, None)
             except Exception:
                 pass
 
@@ -847,21 +872,24 @@ with compare_tab:
                 col_s3, col_s4 = st.columns([1,1])
                 if col_s3.button("Save Snapshot", key="cmp_save_btn"):
                     try:
-                        from csfl_simulator.app.state import save_compare
-                        save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name2 if snap_name2 else None)
-                        st.success("Snapshot saved.")
+                        _state_mod = _get_state_module()
+                        if _state_mod:
+                            _state_mod.save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name2 if snap_name2 else None)
+                            st.success("Snapshot saved.")
+                        else:
+                            st.error("Failed to save snapshot: state module unavailable")
                     except Exception as e:
                         st.error(f"Failed to save snapshot: {e}")
                 with col_s4:
                     try:
-                        from csfl_simulator.app.state import list_snapshots, load_compare
-                        snaps2 = list_snapshots(kind='compare')
+                        _state_mod = _get_state_module()
+                        snaps2 = _state_mod.list_snapshots(kind='compare') if _state_mod else []
                         pick2 = st.selectbox("Load snapshot", [str(p.name) for p in snaps2], index=0 if snaps2 else None, key="cmp_snap_pick")
                         apply_ui2 = st.checkbox("Apply UI from snapshot (overwrite current)", value=False, key="cmp_apply_ui")
                         if st.button("Load Selected Snapshot", key="cmp_load_btn") and snaps2:
                             snap2 = next((p for p in snaps2 if p.name == pick2), None)
-                            if snap2:
-                                data2, ui2 = load_compare(snap2)
+                            if snap2 and _state_mod:
+                                data2, ui2 = _state_mod.load_compare(snap2)
                                 st.session_state.compare_data = data2
                                 st.session_state.compare_results = data2
                                 if apply_ui2 and ui2:
@@ -1070,18 +1098,18 @@ with visualize_tab:
         data_obj = {"kind": "compare", "data": {"metric_to_series": series, "selection_counts": {}, "methods": ["Run"]}}
     elif viz_ui["source"] == "snapshot":
         try:
-            from csfl_simulator.app.state import list_snapshots, load_compare, load_run
+            _state_mod = _get_state_module()
             kind_choice = st.radio("Snapshot kind", ["compare", "run"], index=0, key="viz_snap_kind")
-            snaps = list_snapshots(kind=kind_choice)
+            snaps = _state_mod.list_snapshots(kind=kind_choice) if _state_mod else []
             pick = st.selectbox("Snapshot file", [str(p.name) for p in snaps], index=0 if snaps else None, key="viz_snap_pick")
             if snaps and st.button("Load Snapshot", key="viz_snap_load"):
                 snap = next((p for p in snaps if p.name == pick), None)
-                if snap:
+                if snap and _state_mod:
                     if kind_choice == "compare":
-                        d, _ = load_compare(snap)
+                        d, _ = _state_mod.load_compare(snap)
                         st.session_state.visualize_data = {"kind": "compare", "data": d}
                     else:
-                        d, _ = load_run(snap)
+                        d, _ = _state_mod.load_run(snap)
                         series = {}
                         for key, pretty in [("accuracy","Accuracy"),("f1","F1"),("precision","Precision"),("recall","Recall"),("loss","Loss")]:
                             vals = []
@@ -1134,7 +1162,16 @@ with visualize_tab:
             max_len = 0
         colr1, colr2 = st.columns([1,1])
         viz_ui["round_start"] = int(colr1.number_input("Round start", min_value=0, max_value=max(0, max_len-1), value=int(viz_ui.get("round_start", 0)), step=1, key="viz_r0"))
-        viz_ui["round_end"] = int(colr2.number_input("Round end", min_value=viz_ui["round_start"], max_value=max(0, max_len-1), value=int(viz_ui.get("round_end", max(0, max_len-1) if viz_ui.get("round_end") is None else viz_ui.get("round_end"))), step=1, key="viz_r1"))
+        _end_default = viz_ui.get("round_end")
+        if _end_default is None:
+            _end_default = max(0, max_len - 1)
+        else:
+            try:
+                _end_default = int(_end_default)
+            except Exception:
+                _end_default = max(0, max_len - 1)
+        _end_default = min(max(_end_default, viz_ui["round_start"]), max(0, max_len - 1))
+        viz_ui["round_end"] = int(colr2.number_input("Round end", min_value=viz_ui["round_start"], max_value=max(0, max_len-1), value=_end_default, step=1, key="viz_r1"))
         # Build filtered data
         filtered_mts = {}
         for metric in viz_ui["metrics"]:
