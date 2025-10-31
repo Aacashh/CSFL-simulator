@@ -1,11 +1,27 @@
 import streamlit as st
 from dataclasses import asdict
 import traceback
+import inspect
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
 from csfl_simulator.core.utils import ROOT
 
 st.set_page_config(page_title="CSFL Simulator", layout="wide")
+
+# Plot-call compatibility helper: filter kwargs not supported by the target function
+def _call_plot_func(func, *args, **kwargs):
+    try:
+        sig = inspect.signature(func)
+        allowed = set(
+            p.name
+            for p in sig.parameters.values()
+            if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        )
+        filtered = {k: v for k, v in kwargs.items() if k in allowed}
+        return func(*args, **filtered)
+    except Exception:
+        # Last resort: try positional-only
+        return func(*args)
 
 if "simulator" not in st.session_state:
     st.session_state.simulator = None
@@ -368,13 +384,13 @@ with run_tab:
                             plot_selection_counts_compare_plotly,
                         )
                         for metric_display, series_map in metric_to_series.items():
-                            fig = plot_metric_compare_plotly(series_map, metric_display, template=template_choice2)
+                            fig = _call_plot_func(plot_metric_compare_plotly, series_map, metric_display, template=template_choice2)
                             st.plotly_chart(fig, use_container_width=True)
                         if show_combined2:
-                            figc = plot_multi_panel_plotly(metric_to_series, template=template_choice2)
+                            figc = _call_plot_func(plot_multi_panel_plotly, metric_to_series, template=template_choice2)
                             st.plotly_chart(figc, use_container_width=True)
                         if selection_counts:
-                            figsc = plot_selection_counts_compare_plotly(selection_counts, template=template_choice2)
+                            figsc = _call_plot_func(plot_selection_counts_compare_plotly, selection_counts, template=template_choice2)
                             st.plotly_chart(figsc, use_container_width=True)
                     else:
                         try:
@@ -390,15 +406,24 @@ with run_tab:
                             )
                             _counts_mpl_run_tab = None
                         for metric_display, series_map in metric_to_series.items():
-                            fig = plot_metric_compare_matplotlib(series_map, metric_display, style_name=style_choice2)
-                            st.pyplot(fig, clear_figure=True)
+                            try:
+                                fig = _call_plot_func(plot_metric_compare_matplotlib, series_map, metric_display, style_name=style_choice2)
+                                st.pyplot(fig, clear_figure=True)
+                            except Exception as e:
+                                st.error(f"Matplotlib plotting failed for {metric_display}: {e}")
                         if show_combined2:
-                            figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice2)
-                            st.pyplot(figc, clear_figure=True)
+                            try:
+                                figc = _call_plot_func(plot_multi_panel_matplotlib, metric_to_series, style_name=style_choice2)
+                                st.pyplot(figc, clear_figure=True)
+                            except Exception as e:
+                                st.error(f"Matplotlib multi-panel plotting failed: {e}")
                         if selection_counts:
                             if _counts_mpl_run_tab is not None:
-                                figsc = _counts_mpl_run_tab(selection_counts, style_name=style_choice2)
-                                st.pyplot(figsc, clear_figure=True)
+                                try:
+                                    figsc = _call_plot_func(_counts_mpl_run_tab, selection_counts, style_name=style_choice2)
+                                    st.pyplot(figsc, clear_figure=True)
+                                except Exception as e:
+                                    st.error(f"Matplotlib selection counts plotting failed: {e}")
                             else:
                                 st.info("Selection counts (matplotlib) plot not available on this setup.")
 
@@ -574,13 +599,35 @@ with compare_tab:
                 lw = st.slider("Line width", 1, 6, 2)
                 st.caption("Tip: Click legend items in Plotly to toggle series; use smoothing to reduce noise.")
                 for metric_display, series_map in metric_to_series.items():
-                    fig = plot_metric_compare_plotly(series_map, metric_display, template=template_choice, methods_filter=methods_display, smoothing_window=int(smoothing), y_axis_type=y_axis, line_width=float(lw))
+                    fig = _call_plot_func(
+                        plot_metric_compare_plotly,
+                        series_map,
+                        metric_display,
+                        template=template_choice,
+                        methods_filter=methods_display,
+                        smoothing_window=int(smoothing),
+                        y_axis_type=y_axis,
+                        line_width=float(lw),
+                    )
                     st.plotly_chart(fig, use_container_width=True)
                 if show_combined:
-                    figc = plot_multi_panel_plotly(metric_to_series, template=template_choice, methods_filter=methods_display, smoothing_window=int(smoothing), y_axis_type=y_axis, line_width=float(lw))
+                    figc = _call_plot_func(
+                        plot_multi_panel_plotly,
+                        metric_to_series,
+                        template=template_choice,
+                        methods_filter=methods_display,
+                        smoothing_window=int(smoothing),
+                        y_axis_type=y_axis,
+                        line_width=float(lw),
+                    )
                     st.plotly_chart(figc, use_container_width=True)
                 if selection_counts:
-                    figsc = plot_selection_counts_compare_plotly(selection_counts, template=template_choice, methods_filter=methods_display)
+                    figsc = _call_plot_func(
+                        plot_selection_counts_compare_plotly,
+                        selection_counts,
+                        template=template_choice,
+                        methods_filter=methods_display,
+                    )
                     st.plotly_chart(figsc, use_container_width=True)
             else:
                 try:
@@ -602,15 +649,49 @@ with compare_tab:
                 lw = st.slider("Line width", 1, 6, 2)
                 st.caption("Paper-style: legend moved outside to avoid overlap; adjust line width and smoothing as needed.")
                 for metric_display, series_map in metric_to_series.items():
-                    fig = plot_metric_compare_matplotlib(series_map, metric_display, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out, smoothing_window=int(smoothing), y_axis_type=y_axis, line_width=float(lw))
-                    st.pyplot(fig, clear_figure=True)
+                    try:
+                        fig = _call_plot_func(
+                            plot_metric_compare_matplotlib,
+                            series_map,
+                            metric_display,
+                            style_name=style_choice,
+                            methods_filter=methods_display,
+                            legend_outside=legend_out,
+                            smoothing_window=int(smoothing),
+                            y_axis_type=y_axis,
+                            line_width=float(lw),
+                        )
+                        st.pyplot(fig, clear_figure=True)
+                    except Exception as e:
+                        st.error(f"Matplotlib plotting failed for {metric_display}: {e}")
                 if show_combined:
-                    figc = plot_multi_panel_matplotlib(metric_to_series, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out, smoothing_window=int(smoothing), y_axis_type=y_axis, line_width=float(lw))
-                    st.pyplot(figc, clear_figure=True)
+                    try:
+                        figc = _call_plot_func(
+                            plot_multi_panel_matplotlib,
+                            metric_to_series,
+                            style_name=style_choice,
+                            methods_filter=methods_display,
+                            legend_outside=legend_out,
+                            smoothing_window=int(smoothing),
+                            y_axis_type=y_axis,
+                            line_width=float(lw),
+                        )
+                        st.pyplot(figc, clear_figure=True)
+                    except Exception as e:
+                        st.error(f"Matplotlib multi-panel plotting failed: {e}")
                 if selection_counts:
                     if _counts_mpl_cmp_tab is not None:
-                        figsc = _counts_mpl_cmp_tab(selection_counts, style_name=style_choice, methods_filter=methods_display, legend_outside=legend_out)
-                        st.pyplot(figsc, clear_figure=True)
+                        try:
+                            figsc = _call_plot_func(
+                                _counts_mpl_cmp_tab,
+                                selection_counts,
+                                style_name=style_choice,
+                                methods_filter=methods_display,
+                                legend_outside=legend_out,
+                            )
+                            st.pyplot(figsc, clear_figure=True)
+                        except Exception as e:
+                            st.error(f"Matplotlib selection counts plotting failed: {e}")
                     else:
                         st.info("Selection counts (matplotlib) plot not available on this setup.")
 
