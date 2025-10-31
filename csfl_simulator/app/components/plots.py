@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 try:
     # Optional import; only used when paper-style is selected
@@ -188,24 +188,78 @@ def _safe_template(template: str) -> str:
     return template if template in allowed else "plotly_white"
 
 
-def plot_metric_compare_plotly(method_to_series: Dict[str, List[float]], metric_name: str, template: str = "plotly_white"):
+def _smooth_series(ys: List[float], window: int) -> List[float]:
+    if window is None or window <= 1:
+        return ys
+    try:
+        k = int(window)
+        k = max(1, k)
+        if k == 1 or len(ys) == 0:
+            return ys
+        cumsum = np.cumsum(np.insert(np.asarray(ys, dtype=float), 0, 0.0))
+        out = (cumsum[k:] - cumsum[:-k]) / float(k)
+        # pad to original length by repeating last value
+        if len(out) < len(ys):
+            out = np.concatenate([out, np.full(len(ys) - len(out), out[-1] if len(out) > 0 else 0.0)])
+        return out.tolist()
+    except Exception:
+        return ys
+
+
+def plot_metric_compare_plotly(
+    method_to_series: Dict[str, List[float]],
+    metric_name: str,
+    template: str = "plotly_white",
+    methods_filter: Optional[List[str]] = None,
+    smoothing_window: int = 0,
+    y_axis_type: str = "linear",
+    line_width: float = 2.0,
+) -> go.Figure:
     fig = go.Figure()
     tmpl = _safe_template(template)
-    for name, ys in method_to_series.items():
+    names = list(method_to_series.keys())
+    if methods_filter:
+        names = [n for n in names if n in methods_filter]
+    for name in names:
+        ys = method_to_series[name]
+        ys = _smooth_series(ys, smoothing_window)
         xs = list(range(len(ys)))
-        fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name))
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}))
     fig.update_layout(title=f"{metric_name} per Round", xaxis_title="Round", yaxis_title=metric_name, template=tmpl)
+    fig.update_yaxes(type=y_axis_type)
     return fig
 
 
-def plot_multi_panel_plotly(metric_to_series: Dict[str, Dict[str, List[float]]], template: str = "plotly_white"):
+def plot_loss(metrics):
+    ys = []
+    xs = []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("loss", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='loss'))
+    fig.update_layout(title="Loss per Round", xaxis_title="Round", yaxis_title="Loss", template="plotly_white")
+    return fig
+
+
+def plot_multi_panel_plotly(
+    metric_to_series: Dict[str, Dict[str, List[float]]],
+    template: str = "plotly_white",
+    methods_filter: Optional[List[str]] = None,
+    smoothing_window: int = 0,
+    y_axis_type: str = "linear",
+    line_width: float = 2.0,
+):
     if make_subplots is None:
         # Fallback: single figure by concatenating traces
         flat = {}
         for metric, mseries in metric_to_series.items():
             for name, ys in mseries.items():
+                if methods_filter and name not in methods_filter:
+                    continue
                 flat[f"{metric} — {name}"] = ys
-        return plot_metric_compare_plotly(flat, "Combined", template)
+        return plot_metric_compare_plotly(flat, "Combined", template, methods_filter=None, smoothing_window=smoothing_window, y_axis_type=y_axis_type, line_width=line_width)
     metrics = list(metric_to_series.keys())
     # Ensure deterministic ordering and up to 4 panels
     wanted = [m for m in ["Accuracy", "F1", "Precision", "Recall"] if m in metric_to_series] or metrics[:4]
@@ -215,11 +269,15 @@ def plot_multi_panel_plotly(metric_to_series: Dict[str, Dict[str, List[float]]],
     for idx, metric in enumerate(wanted):
         r, c = (idx // cols) + 1, (idx % cols) + 1
         for name, ys in metric_to_series[metric].items():
+            if methods_filter and name not in methods_filter:
+                continue
+            ys = _smooth_series(ys, smoothing_window)
             xs = list(range(len(ys)))
-            fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, showlegend=(idx == 0)), row=r, col=c)
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines', name=name, line={"width": line_width}, showlegend=(idx == 0)), row=r, col=c)
         fig.update_xaxes(title_text="Round", row=r, col=c)
         fig.update_yaxes(title_text=metric, row=r, col=c)
     fig.update_layout(template=tmpl)
+    fig.update_yaxes(type=y_axis_type)
     return fig
 
 
@@ -239,7 +297,17 @@ def _resolve_mpl_style(style_name: str) -> str:
     return "classic"
 
 
-def plot_metric_compare_matplotlib(method_to_series: Dict[str, List[float]], metric_name: str, style_name: str = "classic"):
+def plot_metric_compare_matplotlib(
+    method_to_series: Dict[str, List[float]],
+    metric_name: str,
+    style_name: str = "classic",
+    methods_filter: Optional[List[str]] = None,
+    legend_outside: bool = True,
+    legend_cols: int = 1,
+    smoothing_window: int = 0,
+    y_axis_type: str = "linear",
+    line_width: float = 2.0,
+):
     if plt is None:
         raise RuntimeError("Matplotlib is not available")
     style = _resolve_mpl_style(style_name)
@@ -252,18 +320,48 @@ def plot_metric_compare_matplotlib(method_to_series: Dict[str, List[float]], met
             ax.set_facecolor("white")
         except Exception:
             pass
-        for name, ys in method_to_series.items():
+        names = list(method_to_series.keys())
+        if methods_filter:
+            names = [n for n in names if n in methods_filter]
+        for name in names:
+            ys = _smooth_series(method_to_series[name], smoothing_window)
             xs = list(range(len(ys)))
-            ax.plot(xs, ys, label=name)
+            ax.plot(xs, ys, label=name, linewidth=line_width)
         ax.set_title(f"{metric_name} per Round")
         ax.set_xlabel("Round")
         ax.set_ylabel(metric_name)
-        ax.legend()
-        fig.tight_layout()
+        try:
+            ax.set_yscale(y_axis_type)
+        except Exception:
+            pass
+        if legend_outside:
+            # place legend to the right, avoid covering the plot
+            lg = ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=max(1, int(legend_cols)))
+            try:
+                lg.set_frame_on(True)
+            except Exception:
+                pass
+            # leave room on the right for legend
+            try:
+                fig.tight_layout(rect=[0.0, 0.0, 0.80, 1.0])
+            except Exception:
+                fig.tight_layout()
+        else:
+            ax.legend(ncol=max(1, int(legend_cols)))
+            fig.tight_layout()
     return fig
 
 
-def plot_multi_panel_matplotlib(metric_to_series: Dict[str, Dict[str, List[float]]], style_name: str = "classic"):
+def plot_multi_panel_matplotlib(
+    metric_to_series: Dict[str, Dict[str, List[float]]],
+    style_name: str = "classic",
+    methods_filter: Optional[List[str]] = None,
+    legend_outside: bool = True,
+    legend_cols: int = 1,
+    smoothing_window: int = 0,
+    y_axis_type: str = "linear",
+    line_width: float = 2.0,
+):
     if plt is None:
         raise RuntimeError("Matplotlib is not available")
     style = _resolve_mpl_style(style_name)
@@ -282,13 +380,94 @@ def plot_multi_panel_matplotlib(metric_to_series: Dict[str, Dict[str, List[float
         for idx, metric in enumerate(wanted):
             r, c = divmod(idx, 2)
             ax = axes[r][c]
-            for name, ys in metric_to_series[metric].items():
+            names = list(metric_to_series[metric].keys())
+            if methods_filter:
+                names = [n for n in names if n in methods_filter]
+            for name in names:
+                ys = _smooth_series(metric_to_series[metric][name], smoothing_window)
                 xs = list(range(len(ys)))
-                ax.plot(xs, ys, label=name)
+                ax.plot(xs, ys, label=name, linewidth=line_width)
             ax.set_title(metric)
             ax.set_xlabel("Round")
             ax.set_ylabel(metric)
-            if idx == 0:
-                ax.legend()
-        fig.tight_layout()
+            try:
+                ax.set_yscale(y_axis_type)
+            except Exception:
+                pass
+        # Put a single shared legend
+        handles, labels = axes[0][0].get_legend_handles_labels()
+        if legend_outside:
+            fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=max(1, int(legend_cols)))
+            try:
+                fig.tight_layout(rect=[0.0, 0.0, 0.80, 1.0])
+            except Exception:
+                fig.tight_layout()
+        else:
+            fig.legend(handles, labels, loc='upper center', ncol=max(1, int(legend_cols)))
+            fig.tight_layout()
     return fig
+
+
+# ---------- Additional plots for loss and selection counts ----------
+
+def plot_selection_counts_compare_plotly(
+    method_to_counts: Dict[str, List[int]],
+    template: str = "plotly_white",
+    methods_filter: Optional[List[str]] = None,
+) -> go.Figure:
+    fig = go.Figure()
+    tmpl = _safe_template(template)
+    names = list(method_to_counts.keys())
+    if methods_filter:
+        names = [n for n in names if n in methods_filter]
+    x = None
+    for name in names:
+        ys = method_to_counts[name]
+        if x is None:
+            x = list(range(len(ys)))
+        fig.add_trace(go.Bar(x=x, y=ys, name=name))
+    fig.update_layout(title="Client Selection Counts", xaxis_title="Client ID", yaxis_title="Times Selected", template=tmpl, barmode='group')
+    return fig
+
+
+def plot_selection_counts_compare_matplotlib(
+    method_to_counts: Dict[str, List[int]],
+    style_name: str = "classic",
+    methods_filter: Optional[List[str]] = None,
+    legend_outside: bool = True,
+    legend_cols: int = 1,
+):
+    if plt is None:
+        raise RuntimeError("Matplotlib is not available")
+    style = _resolve_mpl_style(style_name)
+    with plt.style.context(style):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        try:
+            fig.patch.set_alpha(1.0)
+            fig.patch.set_facecolor("white")
+            ax.set_facecolor("white")
+        except Exception:
+            pass
+        names = list(method_to_counts.keys())
+        if methods_filter:
+            names = [n for n in names if n in methods_filter]
+        # bar grouping
+        num_clients = len(next(iter(method_to_counts.values()))) if method_to_counts else 0
+        idx = np.arange(num_clients)
+        w = 0.8 / max(1, len(names))
+        for i, name in enumerate(names):
+            ys = method_to_counts[name]
+            ax.bar(idx + i * w, ys, width=w, label=name)
+        ax.set_title("Client Selection Counts")
+        ax.set_xlabel("Client ID")
+        ax.set_ylabel("Times Selected")
+        if legend_outside:
+            ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=max(1, int(legend_cols)))
+            try:
+                fig.tight_layout(rect=[0.0, 0.0, 0.80, 1.0])
+            except Exception:
+                fig.tight_layout()
+        else:
+            ax.legend(ncol=max(1, int(legend_cols)))
+            fig.tight_layout()
+        return fig

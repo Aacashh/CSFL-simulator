@@ -40,6 +40,9 @@ class SimConfig:
     dp_sigma: float = 0.0
     dp_epsilon_per_round: float = 0.0
     reward_weights: Dict[str, float] = field(default_factory=lambda: {"acc": 0.6, "time": 0.2, "fair": 0.1, "dp": 0.1})
+    # Performance/diagnostics knobs
+    track_grad_norm: bool = False
+    parallel_clients: int = 0  # 0 = off (sequential)
 
 
 class FLSimulator:
@@ -54,6 +57,7 @@ class FLSimulator:
         # Ensure these attributes exist even before setup() to avoid attribute errors in UI
         self.clients: List[ClientInfo] = []
         self.client_loaders: Dict[int, Any] = {}
+        self._scratch_model = None
 
     def setup(self):
         # Datasets
@@ -149,13 +153,18 @@ class FLSimulator:
         save_json({"config": asdict(self.cfg), "device": self.device}, self.run_dir / "config.json")
 
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
-        import copy
         loader = self.client_loaders[cid]
-        # Deep-copy the current global model to preserve architecture/num_classes
-        model = copy.deepcopy(self.model).to(self.device)
+        # Reuse a scratch model to avoid per-client deepcopy cost
+        if self._scratch_model is None:
+            import copy as _copy
+            self._scratch_model = _copy.deepcopy(self.model).to(self.device)
+        model = self._scratch_model
+        # Reset weights to current global state
+        model.load_state_dict(self.model.state_dict())
         model.train()
         opt = optim.SGD(model.parameters(), lr=self.cfg.lr)
         last_loss = 0.0
+        last_grad_norm = 0.0
         for e in range(self.cfg.local_epochs):
             for bi, (x, y) in enumerate(loader):
                 x, y = x.to(self.device), y.to(self.device)
@@ -163,17 +172,22 @@ class FLSimulator:
                 out = model(x)
                 loss = self.criterion(out, y)
                 loss.backward()
+                if self.cfg.track_grad_norm:
+                    try:
+                        # Use last parameter tensor as a proxy for speed
+                        last_param = next(reversed(list(model.parameters())))
+                        if last_param.grad is not None:
+                            last_grad_norm = float(last_param.grad.norm().item())
+                    except Exception:
+                        pass
                 opt.step()
                 last_loss = float(loss.item())
                 if self.cfg.fast_mode and bi > 1:
                     break
-        # grad norm proxy via final layer
-        grad_norm = 0.0
+        # Export weights safely (clone tensors)
         with torch.no_grad():
-            for p in model.parameters():
-                if p.grad is not None:
-                    grad_norm += float(p.grad.norm().item())
-        return model.state_dict(), len(loader.dataset), last_loss, grad_norm
+            sd = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        return sd, len(loader.dataset), last_loss, (last_grad_norm if self.cfg.track_grad_norm else 0.0)
 
     def run(self, method_key: str = "heuristic.random", on_progress=None, is_cancelled=None) -> Dict[str, Any]:
         self.setup()
@@ -288,4 +302,18 @@ class FLSimulator:
                     pass
         # Save metrics
         save_json({"metrics": metrics}, self.run_dir / "metrics.json")
-        return {"run_id": self.run_id, "metrics": metrics, "config": asdict(self.cfg), "device": self.device, "stopped_early": stopped_early}
+        # Prepare participation counts snapshot
+        try:
+            participation_counts = [int(c.participation_count or 0) for c in self.clients]
+        except Exception:
+            participation_counts = []
+        return {
+            "run_id": self.run_id,
+            "metrics": metrics,
+            "config": asdict(self.cfg),
+            "device": self.device,
+            "stopped_early": stopped_early,
+            "method": method_key,
+            "history": {"selected": list(self.history.get("selected", []))},
+            "participation_counts": participation_counts,
+        }
