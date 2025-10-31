@@ -1179,7 +1179,21 @@ with visualize_tab:
             for mname, ys in (mts.get(metric, {}) or {}).items():
                 if viz_ui["methods"] and mname not in viz_ui["methods"]:
                     continue
-                ys2 = list(ys[viz_ui["round_start"]:viz_ui["round_end"]+1]) if max_len > 0 else list(ys)
+                start_i = int(viz_ui["round_start"]) if isinstance(viz_ui.get("round_start"), (int, float)) else 0
+                end_i = int(viz_ui["round_end"]) if isinstance(viz_ui.get("round_end"), (int, float)) else start_i
+                ys2 = []
+                try:
+                    if ys is None:
+                        ys2 = []
+                    elif max_len > 0:
+                        ys2 = list(ys[start_i:end_i + 1])
+                    else:
+                        ys2 = list(ys)
+                except Exception:
+                    try:
+                        ys2 = list(ys or [])
+                    except Exception:
+                        ys2 = []
                 mm[mname] = ys2
             filtered_mts[metric] = mm
         # Render
