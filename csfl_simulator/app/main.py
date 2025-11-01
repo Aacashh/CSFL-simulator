@@ -1152,17 +1152,6 @@ with visualize_tab:
     else:
         mts = data_obj["data"].get("metric_to_series", {})
         methods_all = list(next(iter(mts.values()), {}).keys())
-        # Sanitize UI selections to current data
-        if methods_all:
-            prev_methods = (st.session_state.get("viz_methods") or viz_ui.get("methods") or [])
-            valid_methods = [m for m in (prev_methods or []) if m in methods_all]
-            if not valid_methods:
-                valid_methods = methods_all
-            viz_ui["methods"] = valid_methods
-            try:
-                st.session_state["viz_methods"] = valid_methods
-            except Exception:
-                pass
         col1, col2, col3 = st.columns([1,1,1])
         with col1:
             viz_ui["chart_style"] = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=(0 if viz_ui.get("chart_style","Interactive (Plotly)").startswith("Interactive") else 1), key="viz_style")
@@ -1178,19 +1167,25 @@ with visualize_tab:
                 viz_ui["mpl_style"] = st.selectbox("Matplotlib style", mpl_styles, index=0, key="viz_mpl")
         with col3:
             viz_ui["show_combined"] = st.checkbox("Show combined 2x2", value=bool(viz_ui.get("show_combined", True)), key="viz_combined")
-        viz_ui["methods"] = st.multiselect("Methods", options=methods_all, default=(viz_ui.get("methods") or methods_all), key="viz_methods")
+        # Compute safe default for methods multiselect
+        methods_default = methods_all
+        if "viz_methods" in st.session_state and st.session_state["viz_methods"]:
+            # Keep user's previous selection if it's valid
+            prev_selection = st.session_state["viz_methods"]
+            methods_default = [m for m in prev_selection if m in methods_all]
+            if not methods_default:
+                methods_default = methods_all
+        viz_ui["methods"] = st.multiselect("Methods", options=methods_all, default=methods_default, key="viz_methods")
         metrics_all = [m for m in ["Accuracy","F1","Precision","Recall","Loss"] if m in mts]
-        if metrics_all:
-            prev_metrics = (st.session_state.get("viz_metrics") or viz_ui.get("metrics") or [])
-            valid_metrics = [m for m in (prev_metrics or []) if m in metrics_all]
-            if not valid_metrics:
-                valid_metrics = metrics_all
-            viz_ui["metrics"] = valid_metrics
-            try:
-                st.session_state["viz_metrics"] = valid_metrics
-            except Exception:
-                pass
-        viz_ui["metrics"] = st.multiselect("Metrics", options=metrics_all, default=(viz_ui.get("metrics") or metrics_all), key="viz_metrics")
+        # Compute safe default for metrics multiselect
+        metrics_default = metrics_all
+        if "viz_metrics" in st.session_state and st.session_state["viz_metrics"]:
+            # Keep user's previous selection if it's valid
+            prev_selection = st.session_state["viz_metrics"]
+            metrics_default = [m for m in prev_selection if m in metrics_all]
+            if not metrics_default:
+                metrics_default = metrics_all
+        viz_ui["metrics"] = st.multiselect("Metrics", options=metrics_all, default=metrics_default, key="viz_metrics")
         col4, col5, col6, col7 = st.columns([1,1,1,1])
         viz_ui["smoothing"] = int(col4.slider("Smoothing", 0, 20, int(viz_ui.get("smoothing", 0)), key="viz_smooth"))
         viz_ui["y_scale"] = col5.radio("Y scale", ["linear","log"], index=(0 if viz_ui.get("y_scale","linear") == "linear" else 1), key="viz_y")
