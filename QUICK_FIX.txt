@@ -1,0 +1,58 @@
+================================================================================
+  QUICK FIX FOR CHANNEL MISMATCH ERROR (Mac)
+================================================================================
+
+ERROR YOU'RE SEEING:
+  RuntimeError: expected input to have 1 channels, but got 3 channels
+
+CAUSE:
+  Python is using old cached bytecode (.pyc files)
+
+FIX (choose ONE):
+================================================================================
+
+OPTION 1: Use the startup script (EASIEST)
+------------------------------------------
+  cd /Users/advaitpathak/Desktop/CSFL-simulator
+  ./run_mac.sh
+
+  (This auto-cleans cache and starts the app)
+
+
+OPTION 2: Manual cache clean
+------------------------------------------
+  cd /Users/advaitpathak/Desktop/CSFL-simulator
+  ./clean_cache.sh
+  streamlit run csfl_simulator/app/main.py
+
+
+OPTION 3: One-liner
+------------------------------------------
+  find . -name "*.pyc" -delete && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null && streamlit run csfl_simulator/app/main.py
+
+
+OPTION 4: Force ignore cache
+------------------------------------------
+  python -B -m streamlit run csfl_simulator/app/main.py
+
+================================================================================
+
+VERIFICATION:
+  After starting, the Streamlit UI should NOT show a red error about stale cache.
+  If you see: "⚠️ STALE CACHE DETECTED" → cache clean didn't work, try Option 4.
+
+TESTING:
+  1. Initialize simulator with CIFAR-10 + CNN-MNIST
+  2. Run for 2 rounds
+  3. Should complete without channel errors
+
+STILL NOT WORKING?
+  Check which Python file is actually being used:
+    python -c "import csfl_simulator.core.models; print(csfl_simulator.core.models.__file__)"
+
+  Should show: /Users/advaitpathak/Desktop/CSFL-simulator/csfl_simulator/core/models.py
+
+  If it shows a different path, you have multiple installations conflicting.
+
+================================================================================
+

@@ -2,11 +2,33 @@ import streamlit as st
 from dataclasses import asdict
 import traceback
 import inspect
+import sys
+
+# Force reload of core modules to avoid stale bytecode cache issues
+# Remove this block after confirming cache is clean
+_RELOAD_CORE = True
+if _RELOAD_CORE:
+    for mod_name in list(sys.modules.keys()):
+        if mod_name.startswith('csfl_simulator.core'):
+            try:
+                del sys.modules[mod_name]
+            except Exception:
+                pass
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
 from csfl_simulator.core.utils import ROOT
 
 st.set_page_config(page_title="CSFL Simulator", layout="wide")
+
+# Diagnostic: verify core modules are fresh
+try:
+    from csfl_simulator.core import models as _models_mod
+    import inspect as _insp
+    _fwd_src = _insp.getsource(_models_mod.CNNMnist.forward)
+    if "_match_channels" not in _fwd_src:
+        st.error("⚠️ STALE CACHE DETECTED: core/models.py is using old bytecode. Run `./clean_cache.sh` and restart!")
+except Exception:
+    pass
 
 # Plot-call compatibility helper: filter kwargs not supported by the target function
 def _call_plot_func(func, *args, **kwargs):

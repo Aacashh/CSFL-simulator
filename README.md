@@ -64,9 +64,17 @@ pip install torch-geometric
 
 5) Launch the app
 
+**Mac users:** Use the safe startup script to avoid cache issues:
+```bash
+./run_mac.sh
+```
+
+**All platforms:**
 ```bash
 streamlit run csfl_simulator/app/main.py
 ```
+
+**Note:** If you get channel mismatch errors after updating code, see `QUICK_FIX.txt` or run `./clean_cache.sh`
 
 6) Smoke test
 - Dataset: MNIST, IID
