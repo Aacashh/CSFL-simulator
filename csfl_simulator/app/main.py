@@ -1199,7 +1199,8 @@ with visualize_tab:
         except Exception:
             max_len = 0
         colr1, colr2 = st.columns([1,1])
-        max_index = max(0, max_len - 1)
+        # Ensure minimum range of 100 for better UX even when no data
+        max_index = max(100, max_len - 1) if max_len > 0 else 100
         # Clamp any persisted widget state before rendering
         try:
             if isinstance(st.session_state.get("viz_r0"), (int, float)):
@@ -1217,7 +1218,7 @@ with visualize_tab:
         viz_ui["round_start"] = int(colr1.number_input("Round start", min_value=0, max_value=max_index, value=_start_default, step=1, key="viz_r0"))
         _end_default = viz_ui.get("round_end")
         if _end_default is None:
-            _end_default = max_index
+            _end_default = max_index if max_len > 0 else max_index
         else:
             try:
                 _end_default = int(_end_default)
@@ -1238,10 +1239,14 @@ with visualize_tab:
                 try:
                     if ys is None:
                         ys2 = []
-                    elif max_len > 0:
-                        ys2 = list(ys[start_i:end_i + 1])
+                    elif max_len > 0 and len(ys) > 0:
+                        # Clamp indices to actual data length
+                        actual_len = len(ys)
+                        safe_start = min(start_i, actual_len - 1) if actual_len > 0 else 0
+                        safe_end = min(end_i, actual_len - 1) if actual_len > 0 else 0
+                        ys2 = list(ys[safe_start:safe_end + 1])
                     else:
-                        ys2 = list(ys)
+                        ys2 = list(ys) if ys else []
                 except Exception:
                     try:
                         ys2 = list(ys or [])
