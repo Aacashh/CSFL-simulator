@@ -209,10 +209,12 @@ def _save_document(kind: Literal['run','compare'], data: Dict[str, Any], ui: Opt
     # Split arrays
     meta, arrays = _split_arrays_document(doc)
     _atomic_write(json_path, json.dumps(meta, indent=2).encode("utf-8"))
-    # npz atomic
-    tmp_npz = npz_path.with_suffix(npz_path.suffix + ".tmp")
+    # npz atomic - note: np.savez automatically adds .npz extension
+    tmp_npz = Path(str(npz_path) + ".tmp")
     np.savez(tmp_npz, **(arrays or {"_empty": np.asarray([], dtype=np.int8)}))
-    os.replace(tmp_npz, npz_path)
+    # np.savez created tmp_npz + ".npz", so we need to move that
+    tmp_npz_actual = Path(str(tmp_npz) + ".npz")
+    os.replace(tmp_npz_actual, npz_path)
 
     # Update latest pointers
     if not name:
@@ -220,9 +222,11 @@ def _save_document(kind: Literal['run','compare'], data: Dict[str, Any], ui: Opt
         latest_npz = SNAP_DIR / f"latest_{kind}.npz"
         try:
             _atomic_write(latest_json, json.dumps(meta, indent=2).encode("utf-8"))
-            tmp_npz2 = latest_npz.with_suffix(latest_npz.suffix + ".tmp")
+            tmp_npz2 = Path(str(latest_npz) + ".tmp")
             np.savez(tmp_npz2, **(arrays or {"_empty": np.asarray([], dtype=np.int8)}))
-            os.replace(tmp_npz2, latest_npz)
+            # np.savez created tmp_npz2 + ".npz", so we need to move that
+            tmp_npz2_actual = Path(str(tmp_npz2) + ".npz")
+            os.replace(tmp_npz2_actual, latest_npz)
         except Exception:
             pass
         # rotate autosaves: keep last N

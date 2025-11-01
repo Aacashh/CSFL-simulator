@@ -181,3 +181,52 @@ methods:
     params: {fraction: null}
     type: baseline
     trainable: false
+  - key: ml.fedcor
+    module: csfl_simulator.selection.ml.fedcor_approx
+    display_name: "FedCor (approx)"
+    origin: paper
+    params: {corr_alpha: 0.5, utility_weight: 1.0}
+    type: ml
+    trainable: false
+  - key: ml.dp_eig
+    module: csfl_simulator.selection.ml.dp_eig
+    display_name: "DP-EIG (info-gain greedy)"
+    origin: custom
+    params: {sigma: 0.0, lambda_cov: 0.3, lambda_time: 0.2}
+    type: ml
+    trainable: false
+  - key: ml.gnn_dpp
+    module: csfl_simulator.selection.ml.gnn_dpp
+    display_name: "GNN-DPP (diverse utility)"
+    origin: custom
+    params: {lambda_div: 0.5, attn_temp: 1.0}
+    type: ml
+    trainable: false
+  - key: ml.pareto_rl
+    module: csfl_simulator.selection.ml.pareto_rl
+    display_name: "ParetoRL (multi-objective)"
+    origin: custom
+    params: {w_acc: 0.6, w_time: 0.2, w_fair: 0.1, w_dp: 0.1, min_low_participation: 0}
+    type: ml
+    trainable: false
+  - key: ml.ucb_grad
+    module: csfl_simulator.selection.ml.ucb_grad
+    display_name: "UCB-Grad (utility + diversity)"
+    origin: custom
+    params: {w_reward: 0.6, w_loss: 0.2, w_grad: 0.2, alpha_ucb: 0.5, lambda_div: 0.2, time_awareness: true}
+    type: ml
+    trainable: false
+  - key: ml.maml_select
+    module: csfl_simulator.selection.ml.maml_select
+    display_name: "MAML-Select (adaptive MLP)"
+    origin: custom
+    params: {max_history: 5000, inner_steps: 3, lr: 0.001, exploration_ucb: 0.2}
+    type: ml
+    trainable: true
+  - key: ml.fedcluster_plus
+    module: csfl_simulator.selection.ml.fedcluster_plus
+    display_name: "FedCluster+ (adaptive clustering)"
+    origin: custom
+    params: {refresh_every: 3, cluster_k: null, rep_weight: 0.5, cluster_importance_decay: 0.95}
+    type: ml
+    trainable: false

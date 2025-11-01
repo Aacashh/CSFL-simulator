@@ -208,3 +208,27 @@ For implementation references, see the indicated file under `csfl_simulator/sele
 - Attention Is All You Need (NeurIPS 2017). [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
 - REINFORCE (1992). [Springer link](https://link.springer.com/article/10.1007/BF00992696)
 - DP-SGD (CCS 2016). [arXiv:1607.00133](https://arxiv.org/abs/1607.00133)
+
+### FedCor (approximate correlation-aware active selection)
+- Impl: `ml/fedcor_approx.py`
+- Greedy objective: \(s(i\mid S) = u_i - \alpha\max_{j\in S} \text{cos}(h_i, h_j)\), where \(u_i=\text{norm}(\ell_i/\hat t_i)\), \(h_i\) label-hist vectors.
+- Intuition: prefer high-utility clients with low correlation to selected ones; fast approximation of FedCor’s correlation modeling.
+- Ref: Li et al., “FedCor: Correlation-based Active Client Selection,” 2021. [arXiv:2103.13822](https://arxiv.org/abs/2103.13822)
+
+### DP-EIG (DP-aware information-gain greedy)
+- Impl: `ml/dp_eig.py`
+- Base EIG proxy: \(\text{eig}_i \propto d_i( g_i^2 + \ell_i ) / (\hat t_i(1+\sigma^2))\); greedy with label-coverage gain and optional time-budget constraint.
+- Intuition: approximate Bayesian experimental design under DP noise; favors informative and fast clients with complementary labels.
+- Refs: DP-SGD (Abadi et al., 2016); submodular greedy (Nemhauser et al., 1978, background theory).
+
+### GNN-DPP (diverse graph scoring + DPP-style sampling)
+- Impl: `ml/gnn_dpp.py`
+- Attention-aggregated utility from cosine-neighborhoods, with DPP-style diversity via MMR: \(\text{score}_i = \tilde u_i - \lambda\max_{j\in S}\cos(x_i,x_j)\).
+- Intuition: capture cross-client relations and enforce diversity to be robust under non-IID and DP noise.
+- Refs: Graph attention (Veličković et al., 2018); DPP selection (Kulesza & Taskar, 2012, background).
+
+### ParetoRL (multi-objective constrained greedy)
+- Impl: `ml/pareto_rl.py`
+- Composite score: \( s_i = w_{acc}\,\text{norm}(\ell_i/\hat t_i) + w_{time}\,\text{norm}(1/\hat t_i) + w_{fair}\,\tilde f_i + w_{dp}\,\tilde \epsilon_i \). Optional safety: include a minimum number of low-participation clients first; respects time budget greedily.
+- Intuition: practical approximation to multi-objective RL with a safety layer; stable and strong under heterogeneity and DP.
+- Refs: Constrained RL (Altman, 1999, background); Oort for reward shaping under FL.

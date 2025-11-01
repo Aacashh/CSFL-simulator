@@ -157,44 +157,67 @@ with setup_tab:
 
 with st.sidebar:
     st.header("Setup")
-    dataset = st.selectbox("Dataset", ["MNIST", "Fashion-MNIST", "CIFAR-10", "CIFAR-100"], index=0)
-    partition = st.selectbox("Partition", ["iid", "dirichlet", "label-shard"], index=0)
-    alpha = st.slider("Dirichlet alpha", 0.05, 2.0, 0.5, 0.05)
-    shards = st.number_input("Label shards per client", 1, 10, 2)
+    dataset = st.selectbox("Dataset", ["MNIST", "Fashion-MNIST", "CIFAR-10", "CIFAR-100"], index=0,
+                          help="The dataset to use for federated learning. MNIST/Fashion-MNIST are simpler (28x28 grayscale), CIFAR is more complex (32x32 RGB).")
+    partition = st.selectbox("Partition", ["iid", "dirichlet", "label-shard"], index=0,
+                            help="How data is distributed across clients:\n• IID: Uniformly random (all clients have similar data)\n• Dirichlet: Non-IID controlled by alpha parameter (realistic heterogeneity)\n• Label-shard: Each client gets data from only a few classes")
+    alpha = st.slider("Dirichlet alpha", 0.05, 2.0, 0.5, 0.05,
+                     help="Controls data heterogeneity in Dirichlet partition. Lower values (0.1) = more non-IID (each client specializes), higher values (2.0) = closer to IID.")
+    shards = st.number_input("Label shards per client", 1, 10, 2,
+                            help="For label-shard partition: number of different classes each client has data from. Lower = more heterogeneous.")
 
-    model = st.selectbox("Model", ["CNN-MNIST", "LightCNN", "ResNet18"], index=0)
-    total_clients = st.number_input("Total clients", 2, 1000, 10)
-    k_clients = st.number_input("Clients per round (K)", 1, 100, 3)
-    rounds = st.number_input("Rounds", 1, 200, 3)
-    local_epochs = st.number_input("Local epochs", 1, 10, 1)
-    batch_size = st.number_input("Batch size", 8, 512, 32)
-    lr = st.number_input("Learning rate", 1e-4, 1.0, 0.01, format="%.5f")
+    model = st.selectbox("Model", ["CNN-MNIST", "LightCNN", "ResNet18"], index=0,
+                        help="Neural network architecture:\n• CNN-MNIST: Lightweight for MNIST/Fashion-MNIST\n• LightCNN: For CIFAR datasets\n• ResNet18: Deeper model for more complex tasks")
+    total_clients = st.number_input("Total clients", 2, 1000, 10,
+                                   help="Total number of participating clients (devices) in the federated learning system.")
+    k_clients = st.number_input("Clients per round (K)", 1, 100, 3,
+                               help="Number of clients selected to participate in each training round. Smaller K = faster but less diverse, larger K = slower but more comprehensive.")
+    rounds = st.number_input("Rounds", 1, 200, 3,
+                            help="Number of federated learning rounds (communication cycles). Each round: clients train locally → server aggregates → repeat.")
+    local_epochs = st.number_input("Local epochs", 1, 10, 1,
+                                  help="Number of training epochs each selected client performs on their local data before sending updates to the server.")
+    batch_size = st.number_input("Batch size", 8, 512, 32,
+                                help="Number of samples per training batch on each client. Larger = faster but needs more memory.")
+    lr = st.number_input("Learning rate", 1e-4, 1.0, 0.01, format="%.5f",
+                        help="Step size for gradient descent optimization. Typical values: 0.001-0.01. Too high = unstable, too low = slow convergence.")
 
-    device_choice = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
-    seed = st.number_input("Seed", 0, 10_000, 42)
-    fast_mode = st.checkbox("Fast mode (few batches)", True)
-    pretrained = st.checkbox("Load pretrained (if available)", False)
+    device_choice = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0,
+                                help="Hardware to run training on:\n• auto: Automatically detect GPU if available\n• cpu: Use CPU only\n• cuda: Force GPU (NVIDIA)")
+    seed = st.number_input("Seed", 0, 10_000, 42,
+                          help="Random seed for reproducibility. Same seed = same results. Useful for comparing different methods fairly.")
+    fast_mode = st.checkbox("Fast mode (few batches)", True,
+                           help="When enabled, uses fewer batches per epoch for faster testing. Disable for full training runs.")
+    pretrained = st.checkbox("Load pretrained (if available)", False,
+                            help="Load pre-trained model weights if available. Useful for transfer learning or continuing from a checkpoint.")
 
     with st.expander("Advanced (System & Privacy)"):
-        time_budget = st.number_input("Round time budget (seconds, 0=none)", 0.0, 1000000.0, 0.0, format="%.2f")
-        dp_sigma = st.number_input("DP Gaussian noise sigma (per-parameter)", 0.0, 10.0, 0.0, format="%.4f")
-        dp_eps = st.number_input("DP epsilon consumed per selection", 0.0, 100.0, 0.0, format="%.3f")
+        time_budget = st.number_input("Round time budget (seconds, 0=none)", 0.0, 1000000.0, 0.0, format="%.2f",
+                                     help="Maximum time allowed per round in seconds. Set to 0 for unlimited. Simulates real-world time constraints where some clients may not finish in time.")
+        dp_sigma = st.number_input("DP Gaussian noise sigma (per-parameter)", 0.0, 10.0, 0.0, format="%.4f",
+                                  help="Standard deviation of Gaussian noise added to model updates for Differential Privacy. Higher = more privacy but less accuracy. 0 = no DP noise.")
+        dp_eps = st.number_input("DP epsilon consumed per selection", 0.0, 100.0, 0.0, format="%.3f",
+                                help="Privacy budget (epsilon) consumed per client selection. Lower epsilon = stronger privacy guarantee. Used with DP-aware selection methods.")
+        dp_clip = st.number_input("DP gradient clip norm (0 to disable)", 0.0, 10.0, 0.0, format="%.3f",
+                                 help="Clips gradient norm before adding DP noise to bound sensitivity. Required for formal DP guarantees. 0 = no clipping. Typical values: 1.0-5.0.")
         
         st.caption("⚡ CUDA Parallelization")
         parallel_clients = st.selectbox(
             "Parallel clients",
             options=[0, -1, 2, 3, 4, 6, 8],
             index=0,
-            help="0=Sequential (default), -1=Auto-detect, 2-8=Fixed parallel clients. "
-                 "Parallel training uses CUDA streams for 2-5x speedup on GPU."
+            help="Number of clients to train in parallel using CUDA streams:\n• 0: Sequential training (no parallelization)\n• -1: Auto-detect optimal based on GPU memory\n• 2-8: Fixed number of parallel clients\nParallel training can give 2-5x speedup on GPU with minimal memory overhead."
         )
         
         st.caption("Composite reward weights (optimization target)")
         colw1, colw2, colw3, colw4 = st.columns(4)
-        w_acc = colw1.slider("w_acc", 0.0, 1.0, 0.6, 0.05)
-        w_time = colw2.slider("w_time", 0.0, 1.0, 0.2, 0.05)
-        w_fair = colw3.slider("w_fair", 0.0, 1.0, 0.1, 0.05)
-        w_dp = colw4.slider("w_dp", 0.0, 1.0, 0.1, 0.05)
+        w_acc = colw1.slider("w_acc", 0.0, 1.0, 0.6, 0.05,
+                            help="Weight for accuracy in composite reward. Higher = prioritize model accuracy.")
+        w_time = colw2.slider("w_time", 0.0, 1.0, 0.2, 0.05,
+                             help="Weight for training time in composite reward. Higher = prioritize faster training rounds.")
+        w_fair = colw3.slider("w_fair", 0.0, 1.0, 0.1, 0.05,
+                             help="Weight for fairness in composite reward. Higher = ensure more equal participation across clients.")
+        w_dp = colw4.slider("w_dp", 0.0, 1.0, 0.1, 0.05,
+                           help="Weight for differential privacy in composite reward. Higher = prioritize privacy-preserving selections.")
 
     # Load methods dynamically
     from csfl_simulator.selection.registry import MethodRegistry
@@ -202,15 +225,18 @@ with st.sidebar:
     labels_map = reg.labels_map()
     label_list = list(labels_map.keys())
     default_idx = 0
-    method_label = st.selectbox("Selection method", label_list, index=default_idx)
+    method_label = st.selectbox("Selection method", label_list, index=default_idx,
+                               help="Algorithm for selecting which K clients participate each round. Options include:\n• Random: Baseline random selection\n• Heuristic: Data size, loss, gradient-based\n• System-aware: Consider device capabilities, deadlines\n• ML-based: Neural network, RL, bandit approaches")
     method = reg.key_from_label(method_label)
 
     # Preselect multiple methods for later comparison runs
     default_compare_labels = [method_label] if method_label in label_list else (label_list[:1] if label_list else [])
-    compare_labels = st.multiselect("Methods for comparison (preset)", label_list, default=default_compare_labels)
+    compare_labels = st.multiselect("Methods for comparison (preset)", label_list, default=default_compare_labels,
+                                   help="Pre-select multiple methods to compare side-by-side. You can run them all together in the Compare tab.")
     st.session_state.compare_methods = [reg.key_from_label(lbl) for lbl in compare_labels]
     compare_repeats_val = int(st.session_state.get("compare_repeats", 1))
-    compare_repeats = st.number_input("Repeats per method (comparison)", 1, 10, compare_repeats_val)
+    compare_repeats = st.number_input("Repeats per method (comparison)", 1, 10, compare_repeats_val,
+                                     help="Number of times to repeat each method with different random seeds. Higher repeats = more reliable results with error bars. Useful for statistical significance.")
     st.session_state.compare_repeats = int(compare_repeats)
 
     init_btn = st.button("Initialize Simulator", use_container_width=True)
@@ -235,6 +261,7 @@ if init_btn:
         time_budget=(float(time_budget) if 'time_budget' in locals() and time_budget > 0 else None),
         dp_sigma=float(dp_sigma) if 'dp_sigma' in locals() else 0.0,
         dp_epsilon_per_round=float(dp_eps) if 'dp_eps' in locals() else 0.0,
+        dp_clip_norm=float(dp_clip) if 'dp_clip' in locals() else 0.0,
         reward_weights={"acc": float(w_acc) if 'w_acc' in locals() else 0.6,
                         "time": float(w_time) if 'w_time' in locals() else 0.2,
                         "fair": float(w_fair) if 'w_fair' in locals() else 0.1,

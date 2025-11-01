@@ -40,6 +40,7 @@ class SimConfig:
     time_budget: Optional[float] = None
     dp_sigma: float = 0.0
     dp_epsilon_per_round: float = 0.0
+    dp_clip_norm: float = 0.0
     reward_weights: Dict[str, float] = field(default_factory=lambda: {"acc": 0.6, "time": 0.2, "fair": 0.1, "dp": 0.1})
     # Performance/diagnostics knobs
     track_grad_norm: bool = False
@@ -240,6 +241,13 @@ class FLSimulator:
                 out = model(x)
                 loss = self.criterion(out, y)
                 loss.backward()
+                # Optional DP gradient clipping
+                if self.cfg.dp_clip_norm and self.cfg.dp_clip_norm > 0:
+                    try:
+                        from .dp import clip_gradients as _dp_clip
+                        _dp_clip(model, float(self.cfg.dp_clip_norm))
+                    except Exception:
+                        pass
                 if self.cfg.track_grad_norm:
                     try:
                         # Use last parameter tensor as a proxy for speed
