@@ -17,6 +17,7 @@ from .metrics import eval_model
 from .utils import new_run_dir, save_json, set_seed, autodetect_device
 from ..selection.registry import MethodRegistry
 from .system import init_system_state, simulate_round_env
+from .parallel import create_trainer
 
 
 @dataclass
@@ -48,7 +49,7 @@ class SimConfig:
 class FLSimulator:
     def __init__(self, config: SimConfig):
         self.cfg = config
-        set_seed(self.cfg.seed)
+        set_seed(self.cfg.seed, deterministic=True)
         self.device = autodetect_device(True) if self.cfg.device == "auto" else self.cfg.device
         self.run_dir, self.run_id = new_run_dir("sim")
         self.registry = MethodRegistry()
@@ -58,6 +59,7 @@ class FLSimulator:
         self.clients: List[ClientInfo] = []
         self.client_loaders: Dict[int, Any] = {}
         self._scratch_model = None
+        self._parallel_trainer = None
 
     def setup(self):
         # Datasets
@@ -192,6 +194,18 @@ class FLSimulator:
                 hist = None
             self.clients.append(ClientInfo(id=cid, data_size=len(idxs), label_histogram=hist))
         init_system_state(self.clients, {})
+        
+        # Initialize parallel trainer if parallelization is enabled
+        if self.cfg.parallel_clients != 0:
+            self._parallel_trainer = create_trainer(
+                model=self.model,
+                device=self.device,
+                criterion=self.criterion,
+                lr=self.cfg.lr,
+                parallel_clients=self.cfg.parallel_clients,
+                track_grad_norm=self.cfg.track_grad_norm
+            )
+        
         # Save config
         save_json({"config": asdict(self.cfg), "device": self.device}, self.run_dir / "config.json")
 
@@ -269,22 +283,48 @@ class FLSimulator:
                     pass
             if state:
                 self.history["state"].update(state)
-            # Local training
+            # Local training - use parallel trainer if enabled, otherwise sequential
             updates, weights = [], []
-            for cid in ids:
-                sd, n, loss, gnorm = self._local_train(cid)
-                self.clients[cid].last_loss = loss
-                self.clients[cid].grad_norm = gnorm
-                self.clients[cid].participation_count += 1
-                # Apply DP accounting per client
-                if self.cfg.dp_epsilon_per_round and self.cfg.dp_epsilon_per_round > 0:
-                    try:
-                        from . import dp as _dp
-                        _dp.consume_epsilon(self.clients[cid], float(self.cfg.dp_epsilon_per_round))
-                    except Exception:
-                        pass
-                updates.append(sd)
-                weights.append(n)
+            
+            if self._parallel_trainer is not None:
+                # Parallel training path
+                results = self._parallel_trainer.train_clients_parallel(
+                    client_ids=ids,
+                    client_loaders=self.client_loaders,
+                    local_epochs=self.cfg.local_epochs,
+                    fast_mode=self.cfg.fast_mode,
+                    seed_offset=rnd
+                )
+                # Process results
+                for (sd, n, loss, gnorm), cid in zip(results, ids):
+                    self.clients[cid].last_loss = loss
+                    self.clients[cid].grad_norm = gnorm
+                    self.clients[cid].participation_count += 1
+                    # Apply DP accounting per client
+                    if self.cfg.dp_epsilon_per_round and self.cfg.dp_epsilon_per_round > 0:
+                        try:
+                            from . import dp as _dp
+                            _dp.consume_epsilon(self.clients[cid], float(self.cfg.dp_epsilon_per_round))
+                        except Exception:
+                            pass
+                    updates.append(sd)
+                    weights.append(n)
+            else:
+                # Sequential training path (backward compatible)
+                for cid in ids:
+                    sd, n, loss, gnorm = self._local_train(cid)
+                    self.clients[cid].last_loss = loss
+                    self.clients[cid].grad_norm = gnorm
+                    self.clients[cid].participation_count += 1
+                    # Apply DP accounting per client
+                    if self.cfg.dp_epsilon_per_round and self.cfg.dp_epsilon_per_round > 0:
+                        try:
+                            from . import dp as _dp
+                            _dp.consume_epsilon(self.clients[cid], float(self.cfg.dp_epsilon_per_round))
+                        except Exception:
+                            pass
+                    updates.append(sd)
+                    weights.append(n)
             # Aggregate
             if updates:
                 # Optional DP noise before aggregation
@@ -298,8 +338,14 @@ class FLSimulator:
                         updates = noisy_updates
                     except Exception:
                         pass
-                new_sd = fedavg(updates, weights)
+                # Keep aggregation on GPU for better performance
+                use_gpu_aggregation = self.device.startswith('cuda')
+                new_sd = fedavg(updates, weights, keep_on_device=use_gpu_aggregation)
                 self.model.load_state_dict(new_sd)
+                
+                # Update parallel trainer's global model if using parallel mode
+                if self._parallel_trainer is not None:
+                    self._parallel_trainer.update_global_model(new_sd)
             # Evaluate
             m = eval_model(self.model, self.test_loader, self.device)
             m["round"] = rnd

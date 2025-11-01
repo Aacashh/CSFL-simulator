@@ -20,13 +20,34 @@ def ensure_dirs():
     (ART_ROOT / "exports").mkdir(parents=True, exist_ok=True)
 
 
-def set_seed(seed: int):
+def set_seed(seed: int, deterministic: bool = True):
+    """
+    Set random seeds for reproducibility.
+    
+    Args:
+        seed: Random seed value
+        deterministic: If True, enables strict deterministic mode (slower but reproducible)
+                      If False, allows optimizations that may vary slightly across runs
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
+    
+    if deterministic:
+        # Strict deterministic mode for exact reproducibility
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        # Enable deterministic algorithms where possible
+        try:
+            torch.use_deterministic_algorithms(True, warn_only=True)
+        except Exception:
+            # Fallback for older PyTorch versions
+            pass
+    else:
+        # Performance mode: allow non-deterministic optimizations
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
 
 
 def autodetect_device(prefer_gpu: bool = True) -> str:

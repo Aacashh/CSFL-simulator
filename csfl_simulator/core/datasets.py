@@ -63,12 +63,23 @@ def get_full_data(name: str, root: Path | None = None):
     return get_dataset(name, True, root), get_dataset(name, False, root)
 
 
-def make_loader(dataset, batch_size: int = 64, shuffle: bool = True, num_workers: int = 2):
+def make_loader(dataset, batch_size: int = 64, shuffle: bool = True, num_workers: int = 4):
     # Use pinned memory only when CUDA is available to avoid warnings on CPU-only runs
     pin = torch.cuda.is_available()
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin)
+    # Optimize DataLoader for better throughput
+    # persistent_workers and prefetch_factor improve performance significantly
+    persistent = num_workers > 0
+    return DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        shuffle=shuffle, 
+        num_workers=num_workers, 
+        pin_memory=pin,
+        persistent_workers=persistent,
+        prefetch_factor=2 if num_workers > 0 else None
+    )
 
 
-def make_loaders_from_indices(dataset, indices, batch_size: int = 64, num_workers: int = 2):
+def make_loaders_from_indices(dataset, indices, batch_size: int = 64, num_workers: int = 4):
     sub = Subset(dataset, indices)
     return make_loader(sub, batch_size=batch_size, shuffle=True, num_workers=num_workers)

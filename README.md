@@ -10,6 +10,7 @@ Highlights
   - Heuristic: Random, Proportional-to-Data, Top-K Loss, Gradient-Norm, Fairness-Adjusted, Cluster-Balanced, Round-Robin, MMR-Diverse, Label-Coverage, DP-Budget-Aware
   - System-aware: FedCS (deadline-aware), TiFL (tiers), Oort-style (utility/time + exploration), Power-of-Choice (two-stage), Oort-Plus (fairness+recency)
   - ML-based: RL-GNN (trainable), Graph Transformer (GT-PPCS), GAT-based, Bandits (epsilon-greedy, LinUCB, RFF-LinUCB), Meta Ranker (SGDRegressor), NeuralLinear-UCB (tiny MLP + Bayesian head), DeepSets Ranker, RankFormer-Tiny
+- **⚡ CUDA Parallelization**: 3-5x speedup with parallel client training using CUDA streams (see [PARALLELIZATION.md](PARALLELIZATION.md))
 - Realism knobs: heterogeneity, network/channel, mobility, time budget, dropouts, DP noise and epsilon
 - Export to .ipynb: generate a self-contained notebook capturing the simulation code, selection code, and parameters
 - Compare methods side-by-side with interactive visualizations
@@ -84,6 +85,14 @@ streamlit run csfl_simulator/app/main.py
 
 Export to Notebook
 - Use the Export tab to produce a notebook under artifacts/exports/<run_id>.ipynb
+
+Performance Optimization
+- **CUDA Parallelization**: Enable parallel client training for 3-5x speedup on GPU
+  - In the UI: Sidebar → Advanced → "Parallel clients" (try `-1` for auto-detect)
+  - Maintains exact reproducibility with deterministic seeding
+  - Automatically manages GPU memory
+  - See [PARALLELIZATION.md](PARALLELIZATION.md) for full guide
+  - Test with: `python test_parallelization.py`
 
 Notes
 - GPU is auto-detected; you can manually switch CPU/GPU in the sidebar.

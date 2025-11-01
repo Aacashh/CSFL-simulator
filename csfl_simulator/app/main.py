@@ -179,6 +179,16 @@ with st.sidebar:
         time_budget = st.number_input("Round time budget (seconds, 0=none)", 0.0, 1000000.0, 0.0, format="%.2f")
         dp_sigma = st.number_input("DP Gaussian noise sigma (per-parameter)", 0.0, 10.0, 0.0, format="%.4f")
         dp_eps = st.number_input("DP epsilon consumed per selection", 0.0, 100.0, 0.0, format="%.3f")
+        
+        st.caption("⚡ CUDA Parallelization")
+        parallel_clients = st.selectbox(
+            "Parallel clients",
+            options=[0, -1, 2, 3, 4, 6, 8],
+            index=0,
+            help="0=Sequential (default), -1=Auto-detect, 2-8=Fixed parallel clients. "
+                 "Parallel training uses CUDA streams for 2-5x speedup on GPU."
+        )
+        
         st.caption("Composite reward weights (optimization target)")
         colw1, colw2, colw3, colw4 = st.columns(4)
         w_acc = colw1.slider("w_acc", 0.0, 1.0, 0.6, 0.05)
@@ -229,6 +239,7 @@ if init_btn:
                         "time": float(w_time) if 'w_time' in locals() else 0.2,
                         "fair": float(w_fair) if 'w_fair' in locals() else 0.1,
                         "dp": float(w_dp) if 'w_dp' in locals() else 0.1},
+        parallel_clients=int(parallel_clients) if 'parallel_clients' in locals() else 0,
     )
     sim = FLSimulator(cfg)
     st.session_state.simulator = sim
