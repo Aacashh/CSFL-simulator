@@ -1239,98 +1239,115 @@ with visualize_tab:
                 try:
                     if ys is None:
                         ys2 = []
-                    elif max_len > 0 and len(ys) > 0:
-                        # Clamp indices to actual data length
-                        actual_len = len(ys)
-                        safe_start = min(start_i, actual_len - 1) if actual_len > 0 else 0
-                        safe_end = min(end_i, actual_len - 1) if actual_len > 0 else 0
-                        ys2 = list(ys[safe_start:safe_end + 1])
                     else:
-                        ys2 = list(ys) if ys else []
-                except Exception:
+                        # Convert numpy array to list if needed
+                        try:
+                            import numpy as np
+                            if isinstance(ys, np.ndarray):
+                                ys = ys.tolist()
+                        except Exception:
+                            pass
+                        
+                        if max_len > 0 and len(ys) > 0:
+                            # Clamp indices to actual data length
+                            actual_len = len(ys)
+                            safe_start = min(start_i, actual_len - 1) if actual_len > 0 else 0
+                            safe_end = min(end_i, actual_len - 1) if actual_len > 0 else 0
+                            ys2 = list(ys[safe_start:safe_end + 1])
+                        else:
+                            ys2 = list(ys) if ys else []
+                except Exception as e:
                     try:
                         ys2 = list(ys or [])
                     except Exception:
                         ys2 = []
                 mm[mname] = ys2
             filtered_mts[metric] = mm
-        # Render
-        if viz_ui["chart_style"].startswith("Interactive"):
-            from csfl_simulator.app.components.plots import plot_metric_compare_plotly, plot_multi_panel_plotly
-            for metric, series_map in filtered_mts.items():
-                fig = _call_plot_func(
-                    plot_metric_compare_plotly,
-                    series_map,
-                    metric,
-                    template=viz_ui["plotly_template"],
-                    methods_filter=viz_ui["methods"],
-                    smoothing_window=viz_ui["smoothing"],
-                    y_axis_type=viz_ui["y_scale"],
-                    line_width=viz_ui["line_width"],
-                    legend_position=viz_ui["legend_position"],
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            if viz_ui["show_combined"] and filtered_mts:
-                figc = _call_plot_func(
-                    plot_multi_panel_plotly,
-                    filtered_mts,
-                    template=viz_ui["plotly_template"],
-                    methods_filter=viz_ui["methods"],
-                    smoothing_window=viz_ui["smoothing"],
-                    y_axis_type=viz_ui["y_scale"],
-                    line_width=viz_ui["line_width"],
-                    legend_position=viz_ui["legend_position"],
-                )
-                st.plotly_chart(figc, use_container_width=True)
-            # Export
-            try:
-                from datetime import datetime as _dt
-                figx = _call_plot_func(
-                    plot_multi_panel_plotly,
-                    filtered_mts,
-                    template=viz_ui["plotly_template"],
-                    methods_filter=viz_ui["methods"],
-                    smoothing_window=viz_ui["smoothing"],
-                    y_axis_type=viz_ui["y_scale"],
-                    line_width=viz_ui["line_width"],
-                    legend_position=viz_ui["legend_position"],
-                )
-                html = figx.to_html(include_plotlyjs="cdn")
-                st.download_button("Download HTML", data=html, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.html", mime="text/html", key="viz_dl_html")
+        
+        # Debug: check if we have data
+        if not filtered_mts or all(not v for v in filtered_mts.values()):
+            st.warning(f"⚠️ No data to display. Metrics selected: {viz_ui['metrics']}, Methods selected: {viz_ui['methods']}, Data available: {list(mts.keys())}")
+        
+        # Render only if we have data
+        if filtered_mts and any(v for v in filtered_mts.values()):
+            if viz_ui["chart_style"].startswith("Interactive"):
+                from csfl_simulator.app.components.plots import plot_metric_compare_plotly, plot_multi_panel_plotly
+                for metric, series_map in filtered_mts.items():
+                    if not series_map:
+                        continue
+                    fig = _call_plot_func(
+                        plot_metric_compare_plotly,
+                        series_map,
+                        metric,
+                        template=viz_ui["plotly_template"],
+                        methods_filter=viz_ui["methods"],
+                        smoothing_window=viz_ui["smoothing"],
+                        y_axis_type=viz_ui["y_scale"],
+                        line_width=viz_ui["line_width"],
+                        legend_position=viz_ui["legend_position"],
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                if viz_ui["show_combined"] and filtered_mts:
+                    figc = _call_plot_func(
+                        plot_multi_panel_plotly,
+                        filtered_mts,
+                        template=viz_ui["plotly_template"],
+                        methods_filter=viz_ui["methods"],
+                        smoothing_window=viz_ui["smoothing"],
+                        y_axis_type=viz_ui["y_scale"],
+                        line_width=viz_ui["line_width"],
+                        legend_position=viz_ui["legend_position"],
+                    )
+                    st.plotly_chart(figc, use_container_width=True)
+                # Export
                 try:
-                    buf = figx.to_image(format="png")
-                    st.download_button("Download PNG", data=buf, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.png", mime="image/png", key="viz_dl_png")
+                    from datetime import datetime as _dt
+                    figx = _call_plot_func(
+                        plot_multi_panel_plotly,
+                        filtered_mts,
+                        template=viz_ui["plotly_template"],
+                        methods_filter=viz_ui["methods"],
+                        smoothing_window=viz_ui["smoothing"],
+                        y_axis_type=viz_ui["y_scale"],
+                        line_width=viz_ui["line_width"],
+                        legend_position=viz_ui["legend_position"],
+                    )
+                    html = figx.to_html(include_plotlyjs="cdn")
+                    st.download_button("Download HTML", data=html, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.html", mime="text/html", key="viz_dl_html")
+                    try:
+                        buf = figx.to_image(format="png")
+                        st.download_button("Download PNG", data=buf, file_name=f"viz_{_dt.now().strftime('%Y%m%d_%H%M%S')}.png", mime="image/png", key="viz_dl_png")
+                    except Exception:
+                        st.caption("PNG export requires kaleido; install to enable.")
                 except Exception:
-                    st.caption("PNG export requires kaleido; install to enable.")
-            except Exception:
-                pass
-        else:
-            from csfl_simulator.app.components.plots import plot_metric_compare_matplotlib, plot_multi_panel_matplotlib
-            for metric in viz_ui["metrics"]:
-                fig = _call_plot_func(
-                    plot_metric_compare_matplotlib,
-                    filtered_mts.get(metric, {}),
-                    metric,
-                    style_name=viz_ui["mpl_style"],
-                    methods_filter=viz_ui["methods"],
-                    legend_position=viz_ui["legend_position"],
-                    smoothing_window=viz_ui["smoothing"],
-                    y_axis_type=viz_ui["y_scale"],
-                    line_width=viz_ui["line_width"],
-                )
-                st.pyplot(fig, clear_figure=True)
-            if viz_ui["show_combined"] and filtered_mts:
-                figc = _call_plot_func(
-                    plot_multi_panel_matplotlib,
-                    filtered_mts,
-                    style_name=viz_ui["mpl_style"],
-                    methods_filter=viz_ui["methods"],
-                    legend_position=viz_ui["legend_position"],
-                    smoothing_window=viz_ui["smoothing"],
-                    y_axis_type=viz_ui["y_scale"],
-                    line_width=viz_ui["line_width"],
-                )
-                st.pyplot(figc, clear_figure=True)
+                    pass
+            else:
+                from csfl_simulator.app.components.plots import plot_metric_compare_matplotlib, plot_multi_panel_matplotlib
+                for metric in viz_ui["metrics"]:
+                    fig = _call_plot_func(
+                        plot_metric_compare_matplotlib,
+                        filtered_mts.get(metric, {}),
+                        metric,
+                        style_name=viz_ui["mpl_style"],
+                        methods_filter=viz_ui["methods"],
+                        legend_position=viz_ui["legend_position"],
+                        smoothing_window=viz_ui["smoothing"],
+                        y_axis_type=viz_ui["y_scale"],
+                        line_width=viz_ui["line_width"],
+                    )
+                    st.pyplot(fig, clear_figure=True)
+                if viz_ui["show_combined"] and filtered_mts:
+                    figc = _call_plot_func(
+                        plot_multi_panel_matplotlib,
+                        filtered_mts,
+                        style_name=viz_ui["mpl_style"],
+                        methods_filter=viz_ui["methods"],
+                        legend_position=viz_ui["legend_position"],
+                        smoothing_window=viz_ui["smoothing"],
+                        y_axis_type=viz_ui["y_scale"],
+                        line_width=viz_ui["line_width"],
+                    )
+                    st.pyplot(figc, clear_figure=True)
 
         # Presets & CSV export
         with st.expander("Presets & Export"):
