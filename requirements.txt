@@ -2,12 +2,13 @@ streamlit
 streamlit-ace
 torch
 torchvision
-numpy
-pandas
-scikit-learn
-matplotlib
-plotly
-seaborn
+numpy>=2.0,<2.1
+scipy>=1.14
+scikit-learn>=1.5
+pandas>=2.2
+matplotlib>=3.8
+plotly>=6.0
+seaborn>=0.13
 nbformat
 nbclient
 pyyaml
@@ -15,3 +16,6 @@ rich
 tqdm
 networkx
 thop
+numexpr>=2.10
+bottleneck>=1.4
+psutil>=5.9

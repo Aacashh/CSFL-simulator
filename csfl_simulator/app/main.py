@@ -17,7 +17,7 @@ if _RELOAD_CORE:
                 pass
 
 from csfl_simulator.core.simulator import FLSimulator, SimConfig
-from csfl_simulator.core.utils import ROOT
+from csfl_simulator.core.utils import ROOT, cleanup_memory
 
 st.set_page_config(page_title="CSFL Simulator", layout="wide")
 
@@ -493,6 +493,13 @@ with run_tab:
                             label2 = next((lbl for lbl, k in label_map.items() if k == mkey), mkey)
                             status2.write(f"[{done2}/{total2}] {label2} — repeat {r+1}")
                             prog2.progress(min(100, pct2))
+                            
+                            # Cleanup memory after each run to prevent accumulation
+                            try:
+                                sim2.cleanup()
+                                cleanup_memory(force_cuda_empty=True, verbose=False)
+                            except Exception:
+                                pass
                         for m in metric_names:
                             runs = per_metric_runs[m]
                             if not runs:
@@ -688,6 +695,13 @@ with compare_tab:
                     pct = int(done / total * 100)
                     status.write(f"[{done}/{total}] {label} — repeat {r+1}")
                     prog.progress(min(100, pct))
+                    
+                    # Cleanup memory after each run to prevent accumulation
+                    try:
+                        sim.cleanup()
+                        cleanup_memory(force_cuda_empty=True, verbose=False)
+                    except Exception:
+                        pass
                 # pad each metric's runs to max len and take mean
                 for m in metric_names:
                     runs = per_metric_runs[m]

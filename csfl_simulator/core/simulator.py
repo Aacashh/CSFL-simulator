@@ -14,7 +14,7 @@ from .models import get_model, maybe_load_pretrained
 from .client import ClientInfo
 from .aggregation import fedavg
 from .metrics import eval_model
-from .utils import new_run_dir, save_json, set_seed, autodetect_device
+from .utils import new_run_dir, save_json, set_seed, autodetect_device, cleanup_memory, check_memory_critical
 from ..selection.registry import MethodRegistry
 from .system import init_system_state, simulate_round_env
 from .parallel import create_trainer
@@ -60,6 +60,7 @@ class FLSimulator:
         self.client_loaders: Dict[int, Any] = {}
         self._scratch_model = None
         self._parallel_trainer = None
+        self._partition_mapping: Dict[int, List[int]] = {}  # Store for emergency cleanup
 
     def setup(self):
         # Datasets
@@ -164,6 +165,7 @@ class FLSimulator:
         # Build client loaders and infos
         self.client_loaders = {}
         self.clients: List[ClientInfo] = []
+        self._partition_mapping = mapping  # Store for emergency cleanup
         for cid in range(self.cfg.total_clients):
             idxs = mapping[cid]
             self.client_loaders[cid] = dset.make_loaders_from_indices(train_ds, idxs, batch_size=self.cfg.batch_size)
@@ -210,6 +212,15 @@ class FLSimulator:
         save_json({"config": asdict(self.cfg), "device": self.device}, self.run_dir / "config.json")
 
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
+        # Lazily recreate loader if it was deleted during emergency cleanup
+        if cid not in self.client_loaders or self.client_loaders[cid] is None:
+            if cid in self._partition_mapping:
+                from . import datasets as dset
+                idxs = self._partition_mapping[cid]
+                self.client_loaders[cid] = dset.make_loaders_from_indices(
+                    self.train_ds, idxs, batch_size=self.cfg.batch_size, num_workers=0
+                )
+        
         loader = self.client_loaders[cid]
         # Reuse a scratch model to avoid per-client deepcopy cost
         if self._scratch_model is None:
@@ -285,6 +296,15 @@ class FLSimulator:
                 self.history["state"].update(state)
             # Local training - use parallel trainer if enabled, otherwise sequential
             updates, weights = [], []
+            
+            # Ensure loaders exist for selected clients (in case emergency cleanup removed them)
+            for cid in ids:
+                if cid not in self.client_loaders or self.client_loaders[cid] is None:
+                    if cid in self._partition_mapping:
+                        idxs = self._partition_mapping[cid]
+                        self.client_loaders[cid] = dset.make_loaders_from_indices(
+                            self.train_ds, idxs, batch_size=self.cfg.batch_size, num_workers=0
+                        )
             
             if self._parallel_trainer is not None:
                 # Parallel training path
@@ -389,6 +409,26 @@ class FLSimulator:
                     on_progress(rnd, {"accuracy": m["accuracy"], "metrics": m, "selected": ids, "reward": reward, "composite": composite})
                 except Exception:
                     pass
+            
+            # Memory management: aggressive cleanup to prevent system hangs
+            # CRITICAL: Clean up every single round to prevent accumulation
+            cleanup_memory(force_cuda_empty=False, verbose=False)
+            
+            # Check memory status every 3 rounds
+            if rnd % 3 == 0:
+                is_critical, msg = check_memory_critical(threshold_percent=70.0)
+                if is_critical:
+                    print(f"⚠️  Warning at round {rnd}: {msg}")
+                    # EMERGENCY: Aggressive cleanup when critical
+                    self._emergency_cleanup()
+                    cleanup_memory(force_cuda_empty=True, verbose=True)
+            
+            # Heavy cleanup every 5 rounds
+            if rnd % 5 == 0:
+                cleanup_memory(force_cuda_empty=True, verbose=False)
+        # Final cleanup after simulation completes
+        cleanup_memory(force_cuda_empty=True, verbose=False)
+        
         # Save metrics
         save_json({"metrics": metrics}, self.run_dir / "metrics.json")
         # Prepare participation counts snapshot
@@ -406,3 +446,124 @@ class FLSimulator:
             "history": {"selected": list(self.history.get("selected", []))},
             "participation_counts": participation_counts,
         }
+    
+    def _emergency_cleanup(self):
+        """Emergency cleanup when memory is critical - very aggressive."""
+        import gc
+        
+        print(f"🚨 EMERGENCY CLEANUP: Aggressively freeing RAM...")
+        
+        # Force delete all client loaders to free RAM
+        if hasattr(self, 'client_loaders') and self.client_loaders:
+            loader_ids = list(self.client_loaders.keys())
+            for cid in loader_ids:
+                try:
+                    loader = self.client_loaders[cid]
+                    # Delete loader's dataset and workers
+                    if hasattr(loader, 'dataset'):
+                        del loader.dataset
+                    if hasattr(loader, '_iterator'):
+                        del loader._iterator
+                    del loader
+                    self.client_loaders[cid] = None
+                except Exception:
+                    pass
+            
+            # Force multiple GC passes before recreating
+            for _ in range(3):
+                gc.collect()
+            
+            self.client_loaders.clear()
+            
+            # Recreate client loaders with REDUCED settings to use less RAM
+            try:
+                from . import datasets as dset
+                # Only recreate loaders we'll actually need (reduce memory footprint)
+                # We'll lazily recreate others if needed
+                for cid in range(min(self.cfg.total_clients, 50)):  # Limit to first 50
+                    if cid in self._partition_mapping:
+                        idxs = self._partition_mapping[cid]
+                        # Use smaller batch size and fewer workers to reduce RAM
+                        batch_size = min(self.cfg.batch_size, 16)
+                        self.client_loaders[cid] = dset.make_loaders_from_indices(
+                            self.train_ds, idxs, batch_size=batch_size, num_workers=0
+                        )
+            except Exception as e:
+                print(f"⚠️  Failed to recreate loaders: {e}")
+        
+        # Clear optimizer states if any
+        if self._scratch_model is not None:
+            del self._scratch_model
+            self._scratch_model = None
+        
+        # Clear parallel trainer caches
+        if self._parallel_trainer is not None:
+            try:
+                # Sync and clear any cached states
+                if hasattr(self._parallel_trainer, 'model_replicas'):
+                    for replica in self._parallel_trainer.model_replicas:
+                        if hasattr(replica, 'zero_grad'):
+                            replica.zero_grad(set_to_none=True)
+            except Exception:
+                pass
+        
+        # Force garbage collection multiple times
+        for _ in range(5):
+            gc.collect()
+        
+        # Clear CUDA cache aggressively
+        if self.device.startswith('cuda'):
+            import torch
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+        
+        print(f"✓ Emergency cleanup completed")
+    
+    def cleanup(self):
+        """Cleanup resources to free memory. Call this between method comparisons."""
+        # Clean up parallel trainer
+        if self._parallel_trainer is not None:
+            if hasattr(self._parallel_trainer, 'cleanup'):
+                self._parallel_trainer.cleanup()
+            self._parallel_trainer = None
+        
+        # Clean up scratch model
+        if self._scratch_model is not None:
+            del self._scratch_model
+            self._scratch_model = None
+        
+        # Clean up client loaders and their datasets
+        if hasattr(self, 'client_loaders'):
+            for cid in list(self.client_loaders.keys()):
+                try:
+                    loader = self.client_loaders.get(cid)
+                    if loader and hasattr(loader, 'dataset'):
+                        del loader.dataset
+                    del loader
+                except Exception:
+                    pass
+            self.client_loaders.clear()
+        
+        # Clean up datasets
+        if hasattr(self, 'train_ds'):
+            try:
+                del self.train_ds
+            except Exception:
+                pass
+        
+        if hasattr(self, 'test_loader'):
+            try:
+                if hasattr(self.test_loader, 'dataset'):
+                    del self.test_loader.dataset
+                del self.test_loader
+            except Exception:
+                pass
+        
+        # Force garbage collection
+        import gc
+        for _ in range(3):
+            gc.collect()
+        
+        # Aggressive memory cleanup
+        cleanup_memory(force_cuda_empty=True, verbose=False)

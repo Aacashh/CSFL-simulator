@@ -277,6 +277,26 @@ class ParallelTrainer:
         """Update the global model and sync all replicas."""
         self.global_model.load_state_dict(new_state_dict)
         # Replicas will be synced at the start of next training batch
+    
+    def cleanup(self):
+        """Clean up resources to free GPU memory."""
+        # Delete model replicas
+        for replica in self.model_replicas:
+            del replica
+        self.model_replicas.clear()
+        
+        # Clear CUDA streams
+        if self.is_cuda:
+            for stream in self.streams:
+                if stream is not None:
+                    # Synchronize before deleting
+                    stream.synchronize()
+            self.streams.clear()
+        
+        # Force GPU cleanup
+        if self.is_cuda:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
 
 def create_trainer(
