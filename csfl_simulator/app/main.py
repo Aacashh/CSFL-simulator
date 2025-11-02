@@ -50,7 +50,18 @@ def _call_plot_func(func, *args, **kwargs):
 def _safe_plotly(plot_func, *args, **kwargs):
     try:
         fig = _call_plot_func(plot_func, *args, **kwargs)
-        st.plotly_chart(fig, use_container_width=True)
+        # Ensure a unique key per call to avoid duplicate element IDs
+        try:
+            if not hasattr(_safe_plotly, "_counter"):
+                _safe_plotly._counter = 0  # type: ignore[attr-defined]
+            _safe_plotly._counter += 1  # type: ignore[attr-defined]
+            key = f"plotly_safe_{_safe_plotly._counter}"  # type: ignore[attr-defined]
+        except Exception:
+            key = None
+        if key is not None:
+            st.plotly_chart(fig, use_container_width=True, key=key)
+        else:
+            st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Plotly rendering failed: {e}")
 
@@ -166,8 +177,8 @@ with st.sidebar:
     shards = st.number_input("Label shards per client", 1, 10, 2,
                             help="For label-shard partition: number of different classes each client has data from. Lower = more heterogeneous.")
 
-    model = st.selectbox("Model", ["CNN-MNIST", "LightCNN", "ResNet18"], index=0,
-                        help="Neural network architecture:\n• CNN-MNIST: Lightweight for MNIST/Fashion-MNIST\n• LightCNN: For CIFAR datasets\n• ResNet18: Deeper model for more complex tasks")
+    model = st.selectbox("Model", ["CNN-MNIST", "CNN-MNIST (FedAvg)", "LightCNN", "ResNet18"], index=0,
+                        help="Neural network architecture:\n• CNN-MNIST: Lightweight for MNIST/Fashion-MNIST\n• CNN-MNIST (FedAvg): 2x(5x5) conv (32,64) + 512 FC for MNIST\n• LightCNN: For CIFAR datasets\n• ResNet18: Deeper model for more complex tasks")
     total_clients = st.number_input("Total clients", 2, 1000, 10,
                                    help="Total number of participating clients (devices) in the federated learning system.")
     k_clients = st.number_input("Clients per round (K)", 1, 100, 3,
@@ -193,6 +204,10 @@ with st.sidebar:
     with st.expander("Advanced (System & Privacy)"):
         time_budget = st.number_input("Round time budget (seconds, 0=none)", 0.0, 1000000.0, 0.0, format="%.2f",
                                      help="Maximum time allowed per round in seconds. Set to 0 for unlimited. Simulates real-world time constraints where some clients may not finish in time.")
+        energy_budget = st.number_input("Round energy budget (a.u., 0=none)", 0.0, 1e9, 0.0, format="%.2f",
+                                       help="Maximum energy allowed per round (abstract units). When set, energy-aware methods will prefer low-energy clients and respect this cap.")
+        bytes_budget = st.number_input("Round bytes budget (a.u., 0=none)", 0.0, 1e12, 0.0, format="%.0f",
+                                      help="Maximum uplink bytes allowed per round (abstract units). Useful to simulate bandwidth caps.")
         dp_sigma = st.number_input("DP Gaussian noise sigma (per-parameter)", 0.0, 10.0, 0.0, format="%.4f",
                                   help="Standard deviation of Gaussian noise added to model updates for Differential Privacy. Higher = more privacy but less accuracy. 0 = no DP noise.")
         dp_eps = st.number_input("DP epsilon consumed per selection", 0.0, 100.0, 0.0, format="%.3f",
@@ -259,6 +274,8 @@ if init_btn:
         fast_mode=fast_mode,
         pretrained=pretrained,
         time_budget=(float(time_budget) if 'time_budget' in locals() and time_budget > 0 else None),
+        energy_budget=(float(energy_budget) if 'energy_budget' in locals() and energy_budget > 0 else None),
+        bytes_budget=(float(bytes_budget) if 'bytes_budget' in locals() and bytes_budget > 0 else None),
         dp_sigma=float(dp_sigma) if 'dp_sigma' in locals() else 0.0,
         dp_epsilon_per_round=float(dp_eps) if 'dp_eps' in locals() else 0.0,
         dp_clip_norm=float(dp_clip) if 'dp_clip' in locals() else 0.0,
@@ -338,38 +355,50 @@ with run_tab:
             except Exception:
                 pass
             # Plots
-            from csfl_simulator.app.components.plots import plot_accuracy, plot_participation, plot_selection_heatmap, plot_dp_usage, plot_round_time, plot_fairness, plot_composite, plot_loss
+            from csfl_simulator.app.components.plots import plot_accuracy, plot_participation, plot_selection_heatmap, plot_dp_usage, plot_round_time, plot_fairness, plot_composite, plot_loss, plot_wall_clock, plot_clients_per_hour, plot_energy, plot_bytes
             with st.expander("Plot Controls", expanded=True):
                 ui = st.session_state.run_ui
                 ui["show_accuracy"] = st.checkbox("Show Accuracy", value=bool(ui.get("show_accuracy", True)))
                 ui["show_loss"] = st.checkbox("Show Loss", value=bool(ui.get("show_loss", True)))
                 ui["show_time"] = st.checkbox("Show Round Time", value=bool(ui.get("show_time", True)))
+                ui["show_wall_clock"] = st.checkbox("Show Wall-Clock", value=bool(ui.get("show_wall_clock", True)))
+                ui["show_throughput"] = st.checkbox("Show Clients/hour", value=bool(ui.get("show_throughput", True)))
+                ui["show_energy"] = st.checkbox("Show Energy", value=bool(ui.get("show_energy", True)))
+                ui["show_bytes"] = st.checkbox("Show Bytes", value=bool(ui.get("show_bytes", True)))
                 ui["show_fair"] = st.checkbox("Show Fairness", value=bool(ui.get("show_fair", True)))
                 ui["show_composite"] = st.checkbox("Show Composite", value=bool(ui.get("show_composite", True)))
                 col_reset, col_clear = st.columns([1,1])
                 if col_reset.button("Reset Plot UI"):
-                    st.session_state.run_ui = {"show_accuracy": True, "show_loss": True, "show_time": True, "show_fair": True, "show_composite": True}
+                    st.session_state.run_ui = {"show_accuracy": True, "show_loss": True, "show_time": True, "show_wall_clock": True, "show_throughput": True, "show_energy": True, "show_bytes": True, "show_fair": True, "show_composite": True}
                     st.experimental_rerun()
                 if col_clear.button("Clear Results"):
                     st.session_state.run_data = None
                     st.session_state.last_result = None
                     st.experimental_rerun()
             if st.session_state.run_ui.get("show_accuracy", True):
-                st.plotly_chart(plot_accuracy(res["metrics"]), use_container_width=True)
+                st.plotly_chart(plot_accuracy(res["metrics"]), use_container_width=True, key="run_plot_accuracy")
             if st.session_state.run_ui.get("show_loss", True):
-                st.plotly_chart(plot_loss(res["metrics"]), use_container_width=True)
+                st.plotly_chart(plot_loss(res["metrics"]), use_container_width=True, key="run_plot_loss")
             if st.session_state.run_ui.get("show_time", True):
-                st.plotly_chart(plot_round_time(res["metrics"]), use_container_width=True)
+                st.plotly_chart(plot_round_time(res["metrics"]), use_container_width=True, key="run_plot_round_time")
+            if st.session_state.run_ui.get("show_wall_clock", True):
+                st.plotly_chart(plot_wall_clock(res["metrics"]), use_container_width=True, key="run_plot_wall_clock")
+            if st.session_state.run_ui.get("show_throughput", True):
+                st.plotly_chart(plot_clients_per_hour(res["metrics"]), use_container_width=True, key="run_plot_throughput")
+            if st.session_state.run_ui.get("show_energy", True):
+                st.plotly_chart(plot_energy(res["metrics"]), use_container_width=True, key="run_plot_energy")
+            if st.session_state.run_ui.get("show_bytes", True):
+                st.plotly_chart(plot_bytes(res["metrics"]), use_container_width=True, key="run_plot_bytes")
             if st.session_state.run_ui.get("show_fair", True):
-                st.plotly_chart(plot_fairness(res["metrics"]), use_container_width=True)
+                st.plotly_chart(plot_fairness(res["metrics"]), use_container_width=True, key="run_plot_fairness")
             if st.session_state.run_ui.get("show_composite", True):
-                st.plotly_chart(plot_composite(res["metrics"]), use_container_width=True)
+                st.plotly_chart(plot_composite(res["metrics"]), use_container_width=True, key="run_plot_composite")
             # Build a lightweight client snapshot for plotting
             # Note: in this session, we use the simulator's current clients
             sim = st.session_state.simulator
-            st.plotly_chart(plot_participation(sim.clients), use_container_width=True)
-            st.plotly_chart(plot_selection_heatmap(sim.history.get("selected", []), sim.cfg.total_clients), use_container_width=True)
-            st.plotly_chart(plot_dp_usage(sim.clients), use_container_width=True)
+            st.plotly_chart(plot_participation(sim.clients), use_container_width=True, key="run_plot_participation")
+            st.plotly_chart(plot_selection_heatmap(sim.history.get("selected", []), sim.cfg.total_clients), use_container_width=True, key="run_plot_selection_heatmap")
+            st.plotly_chart(plot_dp_usage(sim.clients), use_container_width=True, key="run_plot_dp_usage")
 
             # Snapshot controls (Run)
             with st.expander("Snapshot (Run)"):
@@ -549,13 +578,13 @@ with run_tab:
                         )
                         for metric_display, series_map in metric_to_series.items():
                             fig = _call_plot_func(plot_metric_compare_plotly, series_map, metric_display, template=template_choice2)
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, use_container_width=True, key=f"cmp_run_plotly_{metric_display}")
                         if show_combined2:
                             figc = _call_plot_func(plot_multi_panel_plotly, metric_to_series, template=template_choice2)
-                            st.plotly_chart(figc, use_container_width=True)
+                            st.plotly_chart(figc, use_container_width=True, key="cmp_run_plotly_combined")
                         if selection_counts:
                             figsc = _call_plot_func(plot_selection_counts_compare_plotly, selection_counts, template=template_choice2)
-                            st.plotly_chart(figsc, use_container_width=True)
+                            st.plotly_chart(figsc, use_container_width=True, key="cmp_run_plotly_counts")
                     else:
                         try:
                             from csfl_simulator.app.components.plots import (
@@ -795,7 +824,7 @@ with compare_tab:
                         line_width=float(lw),
                         legend_position=legend_pos,
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f"cmp_plotly_{metric_display}")
                 if show_combined:
                     figc = _call_plot_func(
                         plot_multi_panel_plotly,
@@ -807,7 +836,7 @@ with compare_tab:
                         line_width=float(lw),
                         legend_position=legend_pos,
                     )
-                    st.plotly_chart(figc, use_container_width=True)
+                    st.plotly_chart(figc, use_container_width=True, key="cmp_plotly_combined")
                 if selection_counts:
                     figsc = _call_plot_func(
                         plot_selection_counts_compare_plotly,
@@ -815,7 +844,7 @@ with compare_tab:
                         template=template_choice,
                         methods_filter=methods_display,
                     )
-                    st.plotly_chart(figsc, use_container_width=True)
+                    st.plotly_chart(figsc, use_container_width=True, key="cmp_plotly_counts")
                 # Reset/Clear controls
                 col_rc1, col_rc2 = st.columns([1,1])
                 if col_rc1.button("Reset Plot UI (Compare)"):
@@ -1017,7 +1046,7 @@ with compare_tab:
                         line_width=float(lw),
                         legend_position=legend_pos,
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f"cmp_mem_plotly_{metric_display}")
                 if st.checkbox("Show combined 2x2", value=True, key="cmp_combined_mem_plotly"):
                     figc = _call_plot_func(
                         plot_multi_panel_plotly,
@@ -1029,7 +1058,7 @@ with compare_tab:
                         line_width=float(lw),
                         legend_position=legend_pos,
                     )
-                    st.plotly_chart(figc, use_container_width=True)
+                    st.plotly_chart(figc, use_container_width=True, key="cmp_mem_plotly_combined")
                 if selection_counts:
                     figsc = _call_plot_func(
                         plot_selection_counts_compare_plotly,
@@ -1037,7 +1066,7 @@ with compare_tab:
                         template="plotly_white",
                         methods_filter=methods_display,
                     )
-                    st.plotly_chart(figsc, use_container_width=True)
+                    st.plotly_chart(figsc, use_container_width=True, key="cmp_mem_plotly_counts")
                 col_rc5, col_rc6 = st.columns([1,1])
                 if col_rc5.button("Reset Plot UI (Compare)"):
                     st.session_state.compare_ui = {
@@ -1339,7 +1368,7 @@ with visualize_tab:
                         line_width=viz_ui["line_width"],
                         legend_position=viz_ui["legend_position"],
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f"viz_plotly_{metric}")
                 if viz_ui["show_combined"] and filtered_mts:
                     figc = _call_plot_func(
                         plot_multi_panel_plotly,
@@ -1351,7 +1380,7 @@ with visualize_tab:
                         line_width=viz_ui["line_width"],
                         legend_position=viz_ui["legend_position"],
                     )
-                    st.plotly_chart(figc, use_container_width=True)
+                    st.plotly_chart(figc, use_container_width=True, key="viz_plotly_combined")
                 # Export
                 try:
                     from datetime import datetime as _dt

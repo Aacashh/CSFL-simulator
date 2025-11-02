@@ -101,27 +101,42 @@ class CNNMnist(nn.Module):
         x=F.relu(self.fc1(x))
         return self.fc2(x)
 
+class CNNMnistFedAvg(nn.Module):
+    def __init__(self, num_classes=10, in_channels=1, image_size=28):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 32, 5, padding=2)
+        self.conv2 = nn.Conv2d(32, 64, 5, padding=2)
+        self.pool = nn.MaxPool2d(2,2)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = self.pool(F.relu(self.conv1(dummy)))
+            h = self.pool(F.relu(self.conv2(h)))
+            flat = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat, 512, bias=False)
+        self.fc2 = nn.Linear(512, num_classes)
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
+
 class LightCIFAR(nn.Module):
     def __init__(self, num_classes=10, in_channels=3, image_size=32):
         super().__init__()
-        self.conv1=nn.Conv2d(in_channels,32,3,padding=1)
-        self.conv2=nn.Conv2d(32,64,3,padding=1)
-        self.conv3=nn.Conv2d(64,128,3,padding=1)
-        self.pool=nn.MaxPool2d(2,2)
+        self.conv1 = nn.Conv2d(in_channels, 64, 5)
+        self.conv2 = nn.Conv2d(64, 64, 5)
+        self.pool = nn.MaxPool2d(2,2)
         with torch.no_grad():
             dummy = torch.zeros(1, in_channels, image_size, image_size)
-            h = F.relu(self.conv1(dummy))
+            h = self.pool(F.relu(self.conv1(dummy)))
             h = self.pool(F.relu(self.conv2(h)))
-            h = self.pool(F.relu(self.conv3(h)))
-            h = self.pool(h)
             flat = int(h.numel() // h.shape[0])
-        self.fc1=nn.Linear(flat,256)
-        self.fc2=nn.Linear(256,num_classes)
+        self.fc1 = nn.Linear(flat, 256)
+        self.fc2 = nn.Linear(256, num_classes)
     def forward(self,x):
-        x=F.relu(self.conv1(x))
-        x=self.pool(F.relu(self.conv2(x)))
-        x=self.pool(F.relu(self.conv3(x)))
-        x=self.pool(x)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
         x=x.view(x.size(0),-1)
         x=F.relu(self.fc1(x))
         return self.fc2(x)
@@ -132,6 +147,8 @@ ds = CONFIG['dataset'].lower()
 in_ch, img_sz = (1,28) if 'mnist' in ds and 'cifar' not in ds else (3,32)
 if name in ['cnn-mnist','cnn_mnist']:
     model = CNNMnist(num_classes, in_channels=in_ch, image_size=img_sz)
+elif name in ['cnn-mnist (fedavg)','cnn_mnist_fedavg','cnn-mnist-fedavg']:
+    model = CNNMnistFedAvg(num_classes, in_channels=in_ch, image_size=img_sz)
 elif name in ['lightcnn','light-cifar']:
     model = LightCIFAR(num_classes, in_channels=in_ch, image_size=img_sz)
 else:

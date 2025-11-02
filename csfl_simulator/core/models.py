@@ -47,30 +47,53 @@ class CNNMnist(nn.Module):
         return self.fc2(x)
 
 
+class CNNMnistFedAvg(nn.Module):
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
+        super().__init__()
+        # Two 5x5 conv layers with padding=2 to preserve spatial dims before pooling
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=5, padding=2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=5, padding=2)
+        self.pool = nn.MaxPool2d(2, 2)
+        # Determine flattened size dynamically for given input spatial size
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = self.pool(F.relu(self.conv1(dummy)))
+            h = self.pool(F.relu(self.conv2(h)))
+            flat_dim = int(h.numel() // h.shape[0])
+        # 512-unit FC with bias disabled to match 1,663,370 params for 28x28 MNIST
+        self.fc1 = nn.Linear(flat_dim, 512, bias=False)
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
+
 class LightCIFAR(nn.Module):
     def __init__(self, num_classes: int = 10, in_channels: int = 3, image_size: int = 32):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, 32, 3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, 3, padding=1)
+        # First conv block: 5x5 conv (64 filters) + 2x2 max pool
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=5)
+        # Second conv block: 5x5 conv (64 filters) + 2x2 max pool
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=5)
         self.pool = nn.MaxPool2d(2, 2)
         # Determine flattened size dynamically based on input size and channels
         with torch.no_grad():
             dummy = torch.zeros(1, in_channels, image_size, image_size)
-            h = F.relu(self.conv1(dummy))
+            h = self.pool(F.relu(self.conv1(dummy)))
             h = self.pool(F.relu(self.conv2(h)))
-            h = self.pool(F.relu(self.conv3(h)))
-            h = self.pool(h)
             flat_dim = int(h.numel() // h.shape[0])
+        # Two FC layers: hidden -> logits
         self.fc1 = nn.Linear(flat_dim, 256)
         self.fc2 = nn.Linear(256, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = _match_channels(x, self.conv1.in_channels)
-        x = F.relu(self.conv1(x))
+        x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = self.pool(F.relu(self.conv3(x)))
-        x = self.pool(x)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
@@ -91,6 +114,8 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
     in_ch, img_sz = _dataset_image_spec(dataset)
     if name_l in ("cnn-mnist", "cnn_mnist"):
         model = CNNMnist(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("cnn-mnist (fedavg)", "cnn_mnist_fedavg", "cnn-mnist-fedavg"):
+        model = CNNMnistFedAvg(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("lightcnn", "light-cifar"):
         model = LightCIFAR(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l == "resnet18":

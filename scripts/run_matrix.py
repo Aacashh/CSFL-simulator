@@ -22,11 +22,15 @@ PROPOSED = [
     "ml.pareto_rl",
     "ml.dp_eig",
     "ml.gnn_dpp",
+    "system_aware.tribudget",
+    "system_aware.fedcs_energy",
+    "system_aware.oort_energy",
 ]
 
 
 def run_once(dataset: str, partition: str, alpha: float, total_clients: int, K: int, rounds: int,
-             dp_sigma: float, dp_eps_round: float, dp_clip: float, method: str, seed: int, fast: bool) -> dict:
+             dp_sigma: float, dp_eps_round: float, dp_clip: float, method: str, seed: int, fast: bool,
+             time_budget: float | None, energy_budget: float | None, bytes_budget: float | None) -> dict:
     cfg = SimConfig(
         dataset=dataset,
         partition=("dirichlet" if partition == "dirichlet" else partition),
@@ -41,7 +45,9 @@ def run_once(dataset: str, partition: str, alpha: float, total_clients: int, K: 
         device="auto",
         seed=int(seed),
         fast_mode=bool(fast),
-        time_budget=None,
+        time_budget=(float(time_budget) if time_budget and time_budget > 0 else None),
+        energy_budget=(float(energy_budget) if energy_budget and energy_budget > 0 else None),
+        bytes_budget=(float(bytes_budget) if bytes_budget and bytes_budget > 0 else None),
         dp_sigma=float(dp_sigma),
         dp_epsilon_per_round=float(dp_eps_round),
         dp_clip_norm=float(dp_clip),
@@ -63,6 +69,9 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--fast", action="store_true")
     ap.add_argument("--methods", default="all", help="comma-separated or 'all' for baselines+proposed")
+    ap.add_argument("--time_budget", type=float, default=0.0)
+    ap.add_argument("--energy_budget", type=float, default=0.0)
+    ap.add_argument("--bytes_budget", type=float, default=0.0)
     args = ap.parse_args()
 
     methods = []
@@ -101,6 +110,9 @@ def main():
             method=method,
             seed=seed,
             fast=bool(args.fast),
+            time_budget=float(args.time_budget),
+            energy_budget=float(args.energy_budget),
+            bytes_budget=float(args.bytes_budget),
         )
         results.append({
             "method": method,

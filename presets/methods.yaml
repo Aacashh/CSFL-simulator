@@ -139,6 +139,27 @@ methods:
     params: {beta: 0.5, fairness_gamma: 0.3, recency_delta: 0.3, half_life_rounds: 10, alpha_ucb: 0.1, time_awareness: true}
     type: system_aware
     trainable: false
+  - key: system_aware.tribudget
+    module: csfl_simulator.selection.system_aware.tribudget
+    display_name: "TriBudget-Greedy (time+energy+bytes)"
+    origin: custom
+    params: {a_time: 1.0, b_energy: 1.0, c_bytes: 1.0, energy_budget: null, bytes_budget: null}
+    type: system_aware
+    trainable: false
+  - key: system_aware.fedcs_energy
+    module: csfl_simulator.selection.system_aware.fedcs_energy
+    display_name: "FedCS-E (deadline+energy)"
+    origin: custom
+    params: {time_budget: null, energy_budget: null, bytes_budget: null}
+    type: system_aware
+    trainable: false
+  - key: system_aware.oort_energy
+    module: csfl_simulator.selection.system_aware.oort_energy
+    display_name: "Oort-E (energy/bytes-aware)"
+    origin: custom
+    params: {beta: 0.5, alpha_ucb: 0.1, rho_energy: 0.5, kappa_bytes: 0.3, energy_budget: null, bytes_budget: null}
+    type: system_aware
+    trainable: false
   - key: ml.bandit.rff_linucb
     module: csfl_simulator.selection.ml.rff_linucb
     display_name: "Bandit: RFF-LinUCB"
@@ -229,4 +250,11 @@ methods:
     origin: custom
     params: {refresh_every: 3, cluster_k: null, rep_weight: 0.5, cluster_importance_decay: 0.95}
     type: ml
+    trainable: false
+  - key: wrapper.quota_safety
+    module: csfl_simulator.selection.wrappers.quota_safety
+    display_name: "QuotaSafety (wrapper)"
+    origin: custom
+    params: {base_key: system_aware.oort_plus, window: 10, q_min: 1}
+    type: wrapper
     trainable: false

@@ -38,6 +38,8 @@ class SimConfig:
     fast_mode: bool = True
     pretrained: bool = False
     time_budget: Optional[float] = None
+    energy_budget: Optional[float] = None
+    bytes_budget: Optional[float] = None
     dp_sigma: float = 0.0
     dp_epsilon_per_round: float = 0.0
     dp_clip_norm: float = 0.0
@@ -92,6 +94,9 @@ class FLSimulator:
             if name_l in ("cnn-mnist", "cnn_mnist"):
                 from .models import CNNMnist
                 self.model = CNNMnist(num_classes=num_classes, in_channels=c0, image_size=h0).to(self.device)
+            elif name_l in ("cnn-mnist (fedavg)", "cnn_mnist_fedavg", "cnn-mnist-fedavg"):
+                from .models import CNNMnistFedAvg
+                self.model = CNNMnistFedAvg(num_classes=num_classes, in_channels=c0, image_size=h0).to(self.device)
             elif name_l in ("lightcnn", "light-cifar"):
                 from .models import LightCIFAR
                 self.model = LightCIFAR(num_classes=num_classes, in_channels=c0, image_size=h0).to(self.device)
@@ -292,6 +297,9 @@ class FLSimulator:
                 random,
                 self.cfg.time_budget,
                 self.device,
+                # Additional budgets (selectors may ignore if not supported)
+                energy_budget=self.cfg.energy_budget,
+                bytes_budget=self.cfg.bytes_budget,
             )
             self.history["selected"].append(ids)
             # Update recency info on clients
@@ -379,13 +387,25 @@ class FLSimulator:
             m["round"] = rnd
             # Measure round time proxy (number of local batches approximated by data size/speed)
             round_time = sum(float(getattr(self.clients[cid], 'estimated_duration', 0.0) or 0.0) for cid in ids)
-            # Fairness: participation variance
+            round_energy = sum(float(getattr(self.clients[cid], 'estimated_energy', 0.0) or 0.0) for cid in ids)
+            round_bytes = sum(float(getattr(self.clients[cid], 'estimated_bytes', 0.0) or 0.0) for cid in ids)
+            # Keep cumulative wall-clock
+            prev_wc = float(metrics[-1].get('wall_clock', 0.0)) if metrics else 0.0
+            wall_clock = prev_wc + round_time
+            # Fairness: participation variance and Gini
             try:
                 import numpy as _np
                 parts = _np.array([float(c.participation_count or 0.0) for c in self.clients], dtype=float)
                 fairness_var = float(_np.var(parts))
+                s = parts.sum()
+                if s > 0 and len(parts) > 0:
+                    diffs = _np.abs(parts[:, None] - parts[None, :])
+                    fairness_gini = float(diffs.sum() / (2.0 * len(parts) * s))
+                else:
+                    fairness_gini = 0.0
             except Exception:
                 fairness_var = 0.0
+                fairness_gini = 0.0
             # DP usage avg
             dp_used_avg = float(sum(float(getattr(c, 'dp_epsilon_used', 0.0) or 0.0) for c in self.clients) / max(1, len(self.clients)))
             # Composite metric per config weights
@@ -407,9 +427,14 @@ class FLSimulator:
             prev_composite = composite
             # Log metrics
             m["round_time"] = round_time
+            m["round_energy"] = round_energy
+            m["round_bytes"] = round_bytes
+            m["wall_clock"] = wall_clock
+            m["clients_per_hour"] = (len(ids) * 3600.0 / round_time) if round_time > 0 else 0.0
             m["fairness_var"] = fairness_var
             m["dp_used_avg"] = dp_used_avg
             m["composite"] = composite
+            m["fairness_gini"] = fairness_gini
             prev_acc = m["accuracy"]
             metrics.append(m)
             if on_progress:

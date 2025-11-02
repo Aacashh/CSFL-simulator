@@ -177,6 +177,54 @@ def plot_composite(metrics):
     return fig
 
 
+def plot_wall_clock(metrics):
+    xs, ys = [], []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("wall_clock", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='wall_clock'))
+    fig.update_layout(title="Cumulative Wall-Clock", xaxis_title="Round", yaxis_title="Time (a.u.)", template="plotly_white")
+    return fig
+
+
+def plot_clients_per_hour(metrics):
+    xs, ys = [], []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("clients_per_hour", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='clients/hour'))
+    fig.update_layout(title="Throughput (clients/hour)", xaxis_title="Round", yaxis_title="clients/hour", template="plotly_white")
+    return fig
+
+
+def plot_energy(metrics):
+    xs, ys = [], []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("round_energy", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='round_energy'))
+    fig.update_layout(title="Round Energy (proxy)", xaxis_title="Round", yaxis_title="Energy (a.u.)", template="plotly_white")
+    return fig
+
+
+def plot_bytes(metrics):
+    xs, ys = [], []
+    for i, row in enumerate(metrics):
+        if isinstance(row, dict):
+            xs.append(row.get("round", i))
+            ys.append(float(row.get("round_bytes", 0.0) or 0.0))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=ys, mode='lines+markers', name='round_bytes'))
+    fig.update_layout(title="Round Bytes (proxy)", xaxis_title="Round", yaxis_title="Bytes (a.u.)", template="plotly_white")
+    return fig
+
+
 # --------- New comparison plotting helpers ---------
 
 def _safe_template(template: str) -> str:

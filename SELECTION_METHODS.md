@@ -117,6 +117,24 @@ For implementation references, see the indicated file under `csfl_simulator/sele
 - Intuition: stabilize usage via fairness/recency while keeping utility/time and mild exploration.
 - Ref: Builds on Oort (OSDI 2021) [arXiv:2010.06081](https://arxiv.org/abs/2010.06081)
 
+### TriBudget-Greedy (time + energy + bytes)
+- Impl: `system_aware/tribudget.py`
+- Density-based greedy packing under three budgets (time, energy, bytes):
+  \[ s_i = \frac{\ell_i}{a\,\tilde t_i + b\,\tilde e_i + c\,\tilde b_i + 10^{-9}}. \]
+  Accept while remaining budgets allow; fill best-effort otherwise. Tildes denote min–max normalized quantities.
+- Intuition: simple, fast multi-constraint knapsack for realistic system caps (deadlines, energy, bandwidth).
+
+### FedCS-E (deadline + energy)
+- Impl: `system_aware/fedcs_energy.py`
+- FedCS ranking by utility per time with additional feasibility on energy (and optional bytes) budgets.
+- Intuition: keep FedCS behavior but respect energy limits; favors low-energy clients among fast ones.
+
+### Oort-E (energy/bytes-aware Oort)
+- Impl: `system_aware/oort_energy.py`
+- Score:
+  \[ s_i = \frac{(\ell_i^{\beta}/\hat t_i)\,(1+\alpha_{ucb}\,\text{ucb}_i)}{1+\rho\,\tilde e_i + \kappa\,\tilde b_i}. \]
+- Intuition: retain utility/time and exploration, but softly penalize energy and bandwidth usage; optional budget filter.
+
 ---
 
 ## Bandit / ML methods
