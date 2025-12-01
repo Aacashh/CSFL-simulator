@@ -217,6 +217,22 @@ class FLSimulator:
         # Save config
         save_json({"config": asdict(self.cfg), "device": self.device}, self.run_dir / "config.json")
 
+        # Profile model for efficiency metrics
+        self.model_macs_per_sample = 0.0
+        self.model_params_count = 0.0
+        try:
+            import thop
+            # Create a dummy input with correct shape
+            xb, _ = next(iter(self.test_loader))
+            xb = xb[:1].to(self.device)  # use batch size 1 for per-sample MACs
+            macs, params = thop.profile(self.model, inputs=(xb,), verbose=False)
+            self.model_macs_per_sample = macs
+            self.model_params_count = params
+        except ImportError:
+            print("Warning: 'thop' not installed. Research efficiency metrics will be 0.")
+        except Exception as e:
+            print(f"Warning: Model profiling failed: {e}")
+
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
         # Lazily recreate loader if it was deleted during emergency cleanup
         if cid not in self.client_loaders or self.client_loaders[cid] is None:
@@ -276,10 +292,20 @@ class FLSimulator:
         metrics = []
         base = eval_model(self.model, self.test_loader, self.device)
         base["round"] = -1
+        # Initialize cumulative efficiency metrics in base
+        base["cum_flops"] = 0.0
+        base["cum_comm"] = 0.0
+        base["cum_time"] = 0.0
+        base["cum_tflops"] = 0.0
         metrics.append(base)
         # Composite reward initialization
         prev_composite = 0.0
         prev_acc = base["accuracy"]
+        
+        cumulative_flops = 0.0
+        cumulative_comm_mb = 0.0
+        cumulative_time = 0.0
+
         stopped_early = False
         for rnd in range(self.cfg.rounds):
             if is_cancelled and is_cancelled():
@@ -425,11 +451,32 @@ class FLSimulator:
             self.history["state"]["last_reward"] = reward
             prev_acc = m["accuracy"]
             prev_composite = composite
+
+            # Calculate efficiency metrics (FLOPs and Comm)
+            # FLOPs approx: 3 * MACs * local_epochs * data_size (for all participants)
+            round_flops = 0.0
+            for cid in ids:
+                c_data_size = self.clients[cid].data_size
+                round_flops += 3.0 * self.model_macs_per_sample * self.cfg.local_epochs * c_data_size
+            
+            # Communication: 2 * K * ModelSize (MB)
+            # ModelSize in MB (assuming float32 = 4 bytes)
+            model_size_mb = (self.model_params_count * 4) / (1024 * 1024)
+            round_comm_mb = 2.0 * len(ids) * model_size_mb
+            
+            cumulative_flops += round_flops
+            cumulative_comm_mb += round_comm_mb
+            cumulative_time += round_time
+
             # Log metrics
             m["round_time"] = round_time
             m["round_energy"] = round_energy
             m["round_bytes"] = round_bytes
             m["wall_clock"] = wall_clock
+            m["cum_flops"] = cumulative_flops
+            m["cum_tflops"] = cumulative_flops / 1e12
+            m["cum_comm"] = cumulative_comm_mb
+            m["cum_time"] = cumulative_time
             m["clients_per_hour"] = (len(ids) * 3600.0 / round_time) if round_time > 0 else 0.0
             m["fairness_var"] = fairness_var
             m["dp_used_avg"] = dp_used_avg

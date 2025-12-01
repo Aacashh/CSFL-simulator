@@ -686,6 +686,7 @@ with compare_tab:
             # metric -> {label -> mean_series}
             metric_to_series = {pretty[m]: {} for m in metric_names}
             selection_counts = {}
+            metric_objects = {}
             failures_compare_tab: dict[str, list[str]] = {}
 
             for mkey in picks:
@@ -734,6 +735,13 @@ with compare_tab:
                         continue
                     for m in metric_names:
                         per_metric_runs[m].append(extract_series(res["metrics"], m))
+                    
+                    # Accumulate full metric objects for efficiency analysis
+                    try:
+                        metric_objects.setdefault(label, []).append(res["metrics"])
+                    except Exception:
+                        pass
+
                     # accumulate selection counts
                     try:
                         counts = res.get("participation_counts") or []
@@ -777,6 +785,7 @@ with compare_tab:
             st.session_state.compare_data = {
                 "metric_to_series": metric_to_series,
                 "selection_counts": selection_counts,
+                "metric_objects": metric_objects,
                 "labels_map": labels_map,
                 "methods": list(metric_to_series.get("Accuracy", {}).keys()),
             }
@@ -1012,6 +1021,7 @@ with compare_tab:
         elif st.session_state.compare_results:
             metric_to_series = st.session_state.compare_results.get("metric_to_series", {})
             selection_counts = st.session_state.compare_results.get("selection_counts", {})
+            metric_objects = st.session_state.compare_results.get("metric_objects", {})
             # Use the same rendering controls as above
             chart_style = st.radio("Chart style", ["Interactive (Plotly)", "Paper (Matplotlib)"], index=0, key="cmp_style_mem")
             if chart_style.startswith("Interactive"):
@@ -1176,6 +1186,51 @@ with compare_tab:
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
                     st.experimental_rerun()
+
+                # Research Efficiency Analysis
+                with st.expander("Research Efficiency Analysis", expanded=True):
+                    if metric_objects:
+                        try:
+                            from csfl_simulator.app.components.plots import plot_accuracy_vs_resource
+                            
+                            # Get UI settings or defaults
+                            eff_methods = st.session_state.compare_ui.get("methods_filter", None)
+                            eff_lw = float(st.session_state.compare_ui.get("line_width", 2.0))
+                            eff_legend = st.session_state.compare_ui.get("legend_position", "right")
+                            eff_tmpl = st.session_state.compare_ui.get("plotly_template", "plotly_white")
+                            
+                            col_eff1, col_eff2 = st.columns(2)
+                            with col_eff1:
+                                fig_flops = _call_plot_func(
+                                    plot_accuracy_vs_resource,
+                                    metric_objects,
+                                    resource_key="cum_tflops",
+                                    resource_label="Cumulative TFLOPs",
+                                    title="Accuracy vs. Cumulative TFLOPs",
+                                    template=eff_tmpl,
+                                    methods_filter=eff_methods,
+                                    line_width=eff_lw,
+                                    legend_position=eff_legend
+                                )
+                                st.plotly_chart(fig_flops, use_container_width=True, key="eff_flops")
+                                
+                            with col_eff2:
+                                fig_comm = _call_plot_func(
+                                    plot_accuracy_vs_resource,
+                                    metric_objects,
+                                    resource_key="cum_comm",
+                                    resource_label="Cumulative Communication (MB)",
+                                    title="Accuracy vs. Cumulative Comm",
+                                    template=eff_tmpl,
+                                    methods_filter=eff_methods,
+                                    line_width=eff_lw,
+                                    legend_position=eff_legend
+                                )
+                                st.plotly_chart(fig_comm, use_container_width=True, key="eff_comm")
+                        except Exception as e:
+                            st.warning(f"Efficiency analysis failed (missing dependency or data): {e}")
+                    else:
+                        st.info("No detailed metric objects available for efficiency analysis.")
 
 with visualize_tab:
     st.subheader("Visualize Results")

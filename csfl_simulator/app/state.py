@@ -150,6 +150,7 @@ def validate_compare_v2(data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(sc, dict):
         sc = {}
     data["selection_counts"] = sc
+    data.setdefault("metric_objects", {})
     data.setdefault("saved_at", _now_str())
     return data
 
@@ -173,6 +174,7 @@ def _migrate_v1_to_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
         data = {
             "metric_to_series": payload.get("metric_to_series", {}),
             "selection_counts": payload.get("selection_counts", {}),
+            "metric_objects": payload.get("metric_objects", {}),
             "methods": list((payload.get("metric_to_series", {}) or {}).get("Accuracy", {}).keys()),
         }
         doc["data"] = validate_compare_v2(data)

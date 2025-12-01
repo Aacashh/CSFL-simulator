@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 try:
     # Optional import; only used when paper-style is selected
@@ -555,3 +555,92 @@ def plot_selection_counts_compare_matplotlib(
             ax.legend(ncol=max(1, int(legend_cols)))
             fig.tight_layout()
         return fig
+
+def plot_accuracy_vs_resource(
+    method_to_runs: Dict[str, List[List[Dict[str, Any]]]],
+    resource_key: str,
+    resource_label: str,
+    title: str = "Efficiency Curve",
+    template: str = "plotly_white",
+    methods_filter: Optional[List[str]] = None,
+    line_width: float = 2.0,
+    legend_position: str = "right",
+) -> go.Figure:
+    fig = go.Figure()
+    tmpl = _safe_template(template)
+
+    names = list(method_to_runs.keys())
+    if methods_filter:
+        names = [n for n in names if n in methods_filter]
+
+    for name in names:
+        runs = method_to_runs[name]
+        if not runs:
+            continue
+
+        # Extract X and Y for each run
+        xs_list = []
+        ys_list = []
+        max_len = 0
+
+        for run_metrics in runs:
+            # Sort by round just in case, though usually sorted
+            # run_metrics is list of dicts
+            xs = [float(m.get(resource_key, 0.0) or 0.0) for m in run_metrics]
+            ys = [float(m.get("accuracy", 0.0) or 0.0) for m in run_metrics]
+            xs_list.append(xs)
+            ys_list.append(ys)
+            max_len = max(max_len, len(xs))
+
+        # Pad and average
+        if max_len == 0:
+            continue
+
+        # Pad with last value
+        xs_padded = []
+        ys_padded = []
+        for x_seq, y_seq in zip(xs_list, ys_list):
+            if not x_seq:
+                continue
+            curr_len = len(x_seq)
+            if curr_len < max_len:
+                x_seq = x_seq + [x_seq[-1]] * (max_len - curr_len)
+                y_seq = y_seq + [y_seq[-1]] * (max_len - curr_len)
+            xs_padded.append(x_seq)
+            ys_padded.append(y_seq)
+
+        if not xs_padded:
+            continue
+
+        # Average
+        x_avg = [sum(col) / len(col) for col in zip(*xs_padded)]
+        y_avg = [sum(col) / len(col) for col in zip(*ys_padded)]
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_avg,
+                y=y_avg,
+                mode='lines+markers',
+                name=name,
+                line={"width": line_width},
+                legendgroup=name,
+            )
+        )
+
+    legend = {}
+    if legend_position == "top":
+        legend = {"orientation": "h", "y": 1.02, "yanchor": "bottom", "x": 0.0, "xanchor": "left"}
+    elif legend_position == "right":
+        legend = {"orientation": "v", "y": 1.0, "yanchor": "top", "x": 1.02, "xanchor": "left"}
+    if isinstance(legend, dict):
+        legend["groupclick"] = "togglegroup"
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=resource_label,
+        yaxis_title="Accuracy",
+        template=tmpl,
+        legend=legend,
+        uirevision="viz_eff",
+    )
+    return fig
