@@ -370,11 +370,11 @@ with run_tab:
                 col_reset, col_clear = st.columns([1,1])
                 if col_reset.button("Reset Plot UI"):
                     st.session_state.run_ui = {"show_accuracy": True, "show_loss": True, "show_time": True, "show_wall_clock": True, "show_throughput": True, "show_energy": True, "show_bytes": True, "show_fair": True, "show_composite": True}
-                    st.experimental_rerun()
+                    st.rerun()
                 if col_clear.button("Clear Results"):
                     st.session_state.run_data = None
                     st.session_state.last_result = None
-                    st.experimental_rerun()
+                    st.rerun()
             if st.session_state.run_ui.get("show_accuracy", True):
                 st.plotly_chart(plot_accuracy(res["metrics"]), use_container_width=True, key="run_plot_accuracy")
             if st.session_state.run_ui.get("show_loss", True):
@@ -796,6 +796,9 @@ with compare_tab:
                     _state_mod.save_compare(st.session_state.compare_data, st.session_state.compare_ui, None)
             except Exception:
                 pass
+            
+            # Immediately trigger a rerun to refresh the UI with new data
+            st.rerun()
 
             if chart_style.startswith("Interactive"):
                 from csfl_simulator.app.components.plots import (
@@ -870,11 +873,11 @@ with compare_tab:
                         "line_width": 2.0,
                         "show_combined": True,
                     }
-                    st.experimental_rerun()
+                    st.rerun()
                 if col_rc2.button("Clear Comparison Results"):
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 try:
                     from csfl_simulator.app.components.plots import (
@@ -965,11 +968,11 @@ with compare_tab:
                         "line_width": 2.0,
                         "show_combined": True,
                     }
-                    st.experimental_rerun()
+                    st.rerun()
                 if col_rc4.button("Clear Comparison Results"):
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
-                    st.experimental_rerun()
+                    st.rerun()
 
             # Failures summary (Compare tab)
             if failures_compare_tab:
@@ -1018,7 +1021,7 @@ with compare_tab:
                 st.info("Sent current comparison to Visualize tab. Switch to 'Visualize' to customize.")
 
         # Render last comparison if available (no fresh compute required)
-        elif st.session_state.compare_results:
+        if st.session_state.compare_results:
             metric_to_series = st.session_state.compare_results.get("metric_to_series", {})
             selection_counts = st.session_state.compare_results.get("selection_counts", {})
             metric_objects = st.session_state.compare_results.get("metric_objects", {})
@@ -1092,11 +1095,101 @@ with compare_tab:
                         "line_width": 2.0,
                         "show_combined": True,
                     }
-                    st.experimental_rerun()
+                    st.rerun()
                 if col_rc6.button("Clear Comparison Results"):
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
-                    st.experimental_rerun()
+                    st.rerun()
+
+                # Research Efficiency Analysis
+                with st.expander("Research Efficiency Analysis", expanded=True):
+                    mo = st.session_state.compare_results.get("metric_objects") if st.session_state.compare_results else None
+                    if mo:
+                        try:
+                            from csfl_simulator.app.components.plots import plot_accuracy_vs_resource
+                            eff_methods = st.session_state.compare_ui.get("methods_filter", None)
+                            eff_lw = float(st.session_state.compare_ui.get("line_width", 2.0))
+                            eff_legend = st.session_state.compare_ui.get("legend_position", "right")
+                            eff_tmpl = st.session_state.compare_ui.get("plotly_template", "plotly_white")
+                            col_eff1, col_eff2 = st.columns(2)
+                            with col_eff1:
+                                fig_flops = _call_plot_func(
+                                    plot_accuracy_vs_resource,
+                                    mo,
+                                    resource_key="cum_tflops",
+                                    resource_label="Cumulative TFLOPs",
+                                    title="Accuracy vs. Cumulative TFLOPs",
+                                    template=eff_tmpl,
+                                    methods_filter=eff_methods,
+                                    line_width=eff_lw,
+                                    legend_position=eff_legend
+                                )
+                                st.plotly_chart(fig_flops, use_container_width=True, key="eff_flops")
+                            with col_eff2:
+                                fig_comm = _call_plot_func(
+                                    plot_accuracy_vs_resource,
+                                    mo,
+                                    resource_key="cum_comm",
+                                    resource_label="Cumulative Communication (MB)",
+                                    title="Accuracy vs. Cumulative Comm",
+                                    template=eff_tmpl,
+                                    methods_filter=eff_methods,
+                                    line_width=eff_lw,
+                                    legend_position=eff_legend
+                                )
+                                st.plotly_chart(fig_comm, use_container_width=True, key="eff_comm")
+                        except Exception as e:
+                            st.warning(f"Efficiency analysis failed (missing dependency or data): {e}")
+                    else:
+                        st.info("No detailed metric objects available for efficiency analysis.")
+
+                # Method Ranking
+                st.subheader("Method Ranking")
+                mo_rank = st.session_state.compare_results.get("metric_objects") if st.session_state.compare_results else None
+                if mo_rank:
+                    import pandas as pd
+                    import numpy as np
+                    summary_data = []
+                    eff_methods_rank = st.session_state.compare_ui.get("methods_filter", None)
+                    for label, runs in mo_rank.items():
+                        if eff_methods_rank and label not in eff_methods_rank:
+                            continue
+                        final_accs, total_flops, total_comm, total_time, final_fair = [], [], [], [], []
+                        for run_metrics in runs:
+                            if not run_metrics:
+                                continue
+                            last = run_metrics[-1]
+                            final_accs.append(float(last.get("accuracy", 0.0) or 0.0))
+                            total_flops.append(float(last.get("cum_tflops", 0.0) or 0.0))
+                            total_comm.append(float(last.get("cum_comm", 0.0) or 0.0))
+                            total_time.append(float(last.get("cum_time", 0.0) or 0.0))
+                            final_fair.append(float(last.get("fairness_var", 0.0) or 0.0))
+                        if not final_accs:
+                            continue
+                        summary_data.append({
+                            "Method": label,
+                            "Accuracy (%)": f"{np.mean(final_accs):.2f} ± {np.std(final_accs):.2f}",
+                            "TFLOPs": f"{np.mean(total_flops):.4f}",
+                            "Comm (MB)": f"{np.mean(total_comm):.2f}",
+                            "Time (s)": f"{np.mean(total_time):.2f}",
+                            "Fairness (Var)": f"{np.mean(final_fair):.4f}",
+                            "_acc_sort": np.mean(final_accs),
+                            "_flops_sort": np.mean(total_flops),
+                            "_comm_sort": np.mean(total_comm)
+                        })
+                    if summary_data:
+                        df_rank = pd.DataFrame(summary_data)
+                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs)", "Efficiency (Comm)"], index=0)
+                        if sort_col == "Accuracy":
+                            df_rank = df_rank.sort_values("_acc_sort", ascending=False)
+                        elif sort_col == "Efficiency (TFLOPs)":
+                            df_rank = df_rank.sort_values("_flops_sort", ascending=True)
+                        elif sort_col == "Efficiency (Comm)":
+                            df_rank = df_rank.sort_values("_comm_sort", ascending=True)
+                        display_cols = ["Method", "Accuracy (%)", "TFLOPs", "Comm (MB)", "Time (s)", "Fairness (Var)"]
+                        st.dataframe(df_rank[display_cols], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No data for ranking.")
             else:
                 try:
                     from csfl_simulator.app.components.plots import (
@@ -1181,29 +1274,28 @@ with compare_tab:
                         "line_width": 2.0,
                         "show_combined": True,
                     }
-                    st.experimental_rerun()
+                    st.rerun()
                 if col_rc8.button("Clear Comparison Results"):
                     st.session_state.compare_data = None
                     st.session_state.compare_results = None
-                    st.experimental_rerun()
+                    st.rerun()
+                # (Efficiency analysis and method ranking moved below to run regardless of chart style)
 
                 # Research Efficiency Analysis
                 with st.expander("Research Efficiency Analysis", expanded=True):
-                    if metric_objects:
+                    mo = st.session_state.compare_results.get("metric_objects") if st.session_state.compare_results else None
+                    if mo:
                         try:
                             from csfl_simulator.app.components.plots import plot_accuracy_vs_resource
-                            
-                            # Get UI settings or defaults
                             eff_methods = st.session_state.compare_ui.get("methods_filter", None)
                             eff_lw = float(st.session_state.compare_ui.get("line_width", 2.0))
                             eff_legend = st.session_state.compare_ui.get("legend_position", "right")
                             eff_tmpl = st.session_state.compare_ui.get("plotly_template", "plotly_white")
-                            
                             col_eff1, col_eff2 = st.columns(2)
                             with col_eff1:
                                 fig_flops = _call_plot_func(
                                     plot_accuracy_vs_resource,
-                                    metric_objects,
+                                    mo,
                                     resource_key="cum_tflops",
                                     resource_label="Cumulative TFLOPs",
                                     title="Accuracy vs. Cumulative TFLOPs",
@@ -1213,11 +1305,10 @@ with compare_tab:
                                     legend_position=eff_legend
                                 )
                                 st.plotly_chart(fig_flops, use_container_width=True, key="eff_flops")
-                                
                             with col_eff2:
                                 fig_comm = _call_plot_func(
                                     plot_accuracy_vs_resource,
-                                    metric_objects,
+                                    mo,
                                     resource_key="cum_comm",
                                     resource_label="Cumulative Communication (MB)",
                                     title="Accuracy vs. Cumulative Comm",
@@ -1231,6 +1322,55 @@ with compare_tab:
                             st.warning(f"Efficiency analysis failed (missing dependency or data): {e}")
                     else:
                         st.info("No detailed metric objects available for efficiency analysis.")
+
+                # Method Ranking
+                st.subheader("Method Ranking")
+                mo_rank = st.session_state.compare_results.get("metric_objects") if st.session_state.compare_results else None
+                if mo_rank:
+                    import pandas as pd
+                    import numpy as np
+                    summary_data = []
+                    eff_methods_rank = st.session_state.compare_ui.get("methods_filter", None)
+                    for label, runs in mo_rank.items():
+                        if eff_methods_rank and label not in eff_methods_rank:
+                            continue
+                        final_accs, total_flops, total_comm, total_time, final_fair = [], [], [], [], []
+                        for run_metrics in runs:
+                            if not run_metrics:
+                                continue
+                            last = run_metrics[-1]
+                            final_accs.append(float(last.get("accuracy", 0.0) or 0.0))
+                            total_flops.append(float(last.get("cum_tflops", 0.0) or 0.0))
+                            total_comm.append(float(last.get("cum_comm", 0.0) or 0.0))
+                            total_time.append(float(last.get("cum_time", 0.0) or 0.0))
+                            final_fair.append(float(last.get("fairness_var", 0.0) or 0.0))
+                        if not final_accs:
+                            continue
+                        summary_data.append({
+                            "Method": label,
+                            "Accuracy (%)": f"{np.mean(final_accs):.2f} ± {np.std(final_accs):.2f}",
+                            "TFLOPs": f"{np.mean(total_flops):.4f}",
+                            "Comm (MB)": f"{np.mean(total_comm):.2f}",
+                            "Time (s)": f"{np.mean(total_time):.2f}",
+                            "Fairness (Var)": f"{np.mean(final_fair):.4f}",
+                            "_acc_sort": np.mean(final_accs),
+                            "_flops_sort": np.mean(total_flops),
+                            "_comm_sort": np.mean(total_comm)
+                        })
+                    if summary_data:
+                        df_rank = pd.DataFrame(summary_data)
+                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs)", "Efficiency (Comm)"], index=0)
+                        if sort_col == "Accuracy":
+                            df_rank = df_rank.sort_values("_acc_sort", ascending=False)
+                        elif sort_col == "Efficiency (TFLOPs)":
+                            df_rank = df_rank.sort_values("_flops_sort", ascending=True)
+                        elif sort_col == "Efficiency (Comm)":
+                            df_rank = df_rank.sort_values("_comm_sort", ascending=True)
+                        display_cols = ["Method", "Accuracy (%)", "TFLOPs", "Comm (MB)", "Time (s)", "Fairness (Var)"]
+                        st.dataframe(df_rank[display_cols], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No data for ranking.")
+
 
 with visualize_tab:
     st.subheader("Visualize Results")
@@ -1246,7 +1386,20 @@ with visualize_tab:
     elif viz_ui["source"] == "run" and st.session_state.run_data:
         rd = st.session_state.run_data
         series = {}
-        for key, pretty in [("accuracy","Accuracy"),("f1","F1"),("precision","Precision"),("recall","Recall"),("loss","Loss")]:
+        for key, pretty in [
+            ("accuracy","Accuracy"),
+            ("f1","F1"),
+            ("precision","Precision"),
+            ("recall","Recall"),
+            ("loss","Loss"),
+            ("round_time","Round Time"),
+            ("round_energy","Round Energy"),
+            ("round_bytes","Round Bytes"),
+            ("wall_clock","Wall Clock"),
+            ("clients_per_hour","Clients per Hour"),
+            ("composite","Composite"),
+            ("fairness_var","Fairness (Var)"),
+        ]:
             vals = []
             for row in rd.get("metrics", []):
                 try:
@@ -1270,7 +1423,20 @@ with visualize_tab:
                     else:
                         d, _ = _state_mod.load_run(snap)
                         series = {}
-                        for key, pretty in [("accuracy","Accuracy"),("f1","F1"),("precision","Precision"),("recall","Recall"),("loss","Loss")]:
+                        for key, pretty in [
+                            ("accuracy","Accuracy"),
+                            ("f1","F1"),
+                            ("precision","Precision"),
+                            ("recall","Recall"),
+                            ("loss","Loss"),
+                            ("round_time","Round Time"),
+                            ("round_energy","Round Energy"),
+                            ("round_bytes","Round Bytes"),
+                            ("wall_clock","Wall Clock"),
+                            ("clients_per_hour","Clients per Hour"),
+                            ("composite","Composite"),
+                            ("fairness_var","Fairness (Var)"),
+                        ]:
                             vals = []
                             for row in d.get("metrics", []):
                                 try:
