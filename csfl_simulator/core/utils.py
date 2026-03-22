@@ -58,7 +58,12 @@ def autodetect_device(prefer_gpu: bool = True) -> str:
 def new_run_dir(prefix: str = "run") -> Tuple[Path, str]:
     ensure_dirs()
     ts = time.strftime("%Y%m%d-%H%M%S")
-    run_id = f"{prefix}_{ts}_{os.getpid()}"
+    # If prefix looks like a user-given name (not "sim"/"run"), use it as the
+    # primary folder name so results are easy to find by name.
+    if prefix not in ("sim", "run"):
+        run_id = f"{prefix}_{ts}"
+    else:
+        run_id = f"{prefix}_{ts}_{os.getpid()}"
     out = ART_ROOT / "runs" / run_id
     out.mkdir(parents=True, exist_ok=True)
     return out, run_id

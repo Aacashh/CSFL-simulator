@@ -176,6 +176,24 @@ with st.sidebar:
                      help="Controls data heterogeneity in Dirichlet partition. Lower values (0.1) = more non-IID (each client specializes), higher values (2.0) = closer to IID.")
     shards = st.number_input("Label shards per client", 1, 10, 2,
                             help="For label-shard partition: number of different classes each client has data from. Lower = more heterogeneous.")
+    with st.expander("Enable Data Size Skew (Quantity Heterogeneity)"):
+        enable_size_skew = st.checkbox("Enable Data Size Skew", value=False,
+                                       help="When enabled, client dataset sizes will follow a non-uniform distribution (e.g., lognormal or power-law), even under IID partition. This better reflects real-world data quantity heterogeneity.")
+        size_dist_choice = "uniform"
+        size_mu = 0.0
+        size_sigma = 0.5
+        size_alpha = 1.5
+        if enable_size_skew:
+            size_dist_choice = st.selectbox("Size distribution", ["lognormal", "power_law", "uniform"], index=0,
+                                            help="Distribution to shape client dataset sizes.\n• lognormal: moderate skew, controlled by sigma\n• power_law: heavy tail, controlled by alpha\n• uniform: no skew")
+            if size_dist_choice == "lognormal":
+                size_mu = st.number_input("lognormal μ", -2.0, 2.0, 0.0, 0.1,
+                                          help="Mean of underlying normal distribution for lognormal sampling.")
+                size_sigma = st.number_input("lognormal σ", 0.05, 2.0, 0.5, 0.05,
+                                             help="Stddev of underlying normal distribution for lognormal sampling. Higher = more skew.")
+            elif size_dist_choice == "power_law":
+                size_alpha = st.number_input("power-law α", 0.5, 5.0, 1.5, 0.1,
+                                             help="Shape parameter for Pareto/power-law sampling. Lower α = heavier tail (more skew).")
 
     model = st.selectbox("Model", ["CNN-MNIST", "CNN-MNIST (FedAvg)", "LightCNN", "ResNet18"], index=0,
                         help="Neural network architecture:\n• CNN-MNIST: Lightweight for MNIST/Fashion-MNIST\n• CNN-MNIST (FedAvg): 2x(5x5) conv (32,64) + 512 FC for MNIST\n• LightCNN: For CIFAR datasets\n• ResNet18: Deeper model for more complex tasks")
@@ -273,6 +291,10 @@ if init_btn:
         seed=int(seed),
         fast_mode=fast_mode,
         pretrained=pretrained,
+        size_distribution=(size_dist_choice if ('enable_size_skew' in locals() and enable_size_skew) else "uniform"),
+        size_lognormal_mu=float(size_mu) if 'size_mu' in locals() else 0.0,
+        size_lognormal_sigma=float(size_sigma) if 'size_sigma' in locals() else 0.5,
+        size_powerlaw_alpha=float(size_alpha) if 'size_alpha' in locals() else 1.5,
         time_budget=(float(time_budget) if 'time_budget' in locals() and time_budget > 0 else None),
         energy_budget=(float(energy_budget) if 'energy_budget' in locals() and energy_budget > 0 else None),
         bytes_budget=(float(bytes_budget) if 'bytes_budget' in locals() and bytes_budget > 0 else None),
@@ -681,8 +703,19 @@ with compare_tab:
                         ys.append(0.0)
                 return ys
 
-            metric_names = ["accuracy", "f1", "precision", "recall", "loss"]
-            pretty = {"accuracy": "Accuracy", "f1": "F1", "precision": "Precision", "recall": "Recall", "loss": "Loss"}
+            metric_names = ["accuracy", "f1", "precision", "recall", "loss",
+                            "wall_clock", "cum_total_tflops", "cum_tflops", "cum_comm"]
+            pretty = {
+                "accuracy": "Accuracy",
+                "f1": "F1",
+                "precision": "Precision",
+                "recall": "Recall",
+                "loss": "Loss",
+                "wall_clock": "Wall Clock",
+                "cum_total_tflops": "Total TFLOPs",
+                "cum_tflops": "Training TFLOPs",
+                "cum_comm": "Cumulative Comm (MB)",
+            }
             # metric -> {label -> mean_series}
             metric_to_series = {pretty[m]: {} for m in metric_names}
             selection_counts = {}
@@ -990,8 +1023,9 @@ with compare_tab:
                     try:
                         _state_mod = _get_state_module()
                         if _state_mod:
-                            _state_mod.save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name2 if snap_name2 else None)
-                            st.success("Snapshot saved.")
+                            p = _state_mod.save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name2 if snap_name2 else None)
+                            st.success(f"Snapshot saved: {p}")
+                            st.code(str(p))
                         else:
                             st.error("Failed to save snapshot: state module unavailable")
                     except Exception as e:
@@ -1019,6 +1053,23 @@ with compare_tab:
             if st.button("Open in Visualize", key="cmp_open_viz"):
                 st.session_state.visualize_data = {"kind": "compare", "data": st.session_state.compare_results}
                 st.info("Sent current comparison to Visualize tab. Switch to 'Visualize' to customize.")
+        # Always-visible quick save (bottom)
+        if st.session_state.compare_results:
+            st.markdown("---")
+            col_qs1, col_qs2 = st.columns([3,1])
+            snap_name_quick = col_qs1.text_input("Save comparison snapshot as", value="", key="cmp_quick_name", help="Enter a filename (without extension). Files are stored under artifacts/checkpoints.")
+            if col_qs2.button("Save Results", key="cmp_quick_save"):
+                try:
+                    _state_mod = _get_state_module()
+                    if _state_mod:
+                        path_saved = _state_mod.save_compare(st.session_state.compare_results, st.session_state.compare_ui, snap_name_quick if snap_name_quick else None)
+                        st.success(f"Saved comparison snapshot: {path_saved}")
+                        st.caption("Location:")
+                        st.code(str(path_saved))
+                    else:
+                        st.error("State module unavailable; cannot save.")
+                except Exception as e:
+                    st.error(f"Save failed: {e}")
 
         # Render last comparison if available (no fresh compute required)
         if st.session_state.compare_results:
@@ -1111,14 +1162,14 @@ with compare_tab:
                             eff_lw = float(st.session_state.compare_ui.get("line_width", 2.0))
                             eff_legend = st.session_state.compare_ui.get("legend_position", "right")
                             eff_tmpl = st.session_state.compare_ui.get("plotly_template", "plotly_white")
-                            col_eff1, col_eff2 = st.columns(2)
+                            col_eff1, col_eff2, col_eff3 = st.columns(3)
                             with col_eff1:
                                 fig_flops = _call_plot_func(
                                     plot_accuracy_vs_resource,
                                     mo,
-                                    resource_key="cum_tflops",
-                                    resource_label="Cumulative TFLOPs",
-                                    title="Accuracy vs. Cumulative TFLOPs",
+                                    resource_key="cum_total_tflops",
+                                    resource_label="Cumulative TFLOPs (total)",
+                                    title="Accuracy vs. Cumulative TFLOPs (total)",
                                     template=eff_tmpl,
                                     methods_filter=eff_methods,
                                     line_width=eff_lw,
@@ -1138,6 +1189,19 @@ with compare_tab:
                                     legend_position=eff_legend
                                 )
                                 st.plotly_chart(fig_comm, use_container_width=True, key="eff_comm")
+                            with col_eff3:
+                                fig_time = _call_plot_func(
+                                    plot_accuracy_vs_resource,
+                                    mo,
+                                    resource_key="wall_clock",
+                                    resource_label="Wall Clock (a.u.)",
+                                    title="Accuracy vs. Wall Clock",
+                                    template=eff_tmpl,
+                                    methods_filter=eff_methods,
+                                    line_width=eff_lw,
+                                    legend_position=eff_legend
+                                )
+                                st.plotly_chart(fig_time, use_container_width=True, key="eff_time")
                         except Exception as e:
                             st.warning(f"Efficiency analysis failed (missing dependency or data): {e}")
                     else:
@@ -1155,38 +1219,95 @@ with compare_tab:
                         if eff_methods_rank and label not in eff_methods_rank:
                             continue
                         final_accs, total_flops, total_comm, total_time, final_fair = [], [], [], [], []
+                        train_flops_list, sel_flops_list = [], []
+                        t80_list, acc_hr_list, aucn_list = [], [], []
                         for run_metrics in runs:
                             if not run_metrics:
                                 continue
                             last = run_metrics[-1]
                             final_accs.append(float(last.get("accuracy", 0.0) or 0.0))
-                            total_flops.append(float(last.get("cum_tflops", 0.0) or 0.0))
+                            tot = float(last.get("cum_total_tflops", last.get("cum_tflops", 0.0)) or 0.0)
+                            total_flops.append(tot)
+                            trn = float(last.get("cum_tflops", last.get("cum_training_tflops", 0.0)) or 0.0)
+                            train_flops_list.append(trn)
+                            sel = max(0.0, tot - trn)
+                            sel_flops_list.append(sel)
                             total_comm.append(float(last.get("cum_comm", 0.0) or 0.0))
                             total_time.append(float(last.get("cum_time", 0.0) or 0.0))
                             final_fair.append(float(last.get("fairness_var", 0.0) or 0.0))
+                            # New convergence/efficiency metrics
+                            try:
+                                t80 = float(last.get("time_to_80pct_final", float("nan")))
+                                if not np.isnan(t80):
+                                    t80_list.append(t80)
+                            except Exception:
+                                pass
+                            try:
+                                acc_hr = float(last.get("acc_gain_per_hour", float("nan")))
+                                if not np.isnan(acc_hr):
+                                    acc_hr_list.append(acc_hr)
+                            except Exception:
+                                pass
+                            try:
+                                aucn = float(last.get("auc_acc_time_norm", float("nan")))
+                                if not np.isnan(aucn):
+                                    aucn_list.append(aucn)
+                            except Exception:
+                                pass
                         if not final_accs:
                             continue
+                        # Safe means (with NaN handling)
+                        mean_t80 = (np.mean(t80_list) if t80_list else float("nan"))
+                        mean_acc_hr = (np.mean(acc_hr_list) if acc_hr_list else float("nan"))
+                        mean_aucn = (np.mean(aucn_list) if aucn_list else float("nan"))
+                        mean_trn = (np.mean(train_flops_list) if train_flops_list else float("nan"))
+                        mean_sel = (np.mean(sel_flops_list) if sel_flops_list else float("nan"))
+                        # Sort keys (handle NaN by sending to bottom/top appropriately)
+                        t80_sort = (mean_t80 if not np.isnan(mean_t80) else float("inf"))
+                        acc_hr_sort = (mean_acc_hr if not np.isnan(mean_acc_hr) else -float("inf"))
+                        aucn_sort = (mean_aucn if not np.isnan(mean_aucn) else -float("inf"))
                         summary_data.append({
                             "Method": label,
                             "Accuracy (%)": f"{np.mean(final_accs):.2f} ± {np.std(final_accs):.2f}",
-                            "TFLOPs": f"{np.mean(total_flops):.4f}",
+                            "TFLOPs (total)": f"{np.mean(total_flops):.4f}",
+                            "TFLOPs (train)": ("{:.4f}".format(mean_trn) if not np.isnan(mean_trn) else "—"),
+                            "TFLOPs (select)": ("{:.6f}".format(mean_sel) if not np.isnan(mean_sel) else "—"),
                             "Comm (MB)": f"{np.mean(total_comm):.2f}",
-                            "Time (s)": f"{np.mean(total_time):.2f}",
+                            "Time (a.u.)": f"{np.mean(total_time):.2f}",
+                            "t@80% (a.u.)": ("{:.2f}".format(mean_t80) if not np.isnan(mean_t80) else "—"),
+                            "Acc gain/hr": ("{:.4f}".format(mean_acc_hr) if not np.isnan(mean_acc_hr) else "—"),
+                            "AUC (norm)": ("{:.3f}".format(mean_aucn) if not np.isnan(mean_aucn) else "—"),
                             "Fairness (Var)": f"{np.mean(final_fair):.4f}",
                             "_acc_sort": np.mean(final_accs),
                             "_flops_sort": np.mean(total_flops),
-                            "_comm_sort": np.mean(total_comm)
+                            "_comm_sort": np.mean(total_comm),
+                            "_t80_sort": t80_sort,
+                            "_acc_hr_sort": acc_hr_sort,
+                            "_auc_sort": aucn_sort
                         })
                     if summary_data:
                         df_rank = pd.DataFrame(summary_data)
-                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs)", "Efficiency (Comm)"], index=0)
+                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs total)", "Efficiency (TFLOPs select)", "Efficiency (Comm)", "Convergence (t@80%)", "Convergence (Acc/hr)", "Convergence (AUC norm)"], index=0)
                         if sort_col == "Accuracy":
                             df_rank = df_rank.sort_values("_acc_sort", ascending=False)
-                        elif sort_col == "Efficiency (TFLOPs)":
+                        elif sort_col == "Efficiency (TFLOPs total)":
                             df_rank = df_rank.sort_values("_flops_sort", ascending=True)
+                        elif sort_col == "Efficiency (TFLOPs select)":
+                            try:
+                                df_rank["_sel_sort"] = df_rank["TFLOPs (select)"].replace("—", np.nan).astype(float)
+                                df_rank = df_rank.sort_values("_sel_sort", ascending=True)
+                                df_rank = df_rank.drop(columns=["_sel_sort"])
+                            except Exception:
+                                pass
                         elif sort_col == "Efficiency (Comm)":
                             df_rank = df_rank.sort_values("_comm_sort", ascending=True)
-                        display_cols = ["Method", "Accuracy (%)", "TFLOPs", "Comm (MB)", "Time (s)", "Fairness (Var)"]
+                        elif sort_col == "Convergence (t@80%)":
+                            df_rank = df_rank.sort_values("_t80_sort", ascending=True)
+                        elif sort_col == "Convergence (Acc/hr)":
+                            df_rank = df_rank.sort_values("_acc_hr_sort", ascending=False)
+                        elif sort_col == "Convergence (AUC norm)":
+                            df_rank = df_rank.sort_values("_auc_sort", ascending=False)
+                        display_cols = ["Method", "Accuracy (%)", "TFLOPs (total)", "TFLOPs (train)", "TFLOPs (select)", "Comm (MB)", "Time (a.u.)", "t@80% (a.u.)", "Acc gain/hr", "AUC (norm)", "Fairness (Var)"]
                         st.dataframe(df_rank[display_cols], use_container_width=True, hide_index=True)
                     else:
                         st.info("No data for ranking.")
@@ -1335,38 +1456,95 @@ with compare_tab:
                         if eff_methods_rank and label not in eff_methods_rank:
                             continue
                         final_accs, total_flops, total_comm, total_time, final_fair = [], [], [], [], []
+                        train_flops_list, sel_flops_list = [], []
+                        t80_list, acc_hr_list, aucn_list = [], [], []
                         for run_metrics in runs:
                             if not run_metrics:
                                 continue
                             last = run_metrics[-1]
                             final_accs.append(float(last.get("accuracy", 0.0) or 0.0))
-                            total_flops.append(float(last.get("cum_tflops", 0.0) or 0.0))
+                            tot = float(last.get("cum_total_tflops", last.get("cum_tflops", 0.0)) or 0.0)
+                            total_flops.append(tot)
+                            trn = float(last.get("cum_tflops", last.get("cum_training_tflops", 0.0)) or 0.0)
+                            train_flops_list.append(trn)
+                            sel = max(0.0, tot - trn)
+                            sel_flops_list.append(sel)
                             total_comm.append(float(last.get("cum_comm", 0.0) or 0.0))
                             total_time.append(float(last.get("cum_time", 0.0) or 0.0))
                             final_fair.append(float(last.get("fairness_var", 0.0) or 0.0))
+                            # New convergence/efficiency metrics
+                            try:
+                                t80 = float(last.get("time_to_80pct_final", float("nan")))
+                                if not np.isnan(t80):
+                                    t80_list.append(t80)
+                            except Exception:
+                                pass
+                            try:
+                                acc_hr = float(last.get("acc_gain_per_hour", float("nan")))
+                                if not np.isnan(acc_hr):
+                                    acc_hr_list.append(acc_hr)
+                            except Exception:
+                                pass
+                            try:
+                                aucn = float(last.get("auc_acc_time_norm", float("nan")))
+                                if not np.isnan(aucn):
+                                    aucn_list.append(aucn)
+                            except Exception:
+                                pass
                         if not final_accs:
                             continue
+                        # Safe means
+                        mean_t80 = (np.mean(t80_list) if t80_list else float("nan"))
+                        mean_acc_hr = (np.mean(acc_hr_list) if acc_hr_list else float("nan"))
+                        mean_aucn = (np.mean(aucn_list) if aucn_list else float("nan"))
+                        mean_trn = (np.mean(train_flops_list) if train_flops_list else float("nan"))
+                        mean_sel = (np.mean(sel_flops_list) if sel_flops_list else float("nan"))
+                        # Sort keys
+                        t80_sort = (mean_t80 if not np.isnan(mean_t80) else float("inf"))
+                        acc_hr_sort = (mean_acc_hr if not np.isnan(mean_acc_hr) else -float("inf"))
+                        aucn_sort = (mean_aucn if not np.isnan(mean_aucn) else -float("inf"))
                         summary_data.append({
                             "Method": label,
                             "Accuracy (%)": f"{np.mean(final_accs):.2f} ± {np.std(final_accs):.2f}",
-                            "TFLOPs": f"{np.mean(total_flops):.4f}",
+                            "TFLOPs (total)": f"{np.mean(total_flops):.4f}",
+                            "TFLOPs (train)": ("{:.4f}".format(mean_trn) if not np.isnan(mean_trn) else "—"),
+                            "TFLOPs (select)": ("{:.6f}".format(mean_sel) if not np.isnan(mean_sel) else "—"),
                             "Comm (MB)": f"{np.mean(total_comm):.2f}",
-                            "Time (s)": f"{np.mean(total_time):.2f}",
+                            "Time (a.u.)": f"{np.mean(total_time):.2f}",
+                            "t@80% (a.u.)": ("{:.2f}".format(mean_t80) if not np.isnan(mean_t80) else "—"),
+                            "Acc gain/hr": ("{:.4f}".format(mean_acc_hr) if not np.isnan(mean_acc_hr) else "—"),
+                            "AUC (norm)": ("{:.3f}".format(mean_aucn) if not np.isnan(mean_aucn) else "—"),
                             "Fairness (Var)": f"{np.mean(final_fair):.4f}",
                             "_acc_sort": np.mean(final_accs),
                             "_flops_sort": np.mean(total_flops),
-                            "_comm_sort": np.mean(total_comm)
+                            "_comm_sort": np.mean(total_comm),
+                            "_t80_sort": t80_sort,
+                            "_acc_hr_sort": acc_hr_sort,
+                            "_auc_sort": aucn_sort
                         })
                     if summary_data:
                         df_rank = pd.DataFrame(summary_data)
-                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs)", "Efficiency (Comm)"], index=0)
+                        sort_col = st.selectbox("Rank by", ["Accuracy", "Efficiency (TFLOPs total)", "Efficiency (TFLOPs select)", "Efficiency (Comm)", "Convergence (t@80%)", "Convergence (Acc/hr)", "Convergence (AUC norm)"], index=0)
                         if sort_col == "Accuracy":
                             df_rank = df_rank.sort_values("_acc_sort", ascending=False)
-                        elif sort_col == "Efficiency (TFLOPs)":
+                        elif sort_col == "Efficiency (TFLOPs total)":
                             df_rank = df_rank.sort_values("_flops_sort", ascending=True)
+                        elif sort_col == "Efficiency (TFLOPs select)":
+                            try:
+                                df_rank["_sel_sort"] = df_rank["TFLOPs (select)"].replace("—", np.nan).astype(float)
+                                df_rank = df_rank.sort_values("_sel_sort", ascending=True)
+                                df_rank = df_rank.drop(columns=["_sel_sort"])
+                            except Exception:
+                                pass
                         elif sort_col == "Efficiency (Comm)":
                             df_rank = df_rank.sort_values("_comm_sort", ascending=True)
-                        display_cols = ["Method", "Accuracy (%)", "TFLOPs", "Comm (MB)", "Time (s)", "Fairness (Var)"]
+                        elif sort_col == "Convergence (t@80%)":
+                            df_rank = df_rank.sort_values("_t80_sort", ascending=True)
+                        elif sort_col == "Convergence (Acc/hr)":
+                            df_rank = df_rank.sort_values("_acc_hr_sort", ascending=False)
+                        elif sort_col == "Convergence (AUC norm)":
+                            df_rank = df_rank.sort_values("_auc_sort", ascending=False)
+                        display_cols = ["Method", "Accuracy (%)", "TFLOPs (total)", "TFLOPs (train)", "TFLOPs (select)", "Comm (MB)", "Time (a.u.)", "t@80% (a.u.)", "Acc gain/hr", "AUC (norm)", "Fairness (Var)"]
                         st.dataframe(df_rank[display_cols], use_container_width=True, hide_index=True)
                     else:
                         st.info("No data for ranking.")
@@ -1399,6 +1577,10 @@ with visualize_tab:
             ("clients_per_hour","Clients per Hour"),
             ("composite","Composite"),
             ("fairness_var","Fairness (Var)"),
+            # New efficiency metrics
+            ("cum_total_tflops","Total TFLOPs"),
+            ("cum_tflops","Training TFLOPs"),
+            ("cum_comm","Cumulative Comm (MB)"),
         ]:
             vals = []
             for row in rd.get("metrics", []):
@@ -1436,6 +1618,9 @@ with visualize_tab:
                             ("clients_per_hour","Clients per Hour"),
                             ("composite","Composite"),
                             ("fairness_var","Fairness (Var)"),
+                            ("cum_total_tflops","Total TFLOPs"),
+                            ("cum_tflops","Training TFLOPs"),
+                            ("cum_comm","Cumulative Comm (MB)"),
                         ]:
                             vals = []
                             for row in d.get("metrics", []):
@@ -1479,7 +1664,8 @@ with visualize_tab:
             if not methods_default:
                 methods_default = methods_all
         viz_ui["methods"] = st.multiselect("Methods", options=methods_all, default=methods_default, key="viz_methods")
-        metrics_all = [m for m in ["Accuracy","F1","Precision","Recall","Loss"] if m in mts]
+        # Show all available metrics from the dataset rather than a fixed subset
+        metrics_all = list(mts.keys())
         # Compute safe default for metrics multiselect
         metrics_default = metrics_all
         if "viz_metrics" in st.session_state and st.session_state["viz_metrics"]:

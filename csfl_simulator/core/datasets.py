@@ -63,24 +63,44 @@ def get_full_data(name: str, root: Path | None = None):
     return get_dataset(name, True, root), get_dataset(name, False, root)
 
 
-def make_loader(dataset, batch_size: int = 64, shuffle: bool = True, num_workers: int = 2):
+def make_loader(dataset, batch_size: int = 64, shuffle: bool = True, num_workers: int = 0):
+    import sys
+    # Force num_workers=0 on Windows to avoid multiprocessing spawn crashes
+    if sys.platform == "win32":
+        num_workers = 0
     # Use pinned memory only when CUDA is available to avoid warnings on CPU-only runs
     pin = torch.cuda.is_available()
-    # REDUCED num_workers from 4 to 2 to save RAM
-    # Each worker is a separate process holding dataset copy in memory
-    # For 100 clients with 4 workers each = 400 processes = huge RAM usage!
     persistent = num_workers > 0
     return DataLoader(
-        dataset, 
-        batch_size=batch_size, 
-        shuffle=shuffle, 
-        num_workers=num_workers, 
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
         pin_memory=pin,
         persistent_workers=persistent,
         prefetch_factor=2 if num_workers > 0 else None
     )
 
 
-def make_loaders_from_indices(dataset, indices, batch_size: int = 64, num_workers: int = 2):
+def make_loaders_from_indices(dataset, indices, batch_size: int = 64, num_workers: int = 0):
     sub = Subset(dataset, indices)
     return make_loader(sub, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+
+def get_labels(dataset) -> list[int]:
+    """Utility to fetch integer class labels from a torchvision-style dataset."""
+    try:
+        # Many datasets expose 'targets' (list or tensor)
+        t = getattr(dataset, "targets", None)
+        if t is None:
+            t = getattr(dataset, "labels", None)
+        if t is not None:
+            # Convert to Python ints
+            return [int(x) for x in (t.tolist() if hasattr(t, "tolist") else list(t))]
+    except Exception:
+        pass
+    # Fallback: index the dataset
+    try:
+        return [int(dataset[i][1]) for i in range(len(dataset))]
+    except Exception:
+        return []

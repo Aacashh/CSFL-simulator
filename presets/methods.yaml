@@ -125,6 +125,34 @@ methods:
     params: {penalty_eta: 1.0, required_epsilon: null}
     type: heuristic
     trainable: false
+  - key: heuristic.delta
+    module: csfl_simulator.selection.heuristic.delta
+    display_name: "DELTA"
+    origin: custom
+    params: {decay: 0.7, beta: 1.0, c_ucb: 0.5, lam: 0.3}
+    type: heuristic
+    trainable: false
+  - key: heuristic.delta_no_div
+    module: csfl_simulator.selection.heuristic.delta
+    display_name: "DELTA (no diversity)"
+    origin: custom
+    params: {decay: 0.7, beta: 1.0, c_ucb: 0.5, lam: 0.0}
+    type: heuristic
+    trainable: false
+  - key: heuristic.delta_no_ucb
+    module: csfl_simulator.selection.heuristic.delta
+    display_name: "DELTA (no UCB)"
+    origin: custom
+    params: {decay: 0.7, beta: 1.0, c_ucb: 0.0, lam: 0.3}
+    type: heuristic
+    trainable: false
+  - key: heuristic.delta_no_ema
+    module: csfl_simulator.selection.heuristic.delta
+    display_name: "DELTA (no EMA)"
+    origin: custom
+    params: {decay: 0.0, beta: 1.0, c_ucb: 0.5, lam: 0.3}
+    type: heuristic
+    trainable: false
   - key: system_aware.poc
     module: csfl_simulator.selection.system_aware.poc
     display_name: "Power-of-Choice (two-stage)"
@@ -249,6 +277,34 @@ methods:
     display_name: "FedCluster+ (adaptive clustering)"
     origin: custom
     params: {refresh_every: 3, cluster_k: null, rep_weight: 0.5, cluster_importance_decay: 0.95}
+    type: ml
+    trainable: false
+  - key: ml.apex
+    module: csfl_simulator.selection.ml.apex
+    display_name: "APEX (Phase-Aware Thompson)"
+    origin: custom
+    params: {W_phase: 5, gamma: 0.3, w_loss: 0.4, w_grad: 0.2, w_speed: 0.2, w_data: 0.2}
+    type: ml
+    trainable: false
+  - key: ml.apex_no_phase
+    module: csfl_simulator.selection.ml.apex
+    display_name: "APEX (no phase detection)"
+    origin: custom
+    params: {W_phase: 999999, gamma: 0.3}
+    type: ml
+    trainable: false
+  - key: ml.apex_no_ts
+    module: csfl_simulator.selection.ml.apex
+    display_name: "APEX (no Thompson)"
+    origin: custom
+    params: {W_phase: 5, gamma: 0.0}
+    type: ml
+    trainable: false
+  - key: ml.apex_no_div
+    module: csfl_simulator.selection.ml.apex
+    display_name: "APEX (no diversity)"
+    origin: custom
+    params: {W_phase: 5, gamma: 0.3, phase_weights_critical: [0.8, 0.0, 0.2], phase_weights_transition: [0.8, 0.0, 0.2], phase_weights_exploit: [0.8, 0.0, 0.2]}
     type: ml
     trainable: false
   - key: wrapper.quota_safety
