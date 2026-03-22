@@ -26,6 +26,11 @@ class SimConfig:
     partition: str = "iid"
     dirichlet_alpha: float = 0.5
     shards_per_client: int = 2
+    # Data quantity heterogeneity
+    size_distribution: str = "uniform"  # "uniform" | "lognormal" | "power_law"
+    size_lognormal_mu: float = 0.0
+    size_lognormal_sigma: float = 0.5
+    size_powerlaw_alpha: float = 1.5
     total_clients: int = 10
     clients_per_round: int = 3
     rounds: int = 3
@@ -47,6 +52,7 @@ class SimConfig:
     # Performance/diagnostics knobs
     track_grad_norm: bool = False
     parallel_clients: int = 0  # 0 = off (sequential)
+    name: Optional[str] = None  # Named run (used as folder name under artifacts/runs/)
 
 
 class FLSimulator:
@@ -54,7 +60,7 @@ class FLSimulator:
         self.cfg = config
         set_seed(self.cfg.seed, deterministic=True)
         self.device = autodetect_device(True) if self.cfg.device == "auto" else self.cfg.device
-        self.run_dir, self.run_id = new_run_dir("sim")
+        self.run_dir, self.run_id = new_run_dir(self.cfg.name or "sim")
         self.registry = MethodRegistry()
         self.registry.load_presets()
         self.history: Dict[str, Any] = {"state": {}, "selected": []}
@@ -75,12 +81,28 @@ class FLSimulator:
             mapping = part.dirichlet_partition([train_ds[i][1] for i in range(len(train_ds))], self.cfg.total_clients, self.cfg.dirichlet_alpha)
         else:
             mapping = part.label_shard_partition([train_ds[i][1] for i in range(len(train_ds))], self.cfg.total_clients, self.cfg.shards_per_client)
+        # Apply data size skew (quantity heterogeneity) if requested
+        if (self.cfg.size_distribution or "uniform").lower() != "uniform":
+            try:
+                total_size = len(train_ds)
+                mapping = part.apply_size_distribution(
+                    mapping,
+                    total_size=total_size,
+                    size_distribution=self.cfg.size_distribution,
+                    mu=float(self.cfg.size_lognormal_mu),
+                    sigma=float(self.cfg.size_lognormal_sigma),
+                    alpha=float(self.cfg.size_powerlaw_alpha),
+                )
+            except Exception as e:
+                # Non-fatal: fall back to original mapping
+                print(f"Warning: Failed to apply size distribution '{self.cfg.size_distribution}': {e}")
         # Model
         # Infer num_classes from test_ds targets
         try:
             num_classes = len(getattr(test_ds, 'classes', [])) or int(max(test_ds.targets) + 1)
         except Exception:
             num_classes = 10
+        self.num_classes = num_classes
         self.model = get_model(self.cfg.model, self.cfg.dataset, num_classes, device=self.device, pretrained=self.cfg.pretrained)
         maybe_load_pretrained(self.model, self.cfg.model, self.cfg.dataset)
         self.criterion = nn.CrossEntropyLoss()
@@ -192,7 +214,8 @@ class FLSimulator:
                     ys = [int(train_ds[i][1]) for i in idxs]
                 # Infer num_classes from earlier computation or ys
                 try:
-                    L = int(max(getattr(train_ds, 'classes', []) and len(getattr(train_ds, 'classes', [])) or (max(ys) + 1)))
+                    classes_attr = getattr(train_ds, 'classes', None)
+                    L = len(classes_attr) if classes_attr else (int(max(ys) + 1) if ys else 0)
                 except Exception:
                     L = int(max(ys) + 1) if ys else 0
                 if L > 0:
@@ -233,6 +256,10 @@ class FLSimulator:
         except Exception as e:
             print(f"Warning: Model profiling failed: {e}")
 
+        # Save initial model state for fair multi-method comparisons
+        with torch.no_grad():
+            self._initial_state_dict = {k: v.clone() for k, v in self.model.state_dict().items()}
+
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
         # Lazily recreate loader if it was deleted during emergency cleanup
         if cid not in self.client_loaders or self.client_loaders[cid] is None:
@@ -271,10 +298,11 @@ class FLSimulator:
                         pass
                 if self.cfg.track_grad_norm:
                     try:
-                        # Use last parameter tensor as a proxy for speed
-                        last_param = next(reversed(list(model.parameters())))
-                        if last_param.grad is not None:
-                            last_grad_norm = float(last_param.grad.norm().item())
+                        total_norm_sq = sum(
+                            p.grad.data.norm(2).item() ** 2
+                            for p in model.parameters() if p.grad is not None
+                        )
+                        last_grad_norm = total_norm_sq ** 0.5
                     except Exception:
                         pass
                 opt.step()
@@ -286,8 +314,46 @@ class FLSimulator:
             sd = {k: v.detach().clone() for k, v in model.state_dict().items()}
         return sd, len(loader.dataset), last_loss, (last_grad_norm if self.cfg.track_grad_norm else 0.0)
 
+    @staticmethod
+    def _selection_ops_estimate(key: str, N: int) -> float:
+        """Rough complexity estimate for a selection method given N clients."""
+        k = (key or "").lower()
+        if "random" in k or "heuristic" in k:
+            p = 1.0
+        elif "bandit" in k:
+            p = 1.5
+        elif ("ml." in k) or ("gnn" in k) or ("gat" in k) or ("gcn" in k) or ("rl" in k):
+            p = 2.0
+        else:
+            p = 1.0
+        try:
+            return float(N ** p)
+        except Exception:
+            return float(N)
+
     def run(self, method_key: str = "heuristic.random", on_progress=None, is_cancelled=None) -> Dict[str, Any]:
-        self.setup()
+        # Only setup if not already done (allows reuse for fair comparisons)
+        if not hasattr(self, 'train_ds') or self.train_ds is None:
+            self.setup()
+        # Reset state for this run: restore initial model, clear history & client stats
+        if hasattr(self, '_initial_state_dict'):
+            self.model.load_state_dict(self._initial_state_dict)
+        self.history = {"state": {}, "selected": []}
+        for c in self.clients:
+            c.last_loss = 0.0
+            c.grad_norm = 0.0
+            c.participation_count = 0
+            c.last_selected_round = -1
+        set_seed(self.cfg.seed, deterministic=True)
+        self._scratch_model = None
+        # Re-init parallel trainer for clean state
+        if self.cfg.parallel_clients != 0 and self._parallel_trainer is not None:
+            from .parallel import create_trainer
+            self._parallel_trainer = create_trainer(
+                model=self.model, device=self.device, criterion=self.criterion,
+                lr=self.cfg.lr, parallel_clients=self.cfg.parallel_clients,
+                track_grad_norm=self.cfg.track_grad_norm
+            )
         # Baseline evaluation before rounds
         metrics = []
         base = eval_model(self.model, self.test_loader, self.device)
@@ -303,6 +369,7 @@ class FLSimulator:
         prev_acc = base["accuracy"]
         
         cumulative_flops = 0.0
+        cumulative_total_flops = 0.0
         cumulative_comm_mb = 0.0
         cumulative_time = 0.0
 
@@ -314,19 +381,21 @@ class FLSimulator:
             simulate_round_env(self.clients, {}, rnd)
             # Selection
             # Pass time_budget to selector and preset params via registry
+            _t0 = time.perf_counter()
             ids, scores, state = self.registry.invoke(
-                method_key,
-                rnd,
-                self.cfg.clients_per_round,
-                self.clients,
-                self.history,
-                random,
-                self.cfg.time_budget,
-                self.device,
-                # Additional budgets (selectors may ignore if not supported)
-                energy_budget=self.cfg.energy_budget,
-                bytes_budget=self.cfg.bytes_budget,
-            )
+                    method_key,
+                    rnd,
+                    self.cfg.clients_per_round,
+                    self.clients,
+                    self.history,
+                    random,
+                    self.cfg.time_budget,
+                    self.device,
+                    # Additional budgets (selectors may ignore if not supported)
+                    energy_budget=self.cfg.energy_budget,
+                    bytes_budget=self.cfg.bytes_budget,
+                )
+            selection_time = float(time.perf_counter() - _t0)
             self.history["selected"].append(ids)
             # Update recency info on clients
             for cid in ids:
@@ -411,8 +480,10 @@ class FLSimulator:
             # Evaluate
             m = eval_model(self.model, self.test_loader, self.device)
             m["round"] = rnd
-            # Measure round time proxy (number of local batches approximated by data size/speed)
-            round_time = sum(float(getattr(self.clients[cid], 'estimated_duration', 0.0) or 0.0) for cid in ids)
+            # Measure round time (astute): selection_time + max(selected_client_durations)
+            sel_durations = [float(getattr(self.clients[cid], 'estimated_duration', 0.0) or 0.0) for cid in ids]
+            compute_time = max(sel_durations) if sel_durations else 0.0
+            round_time = float(selection_time) + float(compute_time)
             round_energy = sum(float(getattr(self.clients[cid], 'estimated_energy', 0.0) or 0.0) for cid in ids)
             round_bytes = sum(float(getattr(self.clients[cid], 'estimated_bytes', 0.0) or 0.0) for cid in ids)
             # Keep cumulative wall-clock
@@ -458,6 +529,10 @@ class FLSimulator:
             for cid in ids:
                 c_data_size = self.clients[cid].data_size
                 round_flops += 3.0 * self.model_macs_per_sample * self.cfg.local_epochs * c_data_size
+            training_tflops = round_flops / 1e12
+            total_round_flops = round_flops  # training FLOPs only; selection cost tracked via selection_time
+            selection_ops = self._selection_ops_estimate(method_key, len(self.clients))
+            total_round_ops = round_flops + selection_ops  # kept for research/debug; mixed units by design
             
             # Communication: 2 * K * ModelSize (MB)
             # ModelSize in MB (assuming float32 = 4 bytes)
@@ -465,16 +540,26 @@ class FLSimulator:
             round_comm_mb = 2.0 * len(ids) * model_size_mb
             
             cumulative_flops += round_flops
+            cumulative_total_flops += total_round_flops
             cumulative_comm_mb += round_comm_mb
             cumulative_time += round_time
 
             # Log metrics
+            m["selection_time"] = float(selection_time)
+            m["compute_time"] = float(compute_time)
             m["round_time"] = round_time
             m["round_energy"] = round_energy
             m["round_bytes"] = round_bytes
             m["wall_clock"] = wall_clock
             m["cum_flops"] = cumulative_flops
+            # Backward-compat + astute naming
             m["cum_tflops"] = cumulative_flops / 1e12
+            m["training_tflops"] = training_tflops
+            m["cum_training_tflops"] = cumulative_flops / 1e12
+            m["total_tflops"] = total_round_flops / 1e12
+            m["cum_total_tflops"] = cumulative_total_flops / 1e12
+            m["selection_ops_estimate"] = float(selection_ops)
+            m["total_round_ops"] = float(total_round_ops)
             m["cum_comm"] = cumulative_comm_mb
             m["cum_time"] = cumulative_time
             m["clients_per_hour"] = (len(ids) * 3600.0 / round_time) if round_time > 0 else 0.0
@@ -482,6 +567,64 @@ class FLSimulator:
             m["dp_used_avg"] = dp_used_avg
             m["composite"] = composite
             m["fairness_gini"] = fairness_gini
+
+            # --- New DELTA-showcase metrics ---
+            # 1. Label Coverage Ratio: fraction of classes covered by selected clients
+            try:
+                covered_labels = set()
+                for cid in ids:
+                    h = getattr(self.clients[cid], 'label_histogram', None)
+                    if isinstance(h, dict):
+                        for lbl, cnt in h.items():
+                            if cnt and cnt > 0:
+                                covered_labels.add(int(lbl))
+                m["label_coverage_ratio"] = len(covered_labels) / max(1, self.num_classes)
+            except Exception:
+                m["label_coverage_ratio"] = 0.0
+
+            # 2. Selection Overhead %: selection_time as % of round_time
+            m["selection_overhead_pct"] = (float(selection_time) / round_time * 100.0) if round_time > 0 else 0.0
+
+            # 3. Accuracy Stability: 1 - CV of accuracy over last 5 rounds
+            try:
+                recent_accs = [float(row.get("accuracy", 0.0) or 0.0) for row in metrics if int(row.get("round", -1)) >= 0]
+                recent_accs.append(float(m.get("accuracy", 0.0)))
+                window = recent_accs[-5:]
+                if len(window) >= 2:
+                    _mean = sum(window) / len(window)
+                    _std = (sum((x - _mean) ** 2 for x in window) / len(window)) ** 0.5
+                    m["acc_stability"] = max(0.0, min(1.0, 1.0 - (_std / (_mean + 1e-8))))
+                else:
+                    m["acc_stability"] = 1.0
+            except Exception:
+                m["acc_stability"] = 1.0
+
+            # 4. Client Utilization Entropy: normalized Shannon entropy of participation counts
+            try:
+                import numpy as _np2
+                parts2 = _np2.array([float(c.participation_count or 0.0) for c in self.clients], dtype=float)
+                total_p = parts2.sum()
+                n_clients = len(self.clients)
+                if total_p > 0 and n_clients > 1:
+                    probs = parts2 / total_p
+                    probs = probs[probs > 0]
+                    entropy = -float(_np2.sum(probs * _np2.log(probs)))
+                    max_entropy = float(_np2.log(n_clients))
+                    m["utilization_entropy"] = entropy / max_entropy if max_entropy > 0 else 0.0
+                else:
+                    m["utilization_entropy"] = 0.0
+            except Exception:
+                m["utilization_entropy"] = 0.0
+
+            # 5. Convergence Efficiency: accuracy gain per cumulative TFLOP
+            try:
+                base_accuracy = float(metrics[0].get("accuracy", 0.0)) if metrics else 0.0
+                curr_acc = float(m.get("accuracy", 0.0))
+                ctf = cumulative_flops / 1e12
+                m["convergence_efficiency"] = (curr_acc - base_accuracy) / max(ctf, 1e-9)
+            except Exception:
+                m["convergence_efficiency"] = 0.0
+
             prev_acc = m["accuracy"]
             metrics.append(m)
             if on_progress:
@@ -498,7 +641,7 @@ class FLSimulator:
             if rnd % 3 == 0:
                 is_critical, msg = check_memory_critical(threshold_percent=70.0)
                 if is_critical:
-                    print(f"⚠️  Warning at round {rnd}: {msg}")
+                    print(f"WARNING at round {rnd}: {msg}")
                     # EMERGENCY: Aggressive cleanup when critical
                     self._emergency_cleanup()
                     cleanup_memory(force_cuda_empty=True, verbose=True)
@@ -508,6 +651,95 @@ class FLSimulator:
                 cleanup_memory(force_cuda_empty=True, verbose=False)
         # Final cleanup after simulation completes
         cleanup_memory(force_cuda_empty=True, verbose=False)
+        
+        # Convergence and time-accuracy efficiency summaries
+        try:
+            # Build time/accuracy series from base + rounds
+            base_acc = float(metrics[0].get("accuracy", 0.0) or 0.0) if metrics else 0.0
+            times: List[float] = [0.0]
+            accs: List[float] = [base_acc]
+            for row in metrics:
+                try:
+                    r = int(row.get("round", -1))
+                except Exception:
+                    r = -1
+                if r >= 0:
+                    try:
+                        times.append(float(row.get("wall_clock", 0.0) or 0.0))
+                    except Exception:
+                        times.append(0.0)
+                    try:
+                        accs.append(float(row.get("accuracy", 0.0) or 0.0))
+                    except Exception:
+                        accs.append(0.0)
+            def _first_time_to(target: float) -> float:
+                # Return earliest time where acc >= target (linear interpolate across segments)
+                if not times or not accs or len(times) != len(accs):
+                    return float("nan")
+                for i in range(1, len(times)):
+                    a0, a1 = accs[i-1], accs[i]
+                    if a1 >= target:
+                        t0, t1 = times[i-1], times[i]
+                        # linear interpolation safeguard
+                        da = max(1e-12, (a1 - a0))
+                        frac = min(1.0, max(0.0, (target - a0) / da))
+                        return float(t0 + frac * (t1 - t0))
+                return float("nan")
+            def _trapz(xs: List[float], ys: List[float]) -> float:
+                area = 0.0
+                for i in range(1, len(xs)):
+                    dx = float(xs[i] - xs[i-1])
+                    area += dx * (float(ys[i]) + float(ys[i-1])) * 0.5
+                return area
+            final_acc = float(accs[-1]) if accs else base_acc
+            total_time = float(times[-1]) if times else 0.0
+            # Targets as fraction of improvement above baseline
+            improv = max(0.0, final_acc - base_acc)
+            targets = {
+                "50": base_acc + 0.50 * improv,
+                "80": base_acc + 0.80 * improv,
+                "90": base_acc + 0.90 * improv,
+            }
+            t50 = _first_time_to(targets["50"]) if improv > 1e-12 else float("nan")
+            t80 = _first_time_to(targets["80"]) if improv > 1e-12 else float("nan")
+            t90 = _first_time_to(targets["90"]) if improv > 1e-12 else float("nan")
+            # Rounds to reach targets
+            def _rounds_to(target: float) -> float:
+                best = float("nan")
+                for row in metrics:
+                    try:
+                        r = int(row.get("round", -1))
+                        a = float(row.get("accuracy", 0.0) or 0.0)
+                        if r >= 0 and a >= target:
+                            best = float(r + 1)  # +1 to be 1-based count of rounds executed
+                            break
+                    except Exception:
+                        continue
+                return best
+            r50 = _rounds_to(targets["50"]) if improv > 1e-12 else float("nan")
+            r80 = _rounds_to(targets["80"]) if improv > 1e-12 else float("nan")
+            r90 = _rounds_to(targets["90"]) if improv > 1e-12 else float("nan")
+            # AUC of accuracy over wall-clock; normalized by ideal rectangular area at final acc
+            auc = _trapz(times, accs) if len(times) >= 2 else 0.0
+            ideal_area = final_acc * total_time
+            auc_norm = (auc / ideal_area) if ideal_area > 1e-12 else 0.0
+            # Accuracy gain per hour
+            acc_gain = max(0.0, final_acc - base_acc)
+            acc_gain_per_hour = (3600.0 * acc_gain / total_time) if total_time > 1e-9 else 0.0
+            # Attach to final row (for ranking/exports)
+            if metrics:
+                metrics[-1]["time_to_50pct_final"] = float(t50)
+                metrics[-1]["time_to_80pct_final"] = float(t80)
+                metrics[-1]["time_to_90pct_final"] = float(t90)
+                metrics[-1]["rounds_to_50pct_final"] = float(r50)
+                metrics[-1]["rounds_to_80pct_final"] = float(r80)
+                metrics[-1]["rounds_to_90pct_final"] = float(r90)
+                metrics[-1]["auc_acc_time"] = float(auc)
+                metrics[-1]["auc_acc_time_norm"] = float(auc_norm)
+                metrics[-1]["acc_gain_per_hour"] = float(acc_gain_per_hour)
+        except Exception:
+            # Non-fatal; keep results
+            pass
         
         # Save metrics
         save_json({"metrics": metrics}, self.run_dir / "metrics.json")
@@ -531,7 +763,7 @@ class FLSimulator:
         """Emergency cleanup when memory is critical - very aggressive."""
         import gc
         
-        print(f"🚨 EMERGENCY CLEANUP: Aggressively freeing RAM...")
+        print(f"EMERGENCY CLEANUP: Aggressively freeing RAM...")
         
         # Force delete all client loaders to free RAM
         if hasattr(self, 'client_loaders') and self.client_loaders:
@@ -569,7 +801,7 @@ class FLSimulator:
                             self.train_ds, idxs, batch_size=batch_size, num_workers=0
                         )
             except Exception as e:
-                print(f"⚠️  Failed to recreate loaders: {e}")
+                print(f"WARNING: Failed to recreate loaders: {e}")
         
         # Clear optimizer states if any
         if self._scratch_model is not None:
@@ -598,7 +830,7 @@ class FLSimulator:
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
         
-        print(f"✓ Emergency cleanup completed")
+        print(f"Emergency cleanup completed")
     
     def cleanup(self):
         """Cleanup resources to free memory. Call this between method comparisons."""
