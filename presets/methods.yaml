@@ -307,6 +307,50 @@ methods:
     params: {W_phase: 5, gamma: 0.3, phase_weights_critical: [0.8, 0.0, 0.2], phase_weights_transition: [0.8, 0.0, 0.2], phase_weights_exploit: [0.8, 0.0, 0.2]}
     type: ml
     trainable: false
+  # --- APEX v2 (all five fixes) ---
+  - key: ml.apex_v2
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (Self-Calibrating)"
+    origin: custom
+    params: {W_phase: 5, gamma: 0.3, min_dwell: 3, reward_ema_alpha: 0.3, w_loss: 0.4, w_grad: 0.2, w_speed: 0.2, w_data: 0.2}
+    type: ml
+    trainable: false
+  # --- APEX v2 ablations: one fix disabled at a time ---
+  - key: ml.apex_v2_no_adaptive_recency
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (no adaptive recency)"
+    origin: custom
+    params: {use_adaptive_recency: false}
+    type: ml
+    trainable: false
+  - key: ml.apex_v2_no_hysteresis
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (no phase hysteresis)"
+    origin: custom
+    params: {use_phase_hysteresis: false}
+    type: ml
+    trainable: false
+  - key: ml.apex_v2_no_het_scaling
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (no het-aware diversity)"
+    origin: custom
+    params: {use_het_scaling: false}
+    type: ml
+    trainable: false
+  - key: ml.apex_v2_no_posterior_reg
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (no posterior reg)"
+    origin: custom
+    params: {use_posterior_reg: false}
+    type: ml
+    trainable: false
+  - key: ml.apex_v2_no_adaptive_gamma
+    module: csfl_simulator.selection.ml.apex_v2
+    display_name: "APEX v2 (no adaptive gamma)"
+    origin: custom
+    params: {use_adaptive_gamma: false}
+    type: ml
+    trainable: false
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"
