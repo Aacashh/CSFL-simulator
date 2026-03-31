@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional
 
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 import torch
+import numpy as np
 
 from .utils import DATA_ROOT
 
@@ -12,6 +13,7 @@ _MNIST_MEAN, _MNIST_STD = (0.1307,), (0.3081,)
 _FMNIST_MEAN, _FMNIST_STD = (0.2860,), (0.3530,)
 _CIFAR10_MEAN, _CIFAR10_STD = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
 _CIFAR100_MEAN, _CIFAR100_STD = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+_STL10_MEAN, _STL10_STD = (0.4467, 0.4398, 0.4066), (0.2604, 0.2563, 0.2713)
 
 
 def get_transforms(name: str, train: bool = True):
@@ -42,6 +44,13 @@ def get_transforms(name: str, train: bool = True):
             transforms.ToTensor(),
             transforms.Normalize(_CIFAR100_MEAN, _CIFAR100_STD)
         ])
+    if name in ("stl-10", "stl10"):
+        # STL-10 is 96x96; resize to target_size (default 32 for CIFAR compat)
+        return transforms.Compose([
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(_STL10_MEAN, _STL10_STD)
+        ])
     raise ValueError(f"Unknown dataset: {name}")
 
 
@@ -56,6 +65,9 @@ def get_dataset(name: str, train: bool = True, root: Path | None = None, downloa
         return datasets.CIFAR10(root, train=train, download=download, transform=get_transforms("cifar10", train))
     if name_l == "cifar-100" or name_l == "cifar100":
         return datasets.CIFAR100(root, train=train, download=download, transform=get_transforms("cifar100", train))
+    if name_l in ("stl-10", "stl10"):
+        split = "train" if train else "test"
+        return datasets.STL10(root, split=split, download=download, transform=get_transforms("stl10", train))
     raise ValueError(f"Unknown dataset {name}")
 
 
@@ -85,6 +97,91 @@ def make_loader(dataset, batch_size: int = 64, shuffle: bool = True, num_workers
 def make_loaders_from_indices(dataset, indices, batch_size: int = 64, num_workers: int = 0):
     sub = Subset(dataset, indices)
     return make_loader(sub, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+
+def _public_transform_for_training_dataset(training_dataset: str) -> transforms.Compose:
+    """Build a transform for the public dataset that matches the training dataset's input spec."""
+    d = training_dataset.lower()
+    if d in ("mnist",):
+        return transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(28),
+            transforms.ToTensor(),
+            transforms.Normalize(_MNIST_MEAN, _MNIST_STD),
+        ])
+    if d in ("fashion-mnist", "fashionmnist"):
+        return transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(28),
+            transforms.ToTensor(),
+            transforms.Normalize(_FMNIST_MEAN, _FMNIST_STD),
+        ])
+    if d in ("cifar10", "cifar-10"):
+        return transforms.Compose([
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(_CIFAR10_MEAN, _CIFAR10_STD),
+        ])
+    if d in ("cifar100", "cifar-100"):
+        return transforms.Compose([
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(_CIFAR100_MEAN, _CIFAR100_STD),
+        ])
+    # Fallback: resize to 32, 3 channels, CIFAR-10 normalization
+    return transforms.Compose([
+        transforms.Resize(32),
+        transforms.ToTensor(),
+        transforms.Normalize(_CIFAR10_MEAN, _CIFAR10_STD),
+    ])
+
+
+def get_public_dataset(
+    name: str,
+    size: int,
+    training_dataset: str,
+    seed: int = 42,
+    root: Path | None = None,
+) -> Subset:
+    """Load a public dataset for federated distillation.
+
+    Args:
+        name: "same" (sample from test split of training_dataset),
+              "STL-10" (unlabeled STL-10, resized to match training dataset),
+              "FMNIST" / "Fashion-MNIST" (Fashion-MNIST test split).
+        size: Number of public samples to use.
+        training_dataset: The name of the private training dataset (for input spec matching).
+        seed: Random seed for reproducible sampling.
+        root: Data root directory.
+
+    Returns:
+        A Subset of `size` samples with transforms matching the training dataset.
+    """
+    root = root or DATA_ROOT
+    name_l = name.lower()
+    rng = np.random.RandomState(seed)
+
+    if name_l == "same":
+        ds = get_dataset(training_dataset, train=False, root=root)
+        indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+        return Subset(ds, indices)
+
+    if name_l in ("stl-10", "stl10"):
+        tfm = _public_transform_for_training_dataset(training_dataset)
+        ds = datasets.STL10(root, split="unlabeled", download=True, transform=tfm)
+        indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+        return Subset(ds, indices)
+
+    if name_l in ("fashion-mnist", "fashionmnist", "fmnist"):
+        tfm = _public_transform_for_training_dataset(training_dataset)
+        ds = datasets.FashionMNIST(root, train=False, download=True, transform=tfm)
+        indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+        return Subset(ds, indices)
+
+    # Generic fallback: try loading as test split
+    ds = get_dataset(name, train=False, root=root)
+    indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+    return Subset(ds, indices)
 
 
 def get_labels(dataset) -> list[int]:

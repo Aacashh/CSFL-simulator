@@ -55,6 +55,51 @@ def _add_sim_args(p: argparse.ArgumentParser):
     p.add_argument("--dp-sigma", type=float, default=0.0, help="DP Gaussian noise sigma")
     p.add_argument("--dp-epsilon-per-round", type=float, default=0.0, help="DP epsilon budget per round")
     p.add_argument("--dp-clip-norm", type=float, default=0.0, help="DP gradient clip norm")
+    # --- Paradigm & Federated Distillation (FD) ---
+    p.add_argument("--paradigm", default="fl", choices=["fl", "fd"],
+                    help="Training paradigm: fl (Federated Learning) or fd (Federated Distillation)")
+    p.add_argument("--public-dataset", default="same",
+                    help="Public dataset for FD logit exchange (same=test split, STL-10, FMNIST)")
+    p.add_argument("--public-dataset-size", type=int, default=2000,
+                    help="Number of public samples for FD (paper: 2000)")
+    p.add_argument("--distillation-epochs", type=int, default=2,
+                    help="Distillation steps per round (paper: 2)")
+    p.add_argument("--distillation-batch-size", type=int, default=500,
+                    help="Batch size for distillation (paper: 500)")
+    p.add_argument("--temperature", type=float, default=1.0,
+                    help="Softmax temperature for KL divergence")
+    p.add_argument("--distillation-lr", type=float, default=0.001,
+                    help="Learning rate for distillation (paper: Adam 0.001)")
+    p.add_argument("--dynamic-steps", action="store_true", default=True,
+                    help="Enable dynamic training steps K_r (FedTSKD)")
+    p.add_argument("--no-dynamic-steps", dest="dynamic_steps", action="store_false",
+                    help="Disable dynamic training steps")
+    p.add_argument("--dynamic-steps-base", type=int, default=5,
+                    help="Initial multiplier for dynamic steps (paper: 5)")
+    p.add_argument("--dynamic-steps-period", type=int, default=25,
+                    help="Rounds per step decrease (paper: 25)")
+    p.add_argument("--model-heterogeneous", action="store_true", default=False,
+                    help="Enable model heterogeneity (different architectures per client)")
+    p.add_argument("--model-pool", default="",
+                    help="Comma-separated model names for heterogeneity (e.g. FD-CNN1,FD-CNN2,FD-CNN3)")
+    p.add_argument("--channel-noise", action="store_true", default=False,
+                    help="Enable mMIMO channel noise simulation")
+    p.add_argument("--n-bs-antennas", type=int, default=64,
+                    help="Base station antennas N_BS (paper: 64)")
+    p.add_argument("--n-device-antennas", type=int, default=1,
+                    help="Device antennas N_D (paper: 1)")
+    p.add_argument("--ul-snr-db", type=float, default=-8.0,
+                    help="Uplink SNR in dB (paper: -8)")
+    p.add_argument("--dl-snr-db", type=float, default=-20.0,
+                    help="Downlink SNR in dB (paper: -20)")
+    p.add_argument("--quantization-bits", type=int, default=8,
+                    help="Logit quantization bits (paper: 8)")
+    p.add_argument("--group-based", action="store_true", default=False,
+                    help="Enable FedTSKD-G group-based channel-aware FD")
+    p.add_argument("--channel-threshold", type=float, default=0.5,
+                    help="Channel quality threshold for good/bad groups")
+    p.add_argument("--fd-optimizer", default="adam", choices=["adam", "sgd"],
+                    help="Optimizer for FD local training (paper: adam)")
 
 
 def _args_to_config(args) -> SimConfig:
@@ -84,6 +129,28 @@ def _args_to_config(args) -> SimConfig:
         dp_sigma=args.dp_sigma,
         dp_epsilon_per_round=args.dp_epsilon_per_round,
         dp_clip_norm=args.dp_clip_norm,
+        # Federated Distillation fields
+        paradigm=getattr(args, "paradigm", "fl"),
+        public_dataset=getattr(args, "public_dataset", "same"),
+        public_dataset_size=getattr(args, "public_dataset_size", 2000),
+        distillation_epochs=getattr(args, "distillation_epochs", 2),
+        distillation_batch_size=getattr(args, "distillation_batch_size", 500),
+        temperature=getattr(args, "temperature", 1.0),
+        distillation_lr=getattr(args, "distillation_lr", 0.001),
+        dynamic_steps=getattr(args, "dynamic_steps", True),
+        dynamic_steps_base=getattr(args, "dynamic_steps_base", 5),
+        dynamic_steps_period=getattr(args, "dynamic_steps_period", 25),
+        model_heterogeneous=getattr(args, "model_heterogeneous", False),
+        model_pool=getattr(args, "model_pool", ""),
+        channel_noise=getattr(args, "channel_noise", False),
+        n_bs_antennas=getattr(args, "n_bs_antennas", 64),
+        n_device_antennas=getattr(args, "n_device_antennas", 1),
+        ul_snr_db=getattr(args, "ul_snr_db", -8.0),
+        dl_snr_db=getattr(args, "dl_snr_db", -20.0),
+        quantization_bits=getattr(args, "quantization_bits", 8),
+        group_based=getattr(args, "group_based", False),
+        channel_threshold=getattr(args, "channel_threshold", 0.5),
+        fd_optimizer=getattr(args, "fd_optimizer", "adam"),
     )
 
 
@@ -124,7 +191,7 @@ def _extract_summary(result: dict) -> dict:
     """Extract key summary metrics from a run result."""
     metrics = result.get("metrics", [])
     final = metrics[-1] if metrics else {}
-    return {
+    summary = {
         "accuracy": f"{final.get('accuracy', 0.0):.4f}",
         "loss": f"{final.get('loss', 0.0):.4f}",
         "f1": f"{final.get('f1', 0.0):.4f}",
@@ -133,6 +200,13 @@ def _extract_summary(result: dict) -> dict:
         "cum_tflops": f"{final.get('cum_tflops', 0.0):.6f}",
         "cum_comm": f"{final.get('cum_comm', 0.0):.2f}MB",
     }
+    # FD-specific summary fields
+    if result.get("paradigm") == "fd" or final.get("logit_comm_kb") is not None:
+        summary["logit_comm_kb"] = f"{final.get('logit_comm_kb', 0.0):.2f}KB"
+        summary["comm_reduction"] = f"{final.get('comm_reduction_ratio', 0.0):.4f}"
+        summary["kl_divergence"] = f"{final.get('kl_divergence_avg', 0.0):.4f}"
+        summary["client_acc_std"] = f"{final.get('client_accuracy_std', 0.0):.4f}"
+    return summary
 
 
 def _resolve_run_dir(run_path: str) -> Path:
@@ -192,16 +266,25 @@ def _load_run_results(run_dir: Path) -> dict:
 # Commands
 # ---------------------------------------------------------------------------
 
+def _create_simulator(cfg: SimConfig):
+    """Create the appropriate simulator based on paradigm."""
+    if cfg.paradigm == "fd":
+        from csfl_simulator.core.fd_simulator import FDSimulator
+        return FDSimulator(cfg)
+    return FLSimulator(cfg)
+
+
 def cmd_run(args):
     """Run a single simulation."""
     cfg = _args_to_config(args)
     method = args.method
 
+    paradigm_str = f" [{cfg.paradigm.upper()}]" if cfg.paradigm != "fl" else ""
     name_str = f" (name={cfg.name})" if cfg.name else ""
-    print(f"Running: method={method} dataset={cfg.dataset} partition={cfg.partition} "
+    print(f"Running{paradigm_str}: method={method} dataset={cfg.dataset} partition={cfg.partition} "
           f"clients={cfg.total_clients} K={cfg.clients_per_round} rounds={cfg.rounds}{name_str}", file=sys.stderr)
 
-    sim = FLSimulator(cfg)
+    sim = _create_simulator(cfg)
     t0 = time.time()
     result = sim.run(method_key=method, on_progress=_progress_callback(cfg.rounds))
     elapsed = time.time() - t0
@@ -211,11 +294,20 @@ def cmd_run(args):
     # Print summary
     summary = _extract_summary(result)
     print(f"\n{'=' * 50}")
+    print(f"  Paradigm: {cfg.paradigm.upper()}")
     print(f"  Method: {method}")
     if cfg.name:
         print(f"  Name: {cfg.name}")
     print(f"  Dataset: {cfg.dataset} | Partition: {cfg.partition}")
     print(f"  Rounds: {cfg.rounds} | Clients: {cfg.total_clients} (K={cfg.clients_per_round})")
+    if cfg.paradigm == "fd":
+        print(f"  Public dataset: {cfg.public_dataset} ({cfg.public_dataset_size} samples)")
+        if cfg.model_heterogeneous:
+            print(f"  Model pool: {cfg.model_pool}")
+        if cfg.channel_noise:
+            print(f"  Channel: UL={cfg.ul_snr_db}dB DL={cfg.dl_snr_db}dB BS={cfg.n_bs_antennas}")
+        if cfg.group_based:
+            print(f"  Group-based: FedTSKD-G (threshold={cfg.channel_threshold})")
     print(f"{'=' * 50}")
     for k, v in summary.items():
         print(f"  {k:20s}: {v}")
@@ -244,12 +336,13 @@ def cmd_compare(args):
         print("Error: No methods specified. Use --methods 'method1,method2'", file=sys.stderr)
         sys.exit(1)
 
+    paradigm_str = f" [{cfg.paradigm.upper()}]" if cfg.paradigm != "fl" else ""
     name_str = f" (name={cfg.name})" if cfg.name else ""
-    print(f"Comparing {len(methods)} methods on {cfg.dataset} ({cfg.partition}), "
+    print(f"Comparing{paradigm_str} {len(methods)} methods on {cfg.dataset} ({cfg.partition}), "
           f"{cfg.rounds} rounds, {cfg.total_clients} clients (K={cfg.clients_per_round}){name_str}", file=sys.stderr)
 
     # Create ONE simulator with shared partition
-    sim = FLSimulator(cfg)
+    sim = _create_simulator(cfg)
     sim.setup()
 
     results = {}
@@ -348,6 +441,13 @@ def cmd_plot(args):
         "apex_no_phase": "APEX-noPhase", "apex_no_ts": "APEX-noTS",
         "apex_no_div": "APEX-noDiv", "tifl": "TiFL", "poc": "PoC",
         "epsilon_greedy": "e-Greedy", "linucb": "LinUCB",
+        "fedcor_approx": "FedCor", "fedcor": "FedCor",
+        "apex_v2": "APEX v2",
+        "apex_v2_no_adaptive_recency": "v2-noRecency",
+        "apex_v2_no_hysteresis": "v2-noHyst",
+        "apex_v2_no_het_scaling": "v2-noHetScale",
+        "apex_v2_no_posterior_reg": "v2-noPosterior",
+        "apex_v2_no_adaptive_gamma": "v2-noAdaGamma",
     }
     for m in methods:
         short = m.split(".")[-1] if "." in m else m
@@ -391,13 +491,12 @@ def cmd_plot(args):
             ax.set_title(_metric_label(metric) + " per Round")
 
             if len(methods) > 1:
-                ncol = min(len(methods), 4)
-                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.18),
-                          ncol=ncol, fontsize=6, framealpha=0.9,
-                          handlelength=1.2, columnspacing=0.6, handletextpad=0.4)
+                ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5),
+                          fontsize=6, framealpha=0.9,
+                          handlelength=1.2, handletextpad=0.4,
+                          borderaxespad=0.3)
 
-            fig.tight_layout()
-            fig.subplots_adjust(bottom=0.28 if len(methods) > 4 else 0.22)
+            fig.tight_layout(rect=[0.0, 0.0, 0.75, 1.0])
 
             filename = f"{metric}.{fmt}"
             filepath = out_dir / filename
@@ -436,15 +535,15 @@ def cmd_plot(args):
                 r, c = divmod(idx, n_cols)
                 axes[r][c].set_visible(False)
 
-            # Shared legend below all panels
+            # Shared legend to the right of all panels
             handles, labels = axes[0][0].get_legend_handles_labels()
             if len(methods) > 1:
-                fig.legend(handles, labels, loc="upper center",
-                           ncol=min(len(methods), 7), bbox_to_anchor=(0.5, -0.02),
+                fig.legend(handles, labels, loc="center left",
+                           bbox_to_anchor=(1.02, 0.5),
                            framealpha=0.9, fontsize=6, handlelength=1.2,
-                           columnspacing=0.6, handletextpad=0.4)
+                           handletextpad=0.4, borderaxespad=0.3)
 
-            fig.tight_layout()
+            fig.tight_layout(rect=[0.0, 0.0, 0.78, 1.0])
             filename = f"multi_panel.{fmt}"
             filepath = out_dir / filename
             fig.savefig(str(filepath), format=fmt, dpi=dpi, bbox_inches="tight")
@@ -479,6 +578,18 @@ def _metric_label(key: str) -> str:
         "compute_time": "Compute Time (s)",
         "round_energy": "Round Energy",
         "round_bytes": "Round Bytes",
+        # FD-specific metrics
+        "kl_divergence_avg": "KL Divergence (avg)",
+        "distillation_loss_avg": "Distillation Loss (avg)",
+        "logit_comm_kb": "Logit Communication (KB)",
+        "fl_equiv_comm_mb": "FL Equiv. Communication (MB)",
+        "comm_reduction_ratio": "Comm. Reduction Ratio",
+        "effective_noise_var": "Effective Noise Variance",
+        "dynamic_steps_kr": "Dynamic Steps K_r",
+        "num_good_channel": "Good Channel Clients",
+        "num_bad_channel": "Bad Channel Clients",
+        "client_accuracy_avg": "Client Accuracy (avg)",
+        "client_accuracy_std": "Client Accuracy (std)",
     }
     return labels.get(key, key.replace("_", " ").title())
 

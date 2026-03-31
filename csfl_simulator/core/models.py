@@ -99,12 +99,98 @@ class LightCIFAR(nn.Module):
         return self.fc2(x)
 
 
+# ---------------------------------------------------------------------------
+# FD-specific CNN architectures (Mu et al., IEEE TCCN 2024, Table III)
+# Three heterogeneous architectures for federated distillation experiments.
+# All use 3x3 kernels, ReLU, MaxPool(2), Dropout before final FC.
+# ---------------------------------------------------------------------------
+
+class FDCNN1(nn.Module):
+    """Large FD model (~1.2M params). Paper Table III: CNN_1.
+    Conv 1-32, MaxPool, Conv 32-64, MaxPool, FC-128, Dropout, FC-C."""
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.dropout = nn.Dropout(0.5)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = self.pool(F.relu(self.conv1(dummy)))
+            h = self.pool(F.relu(self.conv2(h)))
+            flat_dim = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat_dim, 128)
+        self.fc2 = nn.Linear(128, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = self.dropout(F.relu(self.fc1(x)))
+        return self.fc2(x)
+
+
+class FDCNN2(nn.Module):
+    """Medium FD model (~79K params). Paper Table III: CNN_2.
+    Conv 1-12, MaxPool, Conv 12-24, MaxPool, FC-64, Dropout, FC-C."""
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 12, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(12, 24, kernel_size=3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.dropout = nn.Dropout(0.5)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = self.pool(F.relu(self.conv1(dummy)))
+            h = self.pool(F.relu(self.conv2(h)))
+            flat_dim = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat_dim, 64)
+        self.fc2 = nn.Linear(64, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = self.dropout(F.relu(self.fc1(x)))
+        return self.fc2(x)
+
+
+class FDCNN3(nn.Module):
+    """Small FD model (~25K params). Paper Table III: CNN_3.
+    Conv 1-8, MaxPool, Conv 8-16, MaxPool, FC-64, Dropout, FC-C."""
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 28):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 8, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.dropout = nn.Dropout(0.5)
+        with torch.no_grad():
+            dummy = torch.zeros(1, in_channels, image_size, image_size)
+            h = self.pool(F.relu(self.conv1(dummy)))
+            h = self.pool(F.relu(self.conv2(h)))
+            flat_dim = int(h.numel() // h.shape[0])
+        self.fc1 = nn.Linear(flat_dim, 64)
+        self.fc2 = nn.Linear(64, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.conv1.in_channels)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = self.dropout(F.relu(self.fc1(x)))
+        return self.fc2(x)
+
+
 def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
     if d in ("mnist", "fashion-mnist", "fashionmnist"):
         return 1, 28
     if d in ("cifar10", "cifar-10", "cifar100", "cifar-100"):
         return 3, 32
+    if d in ("stl-10", "stl10"):
+        return 3, 32  # Resized from 96x96 to match training dataset
     # Fallback to common 3x32
     return 3, 32
 
@@ -118,6 +204,12 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
         model = CNNMnistFedAvg(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("lightcnn", "light-cifar"):
         model = LightCIFAR(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("fd-cnn1", "fd_cnn1", "fdcnn1"):
+        model = FDCNN1(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("fd-cnn2", "fd_cnn2", "fdcnn2"):
+        model = FDCNN2(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("fd-cnn3", "fd_cnn3", "fdcnn3"):
+        model = FDCNN3(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l == "resnet18":
         m = resnet18(weights=None)
         # Adapt first conv to dataset channels when needed

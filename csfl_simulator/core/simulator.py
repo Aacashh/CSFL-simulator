@@ -53,6 +53,36 @@ class SimConfig:
     track_grad_norm: bool = False
     parallel_clients: int = 0  # 0 = off (sequential)
     name: Optional[str] = None  # Named run (used as folder name under artifacts/runs/)
+    # Paradigm selection: "fl" (Federated Learning) or "fd" (Federated Distillation)
+    paradigm: str = "fl"
+    # --- Federated Distillation (FD) settings ---
+    # Public dataset for logit exchange
+    public_dataset: str = "same"         # "same" = sample from test split; or dataset name e.g. "STL-10"
+    public_dataset_size: int = 2000      # Number of public samples
+    # Distillation hyperparameters
+    distillation_epochs: int = 2         # S distillation steps per round (paper: 2)
+    distillation_batch_size: int = 500   # Batch size for distillation (paper: 500)
+    temperature: float = 1.0             # Softmax temperature for KL divergence
+    distillation_lr: float = 0.001       # Learning rate for distillation (paper: Adam 0.001)
+    # Dynamic training steps (FedTSKD)
+    dynamic_steps: bool = True           # Decrease local steps K_r over rounds
+    dynamic_steps_base: int = 5          # Initial multiplier (paper: 5)
+    dynamic_steps_period: int = 25       # Rounds per step decrease (paper: 25)
+    # Model heterogeneity
+    model_heterogeneous: bool = False    # Different architectures per client
+    model_pool: str = ""                 # Comma-separated model names, e.g. "FD-CNN1,FD-CNN2,FD-CNN3"
+    # Communication channel (mMIMO)
+    channel_noise: bool = False          # Enable mMIMO channel noise
+    n_bs_antennas: int = 64             # N_BS base station antennas (paper: 64)
+    n_device_antennas: int = 1          # N_D device antennas (paper: 1)
+    ul_snr_db: float = -8.0            # Uplink SNR in dB (paper: -8)
+    dl_snr_db: float = -20.0           # Downlink SNR in dB (paper: -20)
+    quantization_bits: int = 8          # Logit quantization bits (paper: 8)
+    # Group-based FD (FedTSKD-G)
+    group_based: bool = False            # Enable channel-aware group splitting
+    channel_threshold: float = 0.5       # Threshold for good/bad channel groups
+    # FD optimizer
+    fd_optimizer: str = "adam"           # Optimizer for FD local training (paper: adam)
 
 
 class FLSimulator:

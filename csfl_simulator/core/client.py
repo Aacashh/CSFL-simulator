@@ -26,4 +26,5 @@ class ClientInfo:
     utility_estimate: float = 0.0
     last_selected_round: int = -1
     label_histogram: Optional[Dict[int, int]] = None
+    model_arch: Optional[str] = None  # Model architecture name (for FD heterogeneity)
     meta: Dict[str, Any] = field(default_factory=dict)

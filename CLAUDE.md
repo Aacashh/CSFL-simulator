@@ -1,6 +1,6 @@
 # CSFL Simulator
 
-Client Selection for Federated Learning simulator — a research platform for comparing client selection algorithms under realistic heterogeneity (data, system, privacy).
+Client Selection for Federated Learning simulator — a research platform for comparing client selection algorithms under realistic heterogeneity (data, system, privacy). Supports both **Federated Learning (FL)** and **Federated Distillation (FD)** paradigms.
 
 ## Quick Start
 
@@ -28,6 +28,33 @@ streamlit run csfl_simulator/app/main.py
 
 # Batch matrix run (all methods x grid of params)
 python scripts/run_matrix.py --dataset CIFAR10 --rounds 30 --fast
+
+# --- Federated Distillation (FD) ---
+
+# Basic FD run (logits exchanged instead of weights)
+python -m csfl_simulator run --paradigm fd --method heuristic.random --dataset MNIST --rounds 50
+
+# FD with model heterogeneity (different client architectures)
+python -m csfl_simulator run --paradigm fd --method system_aware.oort \
+    --dataset CIFAR-10 --model-heterogeneous --model-pool "FD-CNN1,FD-CNN2,FD-CNN3" \
+    --public-dataset STL-10 --rounds 100 --total-clients 15 --clients-per-round 15
+
+# FD with mMIMO channel noise
+python -m csfl_simulator run --paradigm fd --method heuristic.random \
+    --dataset MNIST --channel-noise --ul-snr-db -8 --dl-snr-db -20
+
+# FD with group-based scheme (FedTSKD-G)
+python -m csfl_simulator run --paradigm fd --method heuristic.random \
+    --dataset CIFAR-10 --channel-noise --group-based --rounds 200
+
+# Compare selection methods under FD
+python -m csfl_simulator compare --paradigm fd \
+    --methods "heuristic.random,system_aware.oort,ml.apex_v2" \
+    --dataset CIFAR-10 --public-dataset STL-10 --rounds 50
+
+# Plot FD-specific metrics
+python -m csfl_simulator plot --run fd_experiment \
+    --metrics accuracy,kl_divergence_avg,comm_reduction_ratio
 ```
 
 ## Project Structure
@@ -37,12 +64,15 @@ csfl_simulator/
 ├── __main__.py              # CLI entry point (run/compare/plot/list-methods/list-runs)
 ├── core/
 │   ├── simulator.py         # FLSimulator + SimConfig — the main engine
-│   ├── datasets.py          # Dataset loading (MNIST, Fashion-MNIST, CIFAR-10/100)
+│   ├── fd_simulator.py      # FDSimulator — Federated Distillation engine (FedTSKD/FedTSKD-G)
+│   ├── fd_aggregation.py    # Logit averaging + group-based aggregation
+│   ├── channel.py           # MIMOChannel — mMIMO uplink/downlink noise simulation
+│   ├── datasets.py          # Dataset loading (MNIST, Fashion-MNIST, CIFAR-10/100, STL-10)
 │   ├── partition.py         # iid, dirichlet, label-shard + size distribution
 │   ├── client.py            # ClientInfo dataclass (all per-client state)
-│   ├── models.py            # CNN-MNIST, CNNMnistFedAvg, LightCIFAR, ResNet18
+│   ├── models.py            # CNN-MNIST, CNNMnistFedAvg, LightCIFAR, ResNet18, FD-CNN1/2/3
 │   ├── aggregation.py       # FedAvg weighted aggregation
-│   ├── metrics.py           # eval_model() → accuracy, F1, precision, recall, loss
+│   ├── metrics.py           # eval_model(), eval_fd_clients()
 │   ├── system.py            # System heterogeneity simulation (speed, channel, energy)
 │   ├── parallel.py          # CUDA parallel client training via streams
 │   ├── dp.py                # Differential privacy (clipping, noise, accounting)
@@ -205,6 +235,9 @@ python -m csfl_simulator list-runs  # Shows name, method, dataset, accuracy, pat
 | CNN-MNIST (FedAvg) | MNIST |
 | LightCNN | CIFAR-10, CIFAR-100 |
 | ResNet18 | CIFAR-10, CIFAR-100 |
+| FD-CNN1 (~1.2M params) | All (FD heterogeneity) |
+| FD-CNN2 (~79K params) | All (FD heterogeneity) |
+| FD-CNN3 (~25K params) | All (FD heterogeneity) |
 
 ## Output Metrics (per round)
 
@@ -216,6 +249,13 @@ Privacy: `dp_used_avg`
 Composite: `composite` (weighted combo of acc/time/fairness/dp)
 Convergence (final round only): `time_to_50/80/90pct_final`, `auc_acc_time_norm`, `acc_gain_per_hour`
 
+### FD-Specific Metrics (paradigm=fd only)
+Distillation: `kl_divergence_avg`, `distillation_loss_avg`
+Communication: `logit_comm_kb`, `fl_equiv_comm_mb`, `comm_reduction_ratio`
+Channel: `effective_noise_var`, `num_good_channel`, `num_bad_channel`
+Training: `dynamic_steps_kr`
+Heterogeneity: `client_accuracy_avg`, `client_accuracy_std`
+
 ## Artifacts
 
 Results are saved to `artifacts/runs/<name>_<timestamp>/` containing:
@@ -225,6 +265,72 @@ Results are saved to `artifacts/runs/<name>_<timestamp>/` containing:
 - `plots/` — generated plots (created by `plot` command)
 
 Datasets download to `data/`.
+
+## Federated Distillation (FD) Mode
+
+FD is a parallel training paradigm enabled with `--paradigm fd`. Based on "Federated Distillation in Massive MIMO Networks" (Mu et al., IEEE TCCN 2024).
+
+### Key Differences from FL
+- **Exchange logits** (soft predictions) instead of model weights (~1% communication overhead)
+- **Model heterogeneity**: different clients can have different architectures
+- **Public dataset**: shared unlabeled dataset for logit generation
+- **KL divergence distillation**: clients learn from aggregated logits via KL loss
+- **Dynamic training steps**: K_r decreases over rounds (FedTSKD)
+- **Channel-aware groups**: FedTSKD-G splits clients by channel quality
+
+### FD CLI Flags
+```
+--paradigm fd                   # Enable FD mode
+--public-dataset STL-10         # Public dataset (same, STL-10, FMNIST)
+--public-dataset-size 2000      # Number of public samples
+--distillation-epochs 2         # Distillation steps per round
+--distillation-batch-size 500   # Distillation batch size
+--temperature 1.0               # KL divergence temperature
+--distillation-lr 0.001         # Adam learning rate for distillation
+--dynamic-steps / --no-dynamic-steps  # Dynamic training steps
+--dynamic-steps-base 5          # Initial step multiplier
+--dynamic-steps-period 25       # Rounds per decrease
+--model-heterogeneous           # Enable per-client architecture variation
+--model-pool "FD-CNN1,FD-CNN2,FD-CNN3"  # Model architectures to cycle
+--channel-noise                 # Enable mMIMO channel noise
+--n-bs-antennas 64              # Base station antennas
+--ul-snr-db -8.0                # Uplink SNR (dB)
+--dl-snr-db -20.0               # Downlink SNR (dB)
+--quantization-bits 8           # Logit quantization
+--group-based                   # Enable FedTSKD-G
+--channel-threshold 0.5         # Good/bad channel threshold
+--fd-optimizer adam              # Optimizer (adam or sgd)
+```
+
+### FD Round Structure (Algorithm 1: FedTSKD)
+1. Client selection (same interface as FL — all methods work)
+2. Local distillation: clients learn from previously received logits via KL divergence
+3. Local training: K_r SGD/Adam steps on private data (K_r decreases over rounds)
+4. Inference: clients predict on public dataset, producing logits
+5. Uplink: logits transmitted to server (with optional mMIMO noise)
+6. Server aggregation: weighted logit averaging
+7. Server distillation: server model learns from aggregated logits
+8. Downlink: server broadcasts processed logits to clients (with optional noise)
+
+### FDSimulator Usage (Programmatic)
+```python
+from csfl_simulator.core.fd_simulator import FDSimulator
+from csfl_simulator.core.simulator import SimConfig
+
+cfg = SimConfig(
+    paradigm="fd",
+    dataset="CIFAR-10", partition="dirichlet", dirichlet_alpha=0.3,
+    model="FD-CNN1", model_heterogeneous=True,
+    model_pool="FD-CNN1,FD-CNN2,FD-CNN3",
+    public_dataset="STL-10", public_dataset_size=2000,
+    total_clients=15, clients_per_round=15, rounds=200,
+    channel_noise=True, ul_snr_db=-8.0, dl_snr_db=-20.0,
+)
+sim = FDSimulator(cfg)
+sim.setup()
+result = sim.run("heuristic.random")
+# result["metrics"] includes FD-specific: kl_divergence_avg, logit_comm_kb, comm_reduction_ratio, ...
+```
 
 ## Development Notes
 
