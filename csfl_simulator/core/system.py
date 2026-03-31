@@ -32,8 +32,14 @@ def simulate_round_env(clients: List[ClientInfo], knobs: Dict[str, Any], round_i
         c.estimated_duration = est_compute + est_net
         # Approximate communication volume as proportional to local data size (abstract units)
         c.estimated_bytes = float(c.data_size)
-        # Simple energy proxy: power (energy_rate) × time
+        # Simple energy proxy: power (energy_rate) x time
         try:
             c.estimated_energy = float(c.energy_rate) * float(c.estimated_duration)
         except Exception:
             c.estimated_energy = c.estimated_duration
+
+        # FD-specific: classify channel group for FedTSKD-G
+        if knobs.get("paradigm") == "fd":
+            threshold = knobs.get("channel_threshold", 0.5)
+            c.meta["channel_group"] = "good" if c.channel_quality > threshold else "bad"
+            c.meta["channel_beta"] = c.channel_quality ** 2

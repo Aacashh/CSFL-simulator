@@ -14,3 +14,6 @@ datasets:
   - name: CIFAR-100
     batch_size: 128
     num_classes: 100
+  - name: STL-10
+    batch_size: 128
+    num_classes: 10

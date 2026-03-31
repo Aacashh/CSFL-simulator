@@ -76,3 +76,32 @@ def eval_model(model, loader, device: str):
     rec = recall_score(ys, yh, average="macro", zero_division=0)
     loss = (loss_sum / max(1, n_total)) if n_total > 0 else 0.0
     return {"accuracy": acc, "f1": f1, "precision": pre, "recall": rec, "loss": loss}
+
+
+def eval_fd_clients(
+    client_models: Dict[int, "torch.nn.Module"],
+    test_loader,
+    device: str,
+    sample_ids: List[int] | None = None,
+) -> Dict[str, float]:
+    """Evaluate multiple (possibly heterogeneous) FD client models.
+
+    Returns averaged metrics across the sampled clients, plus per-client
+    accuracy standard deviation.
+    """
+    import statistics
+
+    ids_to_eval = sample_ids or list(client_models.keys())
+    per_client_accs = []
+    for cid in ids_to_eval:
+        m = eval_model(client_models[cid], test_loader, device)
+        per_client_accs.append(m.get("accuracy", 0.0))
+
+    avg_acc = sum(per_client_accs) / max(len(per_client_accs), 1)
+    acc_std = statistics.stdev(per_client_accs) if len(per_client_accs) > 1 else 0.0
+
+    return {
+        "client_accuracy_avg": avg_acc,
+        "client_accuracy_std": acc_std,
+        "num_clients_evaluated": len(ids_to_eval),
+    }
