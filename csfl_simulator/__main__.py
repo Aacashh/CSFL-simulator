@@ -100,6 +100,11 @@ def _add_sim_args(p: argparse.ArgumentParser):
                     help="Channel quality threshold for good/bad groups")
     p.add_argument("--fd-optimizer", default="adam", choices=["adam", "sgd"],
                     help="Optimizer for FD local training (paper: adam)")
+    # Performance tuning
+    p.add_argument("--eval-every", type=int, default=5,
+                    help="Evaluate every N rounds (default: 5, use 10-20 for faster runs)")
+    p.add_argument("--use-amp", action="store_true", default=False,
+                    help="Enable mixed precision (AMP) for faster training on Turing+ GPUs")
 
 
 def _args_to_config(args) -> SimConfig:
@@ -151,6 +156,8 @@ def _args_to_config(args) -> SimConfig:
         group_based=getattr(args, "group_based", False),
         channel_threshold=getattr(args, "channel_threshold", 0.5),
         fd_optimizer=getattr(args, "fd_optimizer", "adam"),
+        eval_every=getattr(args, "eval_every", 5),
+        use_amp=getattr(args, "use_amp", False),
     )
 
 

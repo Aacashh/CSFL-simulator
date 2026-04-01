@@ -194,6 +194,82 @@ class FDSimulator:
             p.numel() for p in self.server_model.parameters()
         )
 
+        # --- Performance: cache public data on GPU ---
+        self._public_x_cache: Optional[torch.Tensor] = None
+        try:
+            xs = [x for x, *_ in self.public_loader]
+            self._public_x_cache = torch.cat(xs, dim=0).to(self.device)
+        except Exception:
+            pass  # fallback to loader-based iteration
+
+        # --- Performance: cache test set on GPU ---
+        self._test_x_cache: Optional[torch.Tensor] = None
+        self._test_y_cache: Optional[torch.Tensor] = None
+        try:
+            xs, ys = [], []
+            for x, y in self.test_loader:
+                xs.append(x)
+                ys.append(y)
+            self._test_x_cache = torch.cat(xs, dim=0).to(self.device)
+            self._test_y_cache = torch.cat(ys, dim=0).to(self.device)
+        except Exception:
+            pass
+
+        # --- Performance: cache training data on GPU (skip if insufficient VRAM) ---
+        self._client_data_cache: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
+        if self.device.startswith("cuda"):
+            try:
+                free_mem, _ = torch.cuda.mem_get_info()
+                # Estimate total training data size
+                sample_x, _ = train_ds[0]
+                if isinstance(sample_x, torch.Tensor):
+                    bytes_per_sample = sample_x.numel() * sample_x.element_size() + 8  # +8 for label
+                else:
+                    bytes_per_sample = 3 * 32 * 32 * 4 + 8  # fallback estimate
+                total_bytes = len(train_ds) * bytes_per_sample
+                # Only cache if >1GB remains free after caching
+                if total_bytes < free_mem - 1024 ** 3:
+                    for cid in range(cfg.total_clients):
+                        xs, ys = [], []
+                        for x, y in self.client_loaders[cid]:
+                            xs.append(x)
+                            ys.append(y)
+                        self._client_data_cache[cid] = (
+                            torch.cat(xs, dim=0).to(self.device),
+                            torch.cat(ys, dim=0).to(self.device),
+                        )
+            except Exception:
+                self._client_data_cache.clear()
+
+        # --- Performance: AMP (mixed precision) ---
+        self._use_amp = cfg.use_amp and self.device.startswith("cuda")
+        self._scaler = torch.amp.GradScaler("cuda", enabled=self._use_amp) if self._use_amp else None
+
+        # --- Performance: pre-allocated client optimizers ---
+        self._client_train_opts: Dict[int, optim.Optimizer] = {}
+        self._client_distill_opts: Dict[int, optim.Optimizer] = {}
+        self._server_distill_opt: Optional[optim.Optimizer] = None
+
+        # --- Performance: CUDA parallelism detection ---
+        self._max_parallel = 1
+        if self.device.startswith("cuda") and cfg.parallel_clients != 0:
+            try:
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+                free_mem, _ = torch.cuda.mem_get_info()
+                model_mem = sum(p.numel() * p.element_size() for p in self.server_model.parameters())
+                per_client = model_mem * 4  # model + grads + optimizer + activations
+                usable = int(free_mem * 0.5)
+                auto = max(1, min(usable // max(per_client, 1), 8))
+                if cfg.parallel_clients == -1:
+                    self._max_parallel = auto
+                elif cfg.parallel_clients > 0:
+                    self._max_parallel = cfg.parallel_clients
+                else:
+                    self._max_parallel = auto
+            except Exception:
+                self._max_parallel = 2
+
     def _adapt_server_for_groups(self):
         """Double the server model's last FC layer for FedTSKD-G."""
         # Find the last Linear layer
@@ -235,6 +311,32 @@ class FDSimulator:
     # Local training on private data
     # ------------------------------------------------------------------
 
+    def _get_train_opt(self, cid: int) -> optim.Optimizer:
+        """Get or create the training optimizer for a client (reused across rounds)."""
+        if cid not in self._client_train_opts:
+            model = self.client_models[cid]
+            if self.cfg.fd_optimizer == "adam":
+                self._client_train_opts[cid] = optim.Adam(model.parameters(), lr=self.cfg.distillation_lr)
+            else:
+                self._client_train_opts[cid] = optim.SGD(model.parameters(), lr=self.cfg.lr)
+        return self._client_train_opts[cid]
+
+    def _get_distill_opt(self, cid: int) -> optim.Optimizer:
+        """Get or create the distillation optimizer for a client."""
+        if cid not in self._client_distill_opts:
+            self._client_distill_opts[cid] = optim.Adam(
+                self.client_models[cid].parameters(), lr=self.cfg.distillation_lr,
+            )
+        return self._client_distill_opts[cid]
+
+    def _get_server_distill_opt(self) -> optim.Optimizer:
+        """Get or create the server distillation optimizer."""
+        if self._server_distill_opt is None:
+            self._server_distill_opt = optim.Adam(
+                self.server_model.parameters(), lr=self.cfg.distillation_lr,
+            )
+        return self._server_distill_opt
+
     def _local_train(self, cid: int, num_steps: int) -> Tuple[float, float]:
         """Train client cid's model on private data for num_steps SGD/Adam steps.
 
@@ -243,8 +345,53 @@ class FDSimulator:
         cfg = self.cfg
         model = self.client_models[cid]
         model.train()
+        criterion = nn.CrossEntropyLoss()
+        opt = self._get_train_opt(cid)
 
-        # Recreate loader if missing (emergency cleanup recovery)
+        last_loss = 0.0
+        grad_norm = 0.0
+        use_amp = self._use_amp
+        scaler = self._scaler
+
+        # Fast path: GPU-cached training data (no DataLoader overhead)
+        if cid in self._client_data_cache:
+            x_all, y_all = self._client_data_cache[cid]
+            n = x_all.size(0)
+            bs = cfg.batch_size
+            for step in range(num_steps):
+                idx = (step * bs) % n
+                x = x_all[idx:idx + bs]
+                y = y_all[idx:idx + bs]
+                opt.zero_grad()
+                with torch.amp.autocast("cuda", enabled=use_amp):
+                    out = model(x)
+                    loss = criterion(out, y)
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    if cfg.track_grad_norm:
+                        scaler.unscale_(opt)
+                        try:
+                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
+                            grad_norm = total_sq ** 0.5
+                        except Exception:
+                            pass
+                    scaler.step(opt)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    if cfg.track_grad_norm:
+                        try:
+                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
+                            grad_norm = total_sq ** 0.5
+                        except Exception:
+                            pass
+                    opt.step()
+                last_loss = float(loss.item())
+                if cfg.fast_mode and step > 0:
+                    return last_loss, grad_norm
+            return last_loss, grad_norm
+
+        # Fallback: DataLoader-based training
         if cid not in self.client_loaders or self.client_loaders[cid] is None:
             if cid in self._partition_mapping:
                 self.client_loaders[cid] = dset.make_loaders_from_indices(
@@ -253,15 +400,6 @@ class FDSimulator:
                 )
 
         loader = self.client_loaders[cid]
-        criterion = nn.CrossEntropyLoss()
-
-        if cfg.fd_optimizer == "adam":
-            opt = optim.Adam(model.parameters(), lr=cfg.distillation_lr)
-        else:
-            opt = optim.SGD(model.parameters(), lr=cfg.lr)
-
-        last_loss = 0.0
-        grad_norm = 0.0
         step = 0
         while step < num_steps:
             for x, y in loader:
@@ -269,19 +407,29 @@ class FDSimulator:
                     break
                 x, y = x.to(self.device), y.to(self.device)
                 opt.zero_grad()
-                out = model(x)
-                loss = criterion(out, y)
-                loss.backward()
-                if cfg.track_grad_norm:
-                    try:
-                        total_sq = sum(
-                            p.grad.data.norm(2).item() ** 2
-                            for p in model.parameters() if p.grad is not None
-                        )
-                        grad_norm = total_sq ** 0.5
-                    except Exception:
-                        pass
-                opt.step()
+                with torch.amp.autocast("cuda", enabled=use_amp):
+                    out = model(x)
+                    loss = criterion(out, y)
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    if cfg.track_grad_norm:
+                        scaler.unscale_(opt)
+                        try:
+                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
+                            grad_norm = total_sq ** 0.5
+                        except Exception:
+                            pass
+                    scaler.step(opt)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    if cfg.track_grad_norm:
+                        try:
+                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
+                            grad_norm = total_sq ** 0.5
+                        except Exception:
+                            pass
+                    opt.step()
                 last_loss = float(loss.item())
                 step += 1
                 if cfg.fast_mode and step > 1:
@@ -297,11 +445,14 @@ class FDSimulator:
         """Run client model on public dataset, returning logits of shape (N_pub, C)."""
         model = self.client_models[cid]
         model.eval()
+        if self._public_x_cache is not None:
+            with torch.amp.autocast("cuda", enabled=self._use_amp):
+                return model(self._public_x_cache).float()  # always return fp32 logits
         all_logits = []
         for x, *_ in self.public_loader:
             x = x.to(self.device)
-            logits = model(x)
-            all_logits.append(logits)
+            with torch.amp.autocast("cuda", enabled=self._use_amp):
+                all_logits.append(model(x).float())
         return torch.cat(all_logits, dim=0)
 
     # ------------------------------------------------------------------
@@ -319,34 +470,60 @@ class FDSimulator:
         T = cfg.temperature
         model = self.client_models[cid]
         model.train()
-
-        opt = optim.Adam(model.parameters(), lr=cfg.distillation_lr)
+        opt = self._get_distill_opt(cid)
         total_loss = 0.0
         n_batches = 0
+        target_logits = target_logits.to(self.device)
+        use_amp = self._use_amp
+        scaler = self._scaler
 
-        for epoch in range(num_epochs):
-            offset = 0
-            for x, *_ in self.public_loader:
-                x = x.to(self.device)
-                bs = x.size(0)
-                target_batch = target_logits[offset:offset + bs].to(self.device)
-                offset += bs
-
-                opt.zero_grad()
-                student_logits = model(x)
-
-                # KL(log_softmax(student/T), softmax(target/T)) * T^2
-                log_p = F.log_softmax(student_logits / T, dim=-1)
-                q = F.softmax(target_batch / T, dim=-1)
-                loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
-
-                loss.backward()
-                opt.step()
-                total_loss += loss.item()
-                n_batches += 1
-
-                if cfg.fast_mode and n_batches > 1:
-                    return total_loss / max(1, n_batches)
+        # Use cached public data if available (avoids CPU->GPU transfer)
+        if self._public_x_cache is not None:
+            public_x = self._public_x_cache
+            for epoch in range(num_epochs):
+                for i in range(0, public_x.size(0), cfg.distillation_batch_size):
+                    x_batch = public_x[i:i + cfg.distillation_batch_size]
+                    t_batch = target_logits[i:i + cfg.distillation_batch_size]
+                    opt.zero_grad()
+                    with torch.amp.autocast("cuda", enabled=use_amp):
+                        log_p = F.log_softmax(model(x_batch) / T, dim=-1)
+                        q = F.softmax(t_batch / T, dim=-1)
+                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                    if scaler is not None:
+                        scaler.scale(loss).backward()
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        opt.step()
+                    total_loss += loss.item()
+                    n_batches += 1
+                    if cfg.fast_mode and n_batches > 1:
+                        return total_loss / n_batches
+        else:
+            for epoch in range(num_epochs):
+                offset = 0
+                for x, *_ in self.public_loader:
+                    x = x.to(self.device)
+                    bs = x.size(0)
+                    t_batch = target_logits[offset:offset + bs]
+                    offset += bs
+                    opt.zero_grad()
+                    with torch.amp.autocast("cuda", enabled=use_amp):
+                        log_p = F.log_softmax(model(x) / T, dim=-1)
+                        q = F.softmax(t_batch / T, dim=-1)
+                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                    if scaler is not None:
+                        scaler.scale(loss).backward()
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        opt.step()
+                    total_loss += loss.item()
+                    n_batches += 1
+                    if cfg.fast_mode and n_batches > 1:
+                        return total_loss / n_batches
 
         return total_loss / max(1, n_batches)
 
@@ -360,31 +537,59 @@ class FDSimulator:
         T = cfg.temperature
         model = self.server_model
         model.train()
-
-        opt = optim.Adam(model.parameters(), lr=cfg.distillation_lr)
+        opt = self._get_server_distill_opt()
         total_loss = 0.0
         n_batches = 0
+        aggregated_logits = aggregated_logits.to(self.device)
+        use_amp = self._use_amp
+        scaler = self._scaler
 
-        for epoch in range(num_epochs):
-            offset = 0
-            for x, *_ in self.public_loader:
-                x = x.to(self.device)
-                bs = x.size(0)
-                target_batch = aggregated_logits[offset:offset + bs].to(self.device)
-                offset += bs
-
-                opt.zero_grad()
-                server_logits = model(x)
-                log_p = F.log_softmax(server_logits / T, dim=-1)
-                q = F.softmax(target_batch / T, dim=-1)
-                loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
-                loss.backward()
-                opt.step()
-                total_loss += loss.item()
-                n_batches += 1
-
-                if cfg.fast_mode and n_batches > 1:
-                    return total_loss / max(1, n_batches)
+        if self._public_x_cache is not None:
+            public_x = self._public_x_cache
+            for epoch in range(num_epochs):
+                for i in range(0, public_x.size(0), cfg.distillation_batch_size):
+                    x_batch = public_x[i:i + cfg.distillation_batch_size]
+                    t_batch = aggregated_logits[i:i + cfg.distillation_batch_size]
+                    opt.zero_grad()
+                    with torch.amp.autocast("cuda", enabled=use_amp):
+                        log_p = F.log_softmax(model(x_batch) / T, dim=-1)
+                        q = F.softmax(t_batch / T, dim=-1)
+                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                    if scaler is not None:
+                        scaler.scale(loss).backward()
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        opt.step()
+                    total_loss += loss.item()
+                    n_batches += 1
+                    if cfg.fast_mode and n_batches > 1:
+                        return total_loss / n_batches
+        else:
+            for epoch in range(num_epochs):
+                offset = 0
+                for x, *_ in self.public_loader:
+                    x = x.to(self.device)
+                    bs = x.size(0)
+                    t_batch = aggregated_logits[offset:offset + bs]
+                    offset += bs
+                    opt.zero_grad()
+                    with torch.amp.autocast("cuda", enabled=use_amp):
+                        log_p = F.log_softmax(model(x) / T, dim=-1)
+                        q = F.softmax(t_batch / T, dim=-1)
+                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                    if scaler is not None:
+                        scaler.scale(loss).backward()
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        opt.step()
+                    total_loss += loss.item()
+                    n_batches += 1
+                    if cfg.fast_mode and n_batches > 1:
+                        return total_loss / n_batches
 
         return total_loss / max(1, n_batches)
 
@@ -416,6 +621,12 @@ class FDSimulator:
             c.participation_count = 0
             c.last_selected_round = -1
         set_seed(cfg.seed, deterministic=True)
+        # Reset cached optimizers and AMP scaler
+        self._client_train_opts.clear()
+        self._client_distill_opts.clear()
+        self._server_distill_opt = None
+        if self._use_amp:
+            self._scaler = torch.amp.GradScaler("cuda", enabled=True)
 
         # --- Baseline evaluation (round -1) ---
         metrics = []
@@ -432,6 +643,7 @@ class FDSimulator:
         prev_wall_clock = 0.0
         prev_composite = 0.0
         aggregated_logits: Optional[torch.Tensor] = None
+        last_eval: Dict[str, float] = {}
 
         # --- Round loop ---
         for rnd in range(cfg.rounds):
@@ -459,43 +671,62 @@ class FDSimulator:
             for cid in ids:
                 self.clients[cid].last_selected_round = rnd
 
-            # Phase 2: Local distillation with previously received logits (skip round 0)
+            # Phase 2-4: Per-client distillation + training + inference
+            # Parallelised across clients using CUDA streams when available
             kl_divs = []
-            if aggregated_logits is not None and rnd > 0:
-                for cid in ids:
+            client_logits = {}
+
+            def _process_client(cid: int) -> Tuple[float, torch.Tensor]:
+                """Run distill -> train -> inference for one client. Returns (kl, logits)."""
+                kl = 0.0
+                # Phase 2: Local distillation (skip round 0)
+                if aggregated_logits is not None and rnd > 0:
                     if cfg.group_based and self.channel is not None:
-                        # FedTSKD-G: client receives group-specific logits
                         group = self.clients[cid].meta.get("channel_group", "good")
-                        if group == "bad":
-                            target = aggregated_logits[:, :self.num_classes]
-                        else:
-                            target = aggregated_logits[:, self.num_classes:]
+                        target = aggregated_logits[:, :self.num_classes] if group == "bad" else aggregated_logits[:, self.num_classes:]
                     else:
                         target = aggregated_logits
-
-                    # Apply downlink channel noise per client
                     if self.channel is not None:
                         target = self.channel.downlink_noise(target.clone())
-
                     kl = self._local_distill(cid, target, cfg.distillation_epochs)
-                    kl_divs.append(kl)
 
-            # Phase 3: Local training with dynamic steps
-            for cid in ids:
+                # Phase 3: Local training
                 K_r = self._compute_dynamic_steps(rnd, self.clients[cid].data_size)
                 loss, gnorm = self._local_train(cid, K_r)
                 self.clients[cid].last_loss = loss
                 self.clients[cid].grad_norm = gnorm
                 self.clients[cid].participation_count += 1
 
-            # Phase 4: Inference on public dataset + uplink
-            client_logits = {}
-            for cid in ids:
+                # Phase 4: Inference on public dataset + uplink
                 logits = self._generate_logits(cid)
                 if self.channel is not None:
                     logits = self.channel.quantize(logits)
                     logits = self.channel.uplink_noise(logits)
-                client_logits[cid] = logits
+                return kl, logits
+
+            # Run clients in parallel batches using CUDA streams
+            is_cuda = self.device.startswith("cuda")
+            for batch_start in range(0, len(ids), self._max_parallel):
+                batch_ids = ids[batch_start:batch_start + self._max_parallel]
+
+                if is_cuda and len(batch_ids) > 1:
+                    streams = [torch.cuda.Stream() for _ in batch_ids]
+                    results: List[Tuple[float, torch.Tensor]] = [None] * len(batch_ids)  # type: ignore
+                    for i, cid in enumerate(batch_ids):
+                        with torch.cuda.stream(streams[i]):
+                            results[i] = _process_client(cid)
+                    torch.cuda.synchronize()
+                    for i, cid in enumerate(batch_ids):
+                        kl, logits = results[i]
+                        if kl > 0:
+                            kl_divs.append(kl)
+                        client_logits[cid] = logits
+                else:
+                    for cid in batch_ids:
+                        kl, logits = _process_client(cid)
+                        if kl > 0:
+                            kl_divs.append(kl)
+                        client_logits[cid] = logits
 
             # Phase 5: Server aggregation
             weights = [float(self.clients[cid].data_size) for cid in ids]
@@ -517,11 +748,14 @@ class FDSimulator:
             # Server predicts on public dataset → logits for next round's downlink
             self.server_model.eval()
             with torch.no_grad():
-                server_preds = []
-                for x, *_ in self.public_loader:
-                    x = x.to(self.device)
-                    server_preds.append(self.server_model(x))
-                server_logits = torch.cat(server_preds, dim=0)
+                if self._public_x_cache is not None:
+                    server_logits = self.server_model(self._public_x_cache)
+                else:
+                    server_preds = []
+                    for x, *_ in self.public_loader:
+                        x = x.to(self.device)
+                        server_preds.append(self.server_model(x))
+                    server_logits = torch.cat(server_preds, dim=0)
 
             # For next round, clients will receive the server's predicted logits
             if cfg.group_based:
@@ -558,8 +792,14 @@ class FDSimulator:
                 logit_var = aggregated_logits.var().item() if aggregated_logits is not None else 0.0
                 eff_noise_var = self.channel.effective_noise_variance(len(ids), logit_var)
 
-            # Evaluate client models (average accuracy)
-            m = self._evaluate_clients(sample_ids=ids)
+            # Evaluate client models — skip most rounds for speed
+            eval_every = max(1, cfg.eval_every)
+            do_eval = (rnd % eval_every == 0) or (rnd == cfg.rounds - 1) or (rnd == 0)
+            if do_eval:
+                m = self._evaluate_clients(sample_ids=ids)
+                last_eval = m.copy()
+            else:
+                m = last_eval.copy()
 
             # Fairness metrics
             counts = [c.participation_count for c in self.clients]
@@ -613,10 +853,11 @@ class FDSimulator:
             if on_progress:
                 on_progress(rnd, {"accuracy": m.get("accuracy", 0.0), "metrics": m})
 
-            # Memory management
-            cleanup_memory(force_cuda_empty=(rnd % 5 == 0))
-            if rnd % 3 == 0 and check_memory_critical():
-                self._emergency_cleanup()
+            # Memory management (infrequent — small models don't need aggressive cleanup)
+            if rnd % 50 == 0:
+                cleanup_memory(force_cuda_empty=True)
+                if check_memory_critical():
+                    self._emergency_cleanup()
 
         # --- Convergence summary ---
         convergence = self._convergence_summary(metrics)
@@ -642,33 +883,87 @@ class FDSimulator:
     # ------------------------------------------------------------------
 
     def _evaluate_clients(self, sample_ids: Optional[List[int]] = None) -> Dict[str, float]:
-        """Evaluate client models on test set, returning averaged metrics."""
+        """Evaluate client models on test set, returning averaged metrics.
+
+        Uses GPU-cached test data when available to avoid DataLoader overhead.
+        Iterates test data once per chunk, running all client models per chunk.
+        """
         ids_to_eval = sample_ids or list(range(min(self.cfg.total_clients, 10)))
-        all_accs = []
-        # Collect combined predictions from all client models
-        all_ys = []
-        all_preds = []
+        n_clients = len(ids_to_eval)
+
+        # Set all models to eval mode
+        for cid in ids_to_eval:
+            self.client_models[cid].eval()
+
+        if self._test_x_cache is not None and self._test_y_cache is not None:
+            return self._evaluate_clients_cached(ids_to_eval)
+
+        # Fallback: DataLoader-based evaluation
+        per_client_correct = [0] * n_clients
+        per_client_total = [0] * n_clients
+        all_ys: List[int] = []
+        all_preds: List[int] = []
         total_loss = 0.0
         n_samples = 0
 
-        for cid in ids_to_eval:
-            model = self.client_models[cid]
-            model.eval()
-            with torch.no_grad():
+        with torch.no_grad():
+            for cid_idx, cid in enumerate(ids_to_eval):
+                model = self.client_models[cid]
                 for x, y in self.test_loader:
                     x, y = x.to(self.device), y.to(self.device)
                     out = model(x)
                     total_loss += F.cross_entropy(out, y, reduction='sum').item()
                     preds = out.argmax(dim=1)
+                    per_client_correct[cid_idx] += (preds == y).sum().item()
+                    per_client_total[cid_idx] += y.size(0)
                     all_ys.extend(y.cpu().tolist())
                     all_preds.extend(preds.cpu().tolist())
                     n_samples += y.size(0)
 
-            # Per-client accuracy
-            m = eval_model(model, self.test_loader, self.device)
-            all_accs.append(m.get("accuracy", 0.0))
+        return self._compute_eval_metrics(ids_to_eval, per_client_correct, per_client_total,
+                                          all_ys, all_preds, total_loss, n_samples)
 
-        # Compute averaged metrics
+    def _evaluate_clients_cached(self, ids_to_eval: List[int]) -> Dict[str, float]:
+        """Fast evaluation using GPU-cached test data. Single data iteration, all models per chunk."""
+        n_clients = len(ids_to_eval)
+        N_test = self._test_x_cache.size(0)
+        chunk_size = 512
+
+        per_client_correct = [0] * n_clients
+        per_client_total = [0] * n_clients
+        # Accumulate all predictions as GPU tensors (single .cpu() at end)
+        all_ys_parts: List[torch.Tensor] = []
+        all_preds_parts: List[torch.Tensor] = []
+        total_loss = 0.0
+
+        with torch.no_grad():
+            for start in range(0, N_test, chunk_size):
+                x_chunk = self._test_x_cache[start:start + chunk_size]
+                y_chunk = self._test_y_cache[start:start + chunk_size]
+                bs = x_chunk.size(0)
+
+                for i, cid in enumerate(ids_to_eval):
+                    out = self.client_models[cid](x_chunk)
+                    total_loss += F.cross_entropy(out, y_chunk, reduction='sum').item()
+                    preds = out.argmax(dim=1)
+                    per_client_correct[i] += (preds == y_chunk).sum().item()
+                    per_client_total[i] += bs
+                    all_ys_parts.append(y_chunk)
+                    all_preds_parts.append(preds)
+
+        # Single GPU->CPU transfer
+        all_ys = torch.cat(all_ys_parts).cpu().tolist()
+        all_preds = torch.cat(all_preds_parts).cpu().tolist()
+        n_samples = N_test * n_clients
+
+        return self._compute_eval_metrics(ids_to_eval, per_client_correct, per_client_total,
+                                          all_ys, all_preds, total_loss, n_samples)
+
+    def _compute_eval_metrics(self, ids_to_eval, per_client_correct, per_client_total,
+                              all_ys, all_preds, total_loss, n_samples) -> Dict[str, float]:
+        """Compute accuracy, F1, precision, recall from accumulated predictions."""
+        all_accs = [c / max(t, 1) for c, t in zip(per_client_correct, per_client_total)]
+
         try:
             from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
             accuracy = accuracy_score(all_ys, all_preds)
@@ -679,15 +974,12 @@ class FDSimulator:
             accuracy = sum(1 for y, p in zip(all_ys, all_preds) if y == p) / max(len(all_ys), 1)
             f1 = precision = recall = 0.0
 
-        avg_loss = total_loss / max(n_samples, 1)
-
-        # Client accuracy std
         import statistics
         acc_std = statistics.stdev(all_accs) if len(all_accs) > 1 else 0.0
 
         return {
             "accuracy": accuracy,
-            "loss": avg_loss,
+            "loss": total_loss / max(n_samples, 1),
             "f1": f1,
             "precision": precision,
             "recall": recall,
