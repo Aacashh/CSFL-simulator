@@ -83,6 +83,9 @@ class SimConfig:
     channel_threshold: float = 0.5       # Threshold for good/bad channel groups
     # FD optimizer
     fd_optimizer: str = "adam"           # Optimizer for FD local training (paper: adam)
+    # Performance tuning
+    eval_every: int = 5                  # Evaluate every N rounds (0 = every round)
+    use_amp: bool = False                # Mixed precision (AMP) — faster on Turing+ GPUs
 
 
 class FLSimulator:

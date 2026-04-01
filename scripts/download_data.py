@@ -31,6 +31,8 @@ def normalize_name(name: str) -> str:
         return "cifar100"
     if lowered in {"mnist"}:
         return "mnist"
+    if lowered in {"stl10", "stl-10", "stl_10"}:
+        return "stl10"
     return lowered
 
 
@@ -51,11 +53,17 @@ def get_supported() -> Dict[str, Callable[[Path], None]]:
         datasets.CIFAR100(root, train=True, download=True)
         datasets.CIFAR100(root, train=False, download=True)
 
+    def _stl10(root: Path) -> None:
+        datasets.STL10(root, split="train", download=True)
+        datasets.STL10(root, split="test", download=True)
+        datasets.STL10(root, split="unlabeled", download=True)
+
     return {
         "mnist": _mnist,
         "fashion-mnist": _fmnist,
         "cifar10": _cifar10,
         "cifar100": _cifar100,
+        "stl10": _stl10,
     }
 
 
