@@ -687,7 +687,8 @@ class FDSimulator:
                     else:
                         target = aggregated_logits
                     if self.channel is not None:
-                        target = self.channel.downlink_noise(target.clone())
+                        target = self.channel.quantize(target.clone())
+                        target = self.channel.downlink_noise(target)
                     kl = self._local_distill(cid, target, cfg.distillation_epochs)
 
                 # Phase 3: Local training
@@ -797,6 +798,10 @@ class FDSimulator:
             do_eval = (rnd % eval_every == 0) or (rnd == cfg.rounds - 1) or (rnd == 0)
             if do_eval:
                 m = self._evaluate_clients(sample_ids=ids)
+                server_m = self._evaluate_server()
+                m["server_accuracy"] = server_m.get("accuracy", 0.0)
+                m["server_loss"] = server_m.get("loss", 0.0)
+                m["server_f1"] = server_m.get("f1", 0.0)
                 last_eval = m.copy()
             else:
                 m = last_eval.copy()
@@ -986,6 +991,10 @@ class FDSimulator:
             "accuracy_std": acc_std,
             "num_clients_evaluated": len(ids_to_eval),
         }
+
+    def _evaluate_server(self) -> Dict[str, float]:
+        """Evaluate the server model on the test set (selection-independent metric)."""
+        return eval_model(self.server_model, self.test_loader, self.device)
 
     def _convergence_summary(self, metrics: List[Dict]) -> Dict[str, Any]:
         """Compute convergence efficiency metrics from the round-by-round metrics."""

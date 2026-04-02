@@ -1,0 +1,33 @@
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{adjustbox}
+\usepackage{float}
+
+% Prevent tables from being cut off -- scale wide tables to fit page width
+\let\oldlongtable\longtable
+\let\endoldlongtable\endlongtable
+\renewenvironment{longtable}[1]{%
+  \begin{adjustbox}{max width=\textwidth}%
+  \begin{oldlongtable}{#1}%
+}{%
+  \end{oldlongtable}%
+  \end{adjustbox}%
+}
+
+% Also handle regular tabular
+\let\oldtabular\tabular
+\let\endoldtabular\endtabular
+\renewenvironment{tabular}[1]{%
+  \begin{adjustbox}{max width=\textwidth}%
+  \begin{oldtabular}{#1}%
+}{%
+  \end{oldtabular}%
+  \end{adjustbox}%
+}
+
+% Tighter spacing for tables
+\renewcommand{\arraystretch}{1.15}
+
+% Better code block formatting
+\usepackage{fancyvrb}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{fontsize=\small,commandchars=\\\{\}}

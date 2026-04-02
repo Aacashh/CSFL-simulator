@@ -98,19 +98,19 @@ Thumbs.db
 ###############################
 # PDFs & doc build artifacts
 ###############################
-*.pdf
-docs/*.log
-docs/_pdf_header.tex
+# *.pdf
+# docs/*.log
+# docs/_pdf_header.tex
 
 ###############################
 # Experiment protocol (local)
 ###############################
-docs/FD_experiments.md
+# docs/FD_experiments.md
 
 ###############################
 # Paper build output
-###############################
-paper/
+##############################
+# paper/
 
 ###############################
 # Env files
