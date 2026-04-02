@@ -235,9 +235,12 @@ python -m csfl_simulator list-runs  # Shows name, method, dataset, accuracy, pat
 | CNN-MNIST (FedAvg) | MNIST |
 | LightCNN | CIFAR-10, CIFAR-100 |
 | ResNet18 | CIFAR-10, CIFAR-100 |
-| FD-CNN1 (~1.2M params) | All (FD heterogeneity) |
-| FD-CNN2 (~79K params) | All (FD heterogeneity) |
-| FD-CNN3 (~25K params) | All (FD heterogeneity) |
+| FD-CNN1 (~545K params) | MNIST, Fashion-MNIST (FD heterogeneity) |
+| FD-CNN2 (~102K params) | MNIST, Fashion-MNIST (FD heterogeneity) |
+| FD-CNN3 (~68K params) | MNIST, Fashion-MNIST (FD heterogeneity) |
+| ResNet18-FD (~11.2M params) | CIFAR-10, CIFAR-100 (FD heterogeneity) |
+| MobileNetV2-FD (~2.2M params) | CIFAR-10, CIFAR-100 (FD heterogeneity) |
+| ShuffleNetV2-FD (~350K params) | CIFAR-10, CIFAR-100 (FD heterogeneity) |
 
 ## Output Metrics (per round)
 
