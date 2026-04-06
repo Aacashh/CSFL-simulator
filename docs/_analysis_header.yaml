@@ -1,0 +1,36 @@
+---
+title: "Client Selection for Federated Distillation"
+subtitle: "Comprehensive Experiment Analysis"
+author: "Aakash Sharma"
+date: "April 2026"
+geometry:
+  - top=20mm
+  - bottom=20mm
+  - left=18mm
+  - right=18mm
+fontsize: 10pt
+mainfont: "Times New Roman"
+monofont: "Consolas"
+documentclass: article
+classoption:
+  - a4paper
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup{font=small,labelfont=bf}
+  - \usepackage{graphicx}
+  - \usepackage{adjustbox}
+  - \renewcommand{\arraystretch}{1.2}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhead[L]{\small Client Selection for FD}
+  - \fancyhead[R]{\small\thepage}
+  - \fancyfoot[C]{}
+  - \let\oldtable\table
+  - \let\endoldtable\endtable
+  - \renewenvironment{table}[1][htbp]{\begin{oldtable}[H]\centering\small}{\end{oldtable}}
+  - \let\oldlongtable\longtable
+  - \let\endoldlongtable\endlongtable
+---

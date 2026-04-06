@@ -119,3 +119,8 @@ Thumbs.db
 .env.*
 .envrc
 
+docs\figures\analysis
+docs\FD_experiment_analysis.md
+docs\FD_experiment_analysis.pdf
+docs\FD_novel_methods_and_experiments.md
+docs\_analysis_pdf_header.tex
