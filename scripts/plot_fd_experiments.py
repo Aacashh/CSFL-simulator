@@ -31,7 +31,7 @@ from pathlib import Path
 
 # Academic colour palette (colour-blind safe, print-friendly)
 COLORS = [
-    "#1f77b4",  # muted blue    — FedAvg
+    "#1f77b4",  # muted blue    — FedAvg / Random
     "#d62728",  # brick red     — FedCS
     "#2ca02c",  # cooked green  — TiFL
     "#9467bd",  # muted purple  — FedCor
@@ -39,6 +39,12 @@ COLORS = [
     "#e377c2",  # pink          — APEX v2
     "#17becf",  # cyan          — Oort
     "#ff7f0e",  # safety orange — LabelCov
+    "#006400",  # dark green    — SNRD
+    "#DC143C",  # crimson       — LQTS
+    "#4169E1",  # royal blue    — NRFS
+    "#FF8C00",  # dark orange   — LEM
+    "#808080",  # gray          — ablations
+    "#A0522D",  # sienna        — ablations
 ]
 
 MARKERS = ["o", "s", "^", "D", "v", "*", "P", "X"]
@@ -65,6 +71,19 @@ SHORT_NAMES = {
     "system_aware.oort":   "Oort",
     "heuristic.label_coverage": "LabelCov",
     "heuristic.random":    "Random",
+    # FD-Native
+    "fd_native.snr_diversity":      "SNRD",
+    "fd_native.logit_quality_ts":   "LQTS",
+    "fd_native.noise_robust_fair":  "NRFS",
+    "fd_native.logit_entropy_max":  "LEM",
+    # Ablations
+    "fd_native.snrd_ablation_fixed_w":      "SNRD-fixW",
+    "fd_native.snrd_ablation_no_channel":   "SNRD-noCh",
+    "fd_native.snrd_ablation_no_diversity": "SNRD-noDiv",
+    "fd_native.snrd_ablation_no_fairness":  "SNRD-noFair",
+    "fd_native.lqts_ablation_global_reward":"LQTS-global",
+    "fd_native.lqts_ablation_no_diversity": "LQTS-noDiv",
+    "fd_native.lqts_ablation_no_recency":   "LQTS-noRec",
 }
 
 METRIC_LABELS = {
@@ -83,6 +102,15 @@ METRIC_LABELS = {
     "wall_clock":           "Wall Clock (s)",
     "composite":            "Composite Score",
     "distillation_loss_avg":"Distillation Loss",
+    "logit_entropy_avg":           "Avg. Logit Entropy",
+    "logit_cosine_diversity":      "Logit Cosine Diversity",
+    "logit_entropy_var":           "Logit Entropy Variance",
+    "per_class_accuracy_std":      "Per-Class Acc. Std. Dev.",
+    "participation_gini":          "Participation Gini",
+    "channel_quality_selected_avg":"Avg. Selected Channel Quality",
+    "label_coverage_ratio":        "Label Coverage Ratio",
+    "server_client_gap":           "Server-Client Acc. Gap",
+    "server_accuracy":             "Server Testing Accuracy",
 }
 
 

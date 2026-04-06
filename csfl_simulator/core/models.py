@@ -183,6 +183,43 @@ class FDCNN3(nn.Module):
         return self.fc2(x)
 
 
+class MobileNetV2FD(nn.Module):
+    """MobileNetV2 variant for FD experiments (~2.2M params for CIFAR-10).
+    Uses torchvision MobileNetV2 backbone with adapted first conv and classifier."""
+    def __init__(self, num_classes: int = 10, in_channels: int = 3, image_size: int = 32):
+        super().__init__()
+        from torchvision.models import mobilenet_v2
+        base = mobilenet_v2(weights=None)
+        # Adapt first conv for smaller images / different channels
+        base.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1, bias=False)
+        base.classifier = nn.Sequential(
+            nn.Dropout(0.2),
+            nn.Linear(base.last_channel, num_classes),
+        )
+        self.model = base
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, 3) if x.shape[1] != 3 else x
+        return self.model(x)
+
+
+class ShuffleNetV2FD(nn.Module):
+    """ShuffleNetV2 x0.5 variant for FD experiments (~350K params for CIFAR-10).
+    Uses torchvision ShuffleNetV2 backbone with adapted first conv and classifier."""
+    def __init__(self, num_classes: int = 10, in_channels: int = 3, image_size: int = 32):
+        super().__init__()
+        from torchvision.models import shufflenet_v2_x0_5
+        base = shufflenet_v2_x0_5(weights=None)
+        # Adapt first conv for smaller images
+        base.conv1[0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=1, padding=1, bias=False)
+        base.fc = nn.Linear(base.fc.in_features, num_classes)
+        self.model = base
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, 3) if x.shape[1] != 3 else x
+        return self.model(x)
+
+
 def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
     if d in ("mnist", "fashion-mnist", "fashionmnist"):
@@ -210,13 +247,17 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
         model = FDCNN2(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("fd-cnn3", "fd_cnn3", "fdcnn3"):
         model = FDCNN3(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
-    elif name_l == "resnet18":
+    elif name_l in ("resnet18", "resnet18-fd"):
         m = resnet18(weights=None)
-        # Adapt first conv to dataset channels when needed
-        if in_ch != 3:
-            m.conv1 = nn.Conv2d(in_ch, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Adapt first conv for small images (CIFAR 32x32) and different channels
+        m.conv1 = nn.Conv2d(in_ch, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        m.maxpool = nn.Identity()  # Remove maxpool for 32x32 inputs
         m.fc = nn.Linear(m.fc.in_features, num_classes)
         model = m
+    elif name_l in ("mobilenetv2-fd", "mobilenetv2_fd", "mobilenet_v2_fd"):
+        model = MobileNetV2FD(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("shufflenetv2-fd", "shufflenetv2_fd", "shufflenet_v2_fd"):
+        model = ShuffleNetV2FD(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     else:
         raise ValueError(f"Unknown model: {name}")
     model = model.to(device)

@@ -351,6 +351,86 @@ methods:
     params: {use_adaptive_gamma: false}
     type: ml
     trainable: false
+  # --- FD-Native Methods ---
+  - key: fd_native.snr_diversity
+    module: csfl_simulator.selection.fd_native.snr_diversity
+    display_name: "SNRD (SNR-Aware Diversity)"
+    origin: proposed
+    params: {w_fairness: 0.15, noise_threshold: 1.0, channel_ema_alpha: 0.3}
+    type: fd_native
+    trainable: false
+  - key: fd_native.logit_quality_ts
+    module: csfl_simulator.selection.fd_native.logit_quality_ts
+    display_name: "LQTS (Logit-Quality Thompson)"
+    origin: proposed
+    params: {ema_alpha: 0.3, variance_floor_scale: 0.1, w_diversity: 0.25, w_recency: 0.15}
+    type: fd_native
+    trainable: true
+  - key: fd_native.noise_robust_fair
+    module: csfl_simulator.selection.fd_native.noise_robust_fair
+    display_name: "NRFS (Noise-Robust Fair)"
+    origin: proposed
+    params: {max_defer: 3, channel_percentile: 20}
+    type: fd_native
+    trainable: false
+  - key: fd_native.logit_entropy_max
+    module: csfl_simulator.selection.fd_native.logit_entropy_max
+    display_name: "LEM (Logit Entropy Max)"
+    origin: proposed
+    params: {noise_penalty: 0.5, entropy_ema_alpha: 0.3, w_fairness: 0.15, max_entropy_ratio: 0.95, min_entropy_var: 0.01}
+    type: fd_native
+    trainable: false
+  # --- SNRD Ablation Variants ---
+  - key: fd_native.snrd_ablation_fixed_w
+    module: csfl_simulator.selection.fd_native.snr_diversity
+    display_name: "SNRD (fixed w=0.5)"
+    origin: ablation
+    params: {w_fairness: 0.15, fixed_w_channel: 0.5}
+    type: fd_native
+    trainable: false
+  - key: fd_native.snrd_ablation_no_channel
+    module: csfl_simulator.selection.fd_native.snr_diversity
+    display_name: "SNRD (no channel)"
+    origin: ablation
+    params: {w_fairness: 0.15, fixed_w_channel: 0.0}
+    type: fd_native
+    trainable: false
+  - key: fd_native.snrd_ablation_no_diversity
+    module: csfl_simulator.selection.fd_native.snr_diversity
+    display_name: "SNRD (no diversity)"
+    origin: ablation
+    params: {w_fairness: 0.15, fixed_w_channel: 0.85}
+    type: fd_native
+    trainable: false
+  - key: fd_native.snrd_ablation_no_fairness
+    module: csfl_simulator.selection.fd_native.snr_diversity
+    display_name: "SNRD (no fairness)"
+    origin: ablation
+    params: {w_fairness: 0.0, noise_threshold: 1.0}
+    type: fd_native
+    trainable: false
+  # --- LQTS Ablation Variants ---
+  - key: fd_native.lqts_ablation_global_reward
+    module: csfl_simulator.selection.fd_native.logit_quality_ts
+    display_name: "LQTS (global reward)"
+    origin: ablation
+    params: {use_global_reward: true, w_diversity: 0.25, w_recency: 0.15}
+    type: fd_native
+    trainable: true
+  - key: fd_native.lqts_ablation_no_diversity
+    module: csfl_simulator.selection.fd_native.logit_quality_ts
+    display_name: "LQTS (no diversity)"
+    origin: ablation
+    params: {w_diversity: 0.0, w_recency: 0.15}
+    type: fd_native
+    trainable: true
+  - key: fd_native.lqts_ablation_no_recency
+    module: csfl_simulator.selection.fd_native.logit_quality_ts
+    display_name: "LQTS (no recency)"
+    origin: ablation
+    params: {w_diversity: 0.25, w_recency: 0.0}
+    type: fd_native
+    trainable: true
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"

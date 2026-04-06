@@ -729,6 +729,55 @@ class FDSimulator:
                             kl_divs.append(kl)
                         client_logits[cid] = logits
 
+            # --- Per-client logit statistics (for FD-native selectors) ---
+            fd_logit_stats = {}
+            logit_entropy_vals = []
+            logit_entropy_var_vals = []
+            if client_logits and len(client_logits) > 1:
+                all_logit_tensors = [client_logits[cid] for cid in ids]
+                stacked = torch.stack(all_logit_tensors)  # (K, N_pub, C)
+                mean_logits = stacked.mean(dim=0)  # (N_pub, C)
+                # Pairwise cosine distances for diversity
+                flat_vecs = stacked.view(len(ids), -1)  # (K, N_pub*C)
+                norms = flat_vecs.norm(dim=1, keepdim=True).clamp(min=1e-8)
+                normed = flat_vecs / norms
+                cos_sim_matrix = normed @ normed.t()  # (K, K)
+                # Mean pairwise cosine distance (1 - sim, excluding diagonal)
+                K_sel = len(ids)
+                if K_sel > 1:
+                    mask = 1.0 - torch.eye(K_sel, device=cos_sim_matrix.device)
+                    logit_cosine_div = ((1.0 - cos_sim_matrix) * mask).sum().item() / (K_sel * (K_sel - 1))
+                else:
+                    logit_cosine_div = 0.0
+
+                for cid in ids:
+                    cl = client_logits[cid]
+                    # Cosine similarity to mean
+                    cos_sim = F.cosine_similarity(
+                        cl.reshape(1, -1), mean_logits.reshape(1, -1)
+                    ).item()
+                    # Logit entropy per sample
+                    probs = F.softmax(cl, dim=-1).clamp(min=1e-10)
+                    ent_per_sample = -(probs * probs.log()).sum(dim=-1)  # (N_pub,)
+                    entropy_mean = ent_per_sample.mean().item()
+                    entropy_var = ent_per_sample.var().item() if cl.shape[0] > 1 else 0.0
+                    logit_entropy_vals.append(entropy_mean)
+                    logit_entropy_var_vals.append(entropy_var)
+                    fd_logit_stats[cid] = {
+                        "cosine_to_mean": cos_sim,
+                        "entropy_mean": entropy_mean,
+                        "entropy_var": entropy_var,
+                    }
+                data_sizes = {cid: self.clients[cid].data_size for cid in ids}
+                total_data = sum(data_sizes.values())
+                self.history["state"]["fd_logit_stats"] = fd_logit_stats
+                self.history["state"]["fd_logit_rewards"] = {
+                    cid: stats["cosine_to_mean"] * (data_sizes[cid] / max(total_data, 1))
+                    for cid, stats in fd_logit_stats.items()
+                }
+            else:
+                logit_cosine_div = 0.0
+
             # Phase 5: Server aggregation
             weights = [float(self.clients[cid].data_size) for cid in ids]
             logit_list = [client_logits[cid] for cid in ids]
@@ -839,6 +888,14 @@ class FDSimulator:
                 "num_bad_channel": n_bad,
                 "client_accuracy_avg": m.get("accuracy", 0.0),
                 "client_accuracy_std": m.get("accuracy_std", 0.0),
+                # New FD-native metrics
+                "logit_entropy_avg": (sum(logit_entropy_vals) / len(logit_entropy_vals)) if logit_entropy_vals else 0.0,
+                "logit_entropy_var": (sum(logit_entropy_var_vals) / len(logit_entropy_var_vals)) if logit_entropy_var_vals else 0.0,
+                "logit_cosine_diversity": logit_cosine_div,
+                "server_client_gap": m.get("server_accuracy", 0.0) - m.get("accuracy", 0.0),
+                "channel_quality_selected_avg": sum(self.clients[cid].channel_quality for cid in ids) / max(len(ids), 1),
+                "label_coverage_ratio": self._label_coverage_ratio(ids),
+                "participation_gini": fairness_gini,
             })
 
             # Composite score (same formula as FL for comparability)
@@ -882,6 +939,21 @@ class FDSimulator:
             "participation_counts": [c.participation_count for c in self.clients],
             "convergence": convergence,
         }
+
+    def _label_coverage_ratio(self, ids: List[int]) -> float:
+        """Fraction of classes represented by at least one selected client."""
+        covered = set()
+        for cid in ids:
+            h = self.clients[cid].label_histogram
+            if isinstance(h, dict):
+                for cls, cnt in h.items():
+                    if cnt > 0:
+                        covered.add(int(cls))
+            elif isinstance(h, (list, tuple)):
+                for cls, cnt in enumerate(h):
+                    if cnt > 0:
+                        covered.add(cls)
+        return len(covered) / max(self.num_classes, 1)
 
     # ------------------------------------------------------------------
     # Evaluation helpers
