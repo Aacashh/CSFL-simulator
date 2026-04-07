@@ -30,6 +30,11 @@ def fedavg(state_dicts, weights, keep_on_device: bool = True):
         for k in state_dicts[0].keys():
             v0 = state_dicts[0][k]
             if isinstance(v0, torch.Tensor):
+                # Integer tensors (e.g. BatchNorm num_batches_tracked) cannot
+                # be scaled by floats — just take the value from client 0.
+                if not v0.is_floating_point():
+                    new_sd[k] = v0.detach().clone()
+                    continue
                 # Keep tensors on device for GPU-accelerated aggregation
                 if keep_on_device:
                     acc = v0.detach().clone().mul_(scales[0])
