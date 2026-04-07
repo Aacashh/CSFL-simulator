@@ -74,15 +74,16 @@ log() {
 }
 
 # Filter logic: --exp apex => all APEX, --exp fd:3 => FD exp 3, --exp apex:1 => APEX exp 1
+# Supports comma-separated: --exp "apex:4,apex:6,apex:7"
 should_run() {
     local suite="$1" exp="$2"  # e.g. suite=apex exp=1
     [[ -z "$RUN_ONLY" ]] && return 0
-    # Exact match: "apex:1"
-    [[ "$RUN_ONLY" == "${suite}:${exp}" ]] && return 0
-    # Suite-only match: "apex"
-    [[ "$RUN_ONLY" == "${suite}" ]] && return 0
-    # Bare number for backwards compat with old scripts (matches apex)
-    [[ "$RUN_ONLY" =~ ^[0-9]+$ ]] && [[ "$suite" == "apex" ]] && [[ "$RUN_ONLY" == "$exp" ]] && return 0
+    IFS=',' read -ra FILTERS <<< "$RUN_ONLY"
+    for f in "${FILTERS[@]}"; do
+        [[ "$f" == "${suite}:${exp}" ]] && return 0
+        [[ "$f" == "${suite}" ]] && return 0
+        [[ "$f" =~ ^[0-9]+$ ]] && [[ "$suite" == "apex" ]] && [[ "$f" == "$exp" ]] && return 0
+    done
     return 1
 }
 
