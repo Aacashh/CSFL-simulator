@@ -256,11 +256,11 @@ if should_run apex 3; then
         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
         --model ResNet18 --total-clients 200 --clients-per-round 20 --rounds 200
 
-    log "APEX 3c: Scalability N=500, K=50"
-    run_seeded "scale_n500" "${APEX_SCALE}" \
-        ${BASE_FL} \
-        --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
-        --model ResNet18 --total-clients 500 --clients-per-round 50 --rounds 200
+    # log "APEX 3c: Scalability N=500, K=50"
+    # run_seeded "scale_n500" "${APEX_SCALE}" \
+    #     ${BASE_FL} \
+    #     --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
+    #     --model ResNet18 --total-clients 500 --clients-per-round 50 --rounds 200
 fi
 
 # =============================================================================
@@ -314,26 +314,26 @@ fi
 # APEX 7: v1 vs v2 Head-to-Head
 # =============================================================================
 if should_run apex 7; then
-    log "APEX 7: v1 vs v2 (alpha=0.3, N=50)"
-    run_one "v1v2_a03_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
-        --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
-        --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
+#     log "APEX 7: v1 vs v2 (alpha=0.3, N=50)"
+#     run_one "v1v2_a03_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
+#         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
+#         --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
 
-    log "APEX 7: v1 vs v2 (alpha=0.1, N=50)"
-    run_one "v1v2_a01_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
-        --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.1 \
-        --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
+#     log "APEX 7: v1 vs v2 (alpha=0.1, N=50)"
+#     run_one "v1v2_a01_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
+#         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.1 \
+#         --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
 
-    log "APEX 7: v1 vs v2 (alpha=0.6, N=50)"
-    run_one "v1v2_a06_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
-        --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.6 \
-        --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
+#     log "APEX 7: v1 vs v2 (alpha=0.6, N=50)"
+#     run_one "v1v2_a06_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
+#         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.6 \
+#         --model ResNet18 --total-clients 50 --clients-per-round 10 --rounds 200
 
-    log "APEX 7: v1 vs v2 (alpha=0.3, N=100)"
-    run_one "v1v2_n100_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
-        --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
-        --model ResNet18 --total-clients 100 --clients-per-round 10 --rounds 200
-fi
+#     log "APEX 7: v1 vs v2 (alpha=0.3, N=100)"
+#     run_one "v1v2_n100_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
+#         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
+#         --model ResNet18 --total-clients 100 --clients-per-round 10 --rounds 200
+# fi
 
 # =============================================================================
 # APEX 8: LightCNN comparison (model-independence)
