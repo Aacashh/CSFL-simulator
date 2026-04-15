@@ -665,4 +665,3 @@ fi
 echo ""
 echo "  Results in: artifacts/runs/"
 echo "  Run: python -m csfl_simulator list-runs"
-echo ""
