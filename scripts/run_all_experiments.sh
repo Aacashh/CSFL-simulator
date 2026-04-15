@@ -333,7 +333,8 @@ if should_run apex 7; then
 #     run_one "v1v2_n100_s42" --methods "${APEX_V1V2}" ${BASE_FL} --seed 42 \
 #         --dataset CIFAR-10 --partition dirichlet --dirichlet-alpha 0.3 \
 #         --model ResNet18 --total-clients 100 --clients-per-round 10 --rounds 200
-# fi
+    echo "  [SKIP] APEX 7 (v1 vs v2) — commented out"
+fi
 
 # =============================================================================
 # APEX 8: LightCNN comparison (model-independence)
