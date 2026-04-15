@@ -370,10 +370,11 @@ def fig03_heterogeneity_sweep(plt, out: Path):
 
 
 def fig04_scalability(plt, out: Path):
-    """Accuracy vs number of clients (N=50, 100)."""
+    """Accuracy vs number of clients (N=50, 100, 200)."""
     scale_cfgs = [
         (50, "main_cifar10_a03"),
         (100, "scale_n100"),
+        (200, "scale_n200"),
     ]
 
     all_seeds = {}
@@ -412,7 +413,8 @@ def fig04_scalability(plt, out: Path):
 
     ax.set_xlabel("Total Clients (N)")
     ax.set_ylabel("Final Accuracy")
-    ax.set_title("Scalability: CIFAR-10, $\\alpha$=0.3, K=10")
+    k_note = "/".join(str(n // 10 if n <= 100 else n // 10) for n in ns)
+    ax.set_title(f"Scalability: CIFAR-10, $\\alpha$=0.3")
     ax.set_xticks(ns)
     ax.legend(loc="upper right", fontsize=6.5)
     plt.tight_layout()
@@ -546,13 +548,16 @@ def fig08_apex_advantage_heatmap(plt, out: Path):
         "$\\alpha$=0.3\nN=50": "main_cifar10_a03",
         "$\\alpha$=0.6\nN=50": "het_a06",
         "$\\alpha$=0.3\nN=100": "scale_n100",
+        "$\\alpha$=0.3\nN=200": "scale_n200",
+        "CIFAR-100\n$\\alpha$=0.3": "cifar100",
+        "IID\nCIFAR-10": "iid",
     }
 
     baselines = ["baseline.fedavg", "system_aware.oort", "system_aware.poc", "heuristic.mmr_diverse"]
     baseline_names = [SHORT.get(m, m) for m in baselines]
     setting_names = list(experiments.keys())
 
-    matrix = np.zeros((len(baselines), len(experiments)))
+    matrix = np.full((len(baselines), len(experiments)), np.nan)
 
     for j, (setting, prefix) in enumerate(experiments.items()):
         seeds = load_seeds(prefix)
@@ -564,12 +569,13 @@ def fig08_apex_advantage_heatmap(plt, out: Path):
             if base_mean > 0:
                 matrix[i, j] = (apex_mean - base_mean) * 100  # percentage points
 
-    fig, ax = plt.subplots(figsize=(4.5, 2.8))
+    fig, ax = plt.subplots(figsize=(6.5, 2.8))
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto",
-                   vmin=-3, vmax=8)
+    masked = np.ma.masked_invalid(matrix)
+    im = ax.imshow(masked, cmap="RdYlGn", aspect="auto",
+                   vmin=-3, vmax=15)
     ax.set_xticks(np.arange(len(setting_names)))
     ax.set_xticklabels(setting_names, fontsize=7)
     ax.set_yticks(np.arange(len(baselines)))
@@ -579,10 +585,14 @@ def fig08_apex_advantage_heatmap(plt, out: Path):
     for i in range(len(baselines)):
         for j in range(len(experiments)):
             val = matrix[i, j]
+            if np.isnan(val):
+                ax.text(j, i, "N/A", ha="center", va="center",
+                        fontsize=7, color="gray")
+                continue
             color = "white" if abs(val) > 4 else "black"
             sign = "+" if val > 0 else ""
             ax.text(j, i, f"{sign}{val:.1f}", ha="center", va="center",
-                    fontsize=7.5, color=color, fontweight="bold")
+                    fontsize=7, color=color, fontweight="bold")
 
     plt.colorbar(im, ax=ax, shrink=0.8, label="Accuracy Advantage (pp)")
     plt.tight_layout()
@@ -652,25 +662,257 @@ def fig09_convergence_speed(plt, out: Path):
     print("  -> fig09_convergence_speed")
 
 
-def fig10_scale_convergence(plt, out: Path):
-    """Side-by-side convergence: N=50 vs N=100."""
-    seeds_50 = load_seeds("main_cifar10_a03")
-    seeds_100 = load_seeds("scale_n100")
+def fig10a_ablation_bars(plt, out: Path):
+    """Ablation: accuracy of full APEX v2 vs each component-removed variant."""
+    seeds = load_seeds("ablation")
+    if not seeds:
+        print("  [SKIP] fig10a -- no ablation data")
+        return
 
-    if not seeds_50 or not seeds_100:
+    ablation_order = [
+        "ml.apex_v2",
+        "ml.apex_v2_no_adaptive_recency",
+        "ml.apex_v2_no_hysteresis",
+        "ml.apex_v2_no_het_scaling",
+        "ml.apex_v2_no_posterior_reg",
+        "ml.apex_v2_no_adaptive_gamma",
+    ]
+    abl_short = {
+        "ml.apex_v2":                     "APEX v2 (Full)",
+        "ml.apex_v2_no_adaptive_recency": "w/o Adapt. Recency",
+        "ml.apex_v2_no_hysteresis":       "w/o Phase Hysteresis",
+        "ml.apex_v2_no_het_scaling":      "w/o Het-Scaling",
+        "ml.apex_v2_no_posterior_reg":    "w/o Post. Regulariz.",
+        "ml.apex_v2_no_adaptive_gamma":   "w/o Adapt. Gamma",
+    }
+
+    methods = [m for m in ablation_order if m in seeds[0].get("results", {})]
+    means, stds = [], []
+    for m in methods:
+        mu, sigma = mean_final_across_seeds(seeds, m, "accuracy")
+        means.append(mu)
+        stds.append(sigma)
+    names = [abl_short.get(m, m) for m in methods]
+
+    # Sort by accuracy descending
+    order = np.argsort(means)[::-1]
+
+    fig, ax = plt.subplots(figsize=(4.0, 2.8))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    y = np.arange(len(methods))
+    colors = [ABLATION_COLORS.get(methods[i], "#888") for i in order]
+    ax.barh(y, [means[i] for i in order], xerr=[stds[i] for i in order],
+            height=0.6, color=colors, edgecolor="white", linewidth=0.5,
+            capsize=3, error_kw={"linewidth": 0.8})
+    ax.set_yticks(y)
+    ax.set_yticklabels([names[i] for i in order], fontsize=7)
+    ax.set_xlabel("Final Accuracy (mean +/- std)")
+    ax.set_title("Ablation Study: CIFAR-10, $\\alpha$=0.3")
+    ax.invert_yaxis()
+
+    # Full APEX line
+    full_idx = methods.index("ml.apex_v2") if "ml.apex_v2" in methods else None
+    if full_idx is not None:
+        ax.axvline(x=means[full_idx], color=ABLATION_COLORS["ml.apex_v2"],
+                   linestyle="--", linewidth=0.8, alpha=0.7)
+
+    for i, idx in enumerate(order):
+        ax.text(means[idx] + stds[idx] + 0.003, i,
+                f"{means[idx]:.3f}$\\pm${stds[idx]:.3f}",
+                va="center", fontsize=6)
+
+    ax.set_xlim(right=max(means) + max(stds) + 0.06)
+    plt.tight_layout()
+    fig.savefig(out / "fig10a_ablation.png")
+    fig.savefig(out / "fig10a_ablation.eps")
+    plt.close(fig)
+    print("  -> fig10a_ablation")
+
+
+def fig10b_ablation_delta(plt, out: Path):
+    """Ablation: accuracy delta (pp) from removing each component."""
+    seeds = load_seeds("ablation")
+    if not seeds:
+        print("  [SKIP] fig10b -- no ablation data")
+        return
+
+    ablation_variants = [
+        "ml.apex_v2_no_adaptive_recency",
+        "ml.apex_v2_no_hysteresis",
+        "ml.apex_v2_no_het_scaling",
+        "ml.apex_v2_no_posterior_reg",
+        "ml.apex_v2_no_adaptive_gamma",
+    ]
+    component_names = {
+        "ml.apex_v2_no_adaptive_recency": "Adaptive Recency",
+        "ml.apex_v2_no_hysteresis":       "Phase Hysteresis",
+        "ml.apex_v2_no_het_scaling":      "Het-Aware Scaling",
+        "ml.apex_v2_no_posterior_reg":    "Posterior Regulariz.",
+        "ml.apex_v2_no_adaptive_gamma":   "Adaptive Gamma",
+    }
+
+    full_mean, _ = mean_final_across_seeds(seeds, "ml.apex_v2", "accuracy")
+
+    deltas = []
+    names = []
+    for v in ablation_variants:
+        if v not in seeds[0].get("results", {}):
+            continue
+        v_mean, _ = mean_final_across_seeds(seeds, v, "accuracy")
+        delta = (v_mean - full_mean) * 100  # positive = variant is BETTER
+        deltas.append(delta)
+        names.append(component_names.get(v, v))
+
+    order = np.argsort(deltas)
+
+    fig, ax = plt.subplots(figsize=(4.0, 2.4))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    y = np.arange(len(deltas))
+    colors = ["#d62728" if deltas[i] > 0 else "#2ca02c" for i in order]
+    ax.barh(y, [deltas[i] for i in order], height=0.55,
+            color=colors, edgecolor="white", linewidth=0.5)
+    ax.set_yticks(y)
+    ax.set_yticklabels([names[i] for i in order], fontsize=7.5)
+    ax.axvline(x=0, color="black", linewidth=0.8)
+    ax.set_xlabel("Accuracy Change (pp) vs Full APEX v2")
+    ax.set_title("Impact of Removing Each Component")
+
+    for i, idx in enumerate(order):
+        sign = "+" if deltas[idx] > 0 else ""
+        ha = "left" if deltas[idx] >= 0 else "right"
+        offset = 0.1 if deltas[idx] >= 0 else -0.1
+        ax.text(deltas[idx] + offset, i,
+                f"{sign}{deltas[idx]:.2f} pp", va="center", fontsize=7, ha=ha)
+
+    plt.tight_layout()
+    fig.savefig(out / "fig10b_ablation_delta.png")
+    fig.savefig(out / "fig10b_ablation_delta.eps")
+    plt.close(fig)
+    print("  -> fig10b_ablation_delta")
+
+
+def fig11_cifar100_benchmark(plt, out: Path):
+    """CIFAR-100 accuracy bars with error bars."""
+    seeds = load_seeds("cifar100")
+    if not seeds:
+        print("  [SKIP] fig11 -- no CIFAR-100 data")
+        return
+
+    methods = [m for m in METHOD_ORDER if m in seeds[0].get("results", {})]
+    means, stds = [], []
+    for m in methods:
+        mu, sigma = mean_final_across_seeds(seeds, m, "accuracy")
+        means.append(mu)
+        stds.append(sigma)
+    names = [SHORT.get(m, m.split(".")[-1]) for m in methods]
+
+    order = np.argsort(means)[::-1]
+
+    fig, ax = plt.subplots(figsize=(3.5, 2.4))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    y = np.arange(len(methods))
+    ax.barh(y, [means[i] for i in order], xerr=[stds[i] for i in order],
+            height=0.6,
+            color=[COLORS.get(methods[i], "#888") for i in order],
+            edgecolor="white", linewidth=0.5,
+            capsize=3, error_kw={"linewidth": 0.8})
+    ax.set_yticks(y)
+    ax.set_yticklabels([names[i] for i in order])
+    ax.set_xlabel("Final Accuracy (mean +/- std)")
+    ax.set_title("CIFAR-100, Dirichlet $\\alpha$=0.3, N=50, K=10")
+    ax.invert_yaxis()
+
+    for i, idx in enumerate(order):
+        ax.text(means[idx] + stds[idx] + 0.003, i,
+                f"{means[idx]:.3f}$\\pm${stds[idx]:.3f}",
+                va="center", fontsize=6.5)
+
+    ax.set_xlim(right=max(means) + max(stds) + 0.06)
+    plt.tight_layout()
+    fig.savefig(out / "fig11_cifar100_benchmark.png")
+    fig.savefig(out / "fig11_cifar100_benchmark.eps")
+    plt.close(fig)
+    print("  -> fig11_cifar100_benchmark")
+
+
+def fig12_cifar100_convergence(plt, out: Path):
+    """CIFAR-100 convergence curves."""
+    seeds = load_seeds("cifar100")
+    if not seeds:
+        print("  [SKIP] fig12 -- no CIFAR-100 data")
+        return
+
+    methods = [m for m in METHOD_ORDER if m in seeds[0].get("results", {})]
+
+    fig, ax = plt.subplots(figsize=(3.5, 2.8))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    for m in methods:
+        xs, ys_mean, ys_std = mean_series_across_seeds(seeds, m, "accuracy")
+        if len(ys_mean) == 0:
+            continue
+        ys_s = smooth(ys_mean, 10)
+        std_s = smooth(ys_std, 10)
+        xs_s = xs[:len(ys_s)]
+        mark_every = max(1, len(xs_s) // 8)
+        ax.plot(xs_s, ys_s, color=COLORS.get(m, "#888"),
+                marker=MARKERS.get(m, "o"),
+                markevery=mark_every, markersize=4,
+                markerfacecolor="white", markeredgewidth=0.8,
+                markeredgecolor=COLORS.get(m, "#888"),
+                linewidth=1.2, label=SHORT.get(m, m))
+        ax.fill_between(xs_s, ys_s - std_s, ys_s + std_s,
+                        color=COLORS.get(m, "#888"), alpha=0.1)
+
+    ax.set_xlabel("Communication Round")
+    ax.set_ylabel("Test Accuracy")
+    ax.set_title("CIFAR-100 Convergence, $\\alpha$=0.3")
+    ax.legend(loc="lower right", ncol=2, fontsize=5.5)
+    plt.tight_layout()
+    fig.savefig(out / "fig12_cifar100_convergence.png")
+    fig.savefig(out / "fig12_cifar100_convergence.eps")
+    plt.close(fig)
+    print("  -> fig12_cifar100_convergence")
+
+
+def fig10_scale_convergence(plt, out: Path):
+    """Side-by-side convergence: N=50 vs N=100 vs N=200."""
+    scale_data = [
+        ("main_cifar10_a03", "(a) N=50, K=10"),
+        ("scale_n100", "(b) N=100, K=10"),
+        ("scale_n200", "(c) N=200, K=20"),
+    ]
+
+    panels = []
+    for prefix, title in scale_data:
+        s = load_seeds(prefix)
+        if s:
+            panels.append((s, title))
+
+    if len(panels) < 2:
         print("  [SKIP] fig10 -- insufficient data")
         return
 
+    # Find common methods across all panels
     common = []
     for m in METHOD_ORDER:
-        if (m in seeds_50[0]["results"] and m in seeds_100[0]["results"]):
+        if all(m in p[0][0]["results"] for p in panels):
             common.append(m)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.16, 2.8), sharey=True)
+    ncols = len(panels)
+    fig, axes = plt.subplots(1, ncols, figsize=(3.5 * ncols, 2.8), sharey=True)
     fig.patch.set_facecolor("white")
+    if ncols == 1:
+        axes = [axes]
 
-    for ax, seeds, title in [(ax1, seeds_50, "(a) N=50, K=10"),
-                              (ax2, seeds_100, "(b) N=100, K=10")]:
+    for ax, (seeds, title) in zip(axes, panels):
         ax.set_facecolor("white")
         for m in common:
             xs, ys_mean, ys_std = mean_series_across_seeds(seeds, m, "accuracy")
@@ -689,12 +931,154 @@ def fig10_scale_convergence(plt, out: Path):
         ax.set_title(title)
         ax.legend(loc="lower right", fontsize=5.5)
 
-    ax1.set_ylabel("Test Accuracy")
+    axes[0].set_ylabel("Test Accuracy")
     plt.tight_layout()
     fig.savefig(out / "fig10_scale_convergence.png")
     fig.savefig(out / "fig10_scale_convergence.eps")
     plt.close(fig)
     print("  -> fig10_scale_convergence")
+
+
+def fig13_cross_dataset(plt, out: Path):
+    """Cross-dataset generalization: APEX v2 rank and accuracy across all datasets."""
+    datasets_cfg = [
+        ("MNIST", "mnist"),
+        ("FMNIST", "fmnist"),
+        ("CIFAR-10", "main_cifar10_a03"),
+        ("CIFAR-100", "cifar100"),
+    ]
+
+    # Methods present across most datasets
+    target_methods = ["baseline.fedavg", "system_aware.oort", "system_aware.poc", "ml.apex_v2"]
+
+    all_data = {}
+    for dname, prefix in datasets_cfg:
+        s = load_seeds(prefix)
+        if s:
+            all_data[dname] = s
+
+    if not all_data:
+        print("  [SKIP] fig13 -- no data")
+        return
+
+    fig, ax = plt.subplots(figsize=(5.5, 3.0))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    dnames = list(all_data.keys())
+    x = np.arange(len(dnames))
+    n_methods = len(target_methods)
+    w = 0.8 / n_methods
+
+    for i, m in enumerate(target_methods):
+        means, stds = [], []
+        for dname in dnames:
+            seeds = all_data[dname]
+            mu, sigma = mean_final_across_seeds(seeds, m, "accuracy")
+            means.append(mu)
+            stds.append(sigma)
+        offset = (i - (n_methods - 1) / 2) * w
+        ax.bar(x + offset, means, w, yerr=stds, label=SHORT.get(m, m),
+               color=COLORS.get(m, "#888"), alpha=0.85, capsize=2,
+               error_kw={"linewidth": 0.7})
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(dnames, fontsize=8)
+    ax.set_ylabel("Final Accuracy (mean +/- std)")
+    ax.set_title("Cross-Dataset Generalization (Dir. $\\alpha$=0.3, N=50)")
+    ax.legend(fontsize=7, loc="upper right")
+    plt.tight_layout()
+    fig.savefig(out / "fig13_cross_dataset.png")
+    fig.savefig(out / "fig13_cross_dataset.eps")
+    plt.close(fig)
+    print("  -> fig13_cross_dataset")
+
+
+def fig14_iid_sanity(plt, out: Path):
+    """IID sanity check: accuracy bars."""
+    seeds = load_seeds("iid")
+    if not seeds:
+        print("  [SKIP] fig14 -- no IID data")
+        return
+
+    methods = [m for m in METHOD_ORDER if m in seeds[0].get("results", {})]
+    means, stds = [], []
+    for m in methods:
+        mu, sigma = mean_final_across_seeds(seeds, m, "accuracy")
+        means.append(mu)
+        stds.append(sigma)
+    names = [SHORT.get(m, m.split(".")[-1]) for m in methods]
+
+    order = np.argsort(means)[::-1]
+
+    fig, ax = plt.subplots(figsize=(3.5, 2.2))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    y = np.arange(len(methods))
+    ax.barh(y, [means[i] for i in order], xerr=[stds[i] for i in order],
+            height=0.6,
+            color=[COLORS.get(methods[i], "#888") for i in order],
+            edgecolor="white", linewidth=0.5,
+            capsize=3, error_kw={"linewidth": 0.8})
+    ax.set_yticks(y)
+    ax.set_yticklabels([names[i] for i in order])
+    ax.set_xlabel("Final Accuracy (mean +/- std)")
+    ax.set_title("IID Sanity Check: CIFAR-10, N=50, K=10")
+    ax.invert_yaxis()
+
+    for i, idx in enumerate(order):
+        ax.text(means[idx] + stds[idx] + 0.005, i,
+                f"{means[idx]:.3f}$\\pm${stds[idx]:.3f}",
+                va="center", fontsize=6.5)
+
+    ax.set_xlim(right=max(means) + max(stds) + 0.08)
+    plt.tight_layout()
+    fig.savefig(out / "fig14_iid_sanity.png")
+    fig.savefig(out / "fig14_iid_sanity.eps")
+    plt.close(fig)
+    print("  -> fig14_iid_sanity")
+
+
+def fig15_fmnist_convergence(plt, out: Path):
+    """Fashion-MNIST convergence curves."""
+    seeds = load_seeds("fmnist")
+    if not seeds:
+        print("  [SKIP] fig15 -- no FMNIST data")
+        return
+
+    methods = [m for m in METHOD_ORDER if m in seeds[0].get("results", {})]
+
+    fig, ax = plt.subplots(figsize=(3.5, 2.8))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    for m in methods:
+        xs, ys_mean, ys_std = mean_series_across_seeds(seeds, m, "accuracy")
+        if len(ys_mean) == 0:
+            continue
+        ys_s = smooth(ys_mean, 10)
+        std_s = smooth(ys_std, 10)
+        xs_s = xs[:len(ys_s)]
+        mark_every = max(1, len(xs_s) // 8)
+        ax.plot(xs_s, ys_s, color=COLORS.get(m, "#888"),
+                marker=MARKERS.get(m, "o"),
+                markevery=mark_every, markersize=4,
+                markerfacecolor="white", markeredgewidth=0.8,
+                markeredgecolor=COLORS.get(m, "#888"),
+                linewidth=1.2, label=SHORT.get(m, m))
+        ax.fill_between(xs_s, ys_s - std_s, ys_s + std_s,
+                        color=COLORS.get(m, "#888"), alpha=0.1)
+
+    ax.set_xlabel("Communication Round")
+    ax.set_ylabel("Test Accuracy")
+    ax.set_title("Fashion-MNIST Convergence, $\\alpha$=0.3 (3 seeds)")
+    ax.legend(loc="lower right", ncol=2, fontsize=5.5)
+    plt.tight_layout()
+    fig.savefig(out / "fig15_fmnist_convergence.png")
+    fig.savefig(out / "fig15_fmnist_convergence.eps")
+    plt.close(fig)
+    print("  -> fig15_fmnist_convergence")
 
 
 # ---------------------------------------------------------------------------
@@ -721,7 +1105,14 @@ def main():
     fig07_extreme_noniid_convergence(plt, out)
     fig08_apex_advantage_heatmap(plt, out)
     fig09_convergence_speed(plt, out)
+    fig10a_ablation_bars(plt, out)
+    fig10b_ablation_delta(plt, out)
+    fig11_cifar100_benchmark(plt, out)
+    fig12_cifar100_convergence(plt, out)
     fig10_scale_convergence(plt, out)
+    fig13_cross_dataset(plt, out)
+    fig14_iid_sanity(plt, out)
+    fig15_fmnist_convergence(plt, out)
 
     print(f"\nAll figures saved to {out}/")
     print("PNG for preview, EPS for paper inclusion.")
