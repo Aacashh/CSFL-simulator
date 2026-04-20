@@ -104,9 +104,10 @@ across-method reset path, seed-based reproducibility) are relaxed here.
 ### Tier 3 — Opt-in features (default OFF)
 - `SimConfig.use_torch_compile: bool = False`. When on plus CUDA plus
   PyTorch ≥ 2.1, `_maybe_compile_models` wraps each client model and the
-  server model with `torch.compile(mode="reduce-overhead")`. Failures per
-  model are caught and the uncompiled module is kept — the simulator stays
-  functional even if only some models compile.
+  server model with `torch.compile()` in the default Inductor mode (NOT
+  `mode="reduce-overhead"` — see the "Follow-up pass bugs" section below
+  for why). Failures per model are caught and the uncompiled module is
+  kept — the simulator stays functional even if only some models compile.
 - `SimConfig.channels_last: bool = False`. When on plus CUDA,
   `_maybe_apply_channels_last` converts the cached public, test, and
   per-client training tensors along with every unique model instance to
@@ -302,3 +303,54 @@ clients, the realistic lower bound is ~15 s per round. Getting below 10 s
 would require dropping the batch size ceiling, cutting `local_epochs` back
 to 1, or shortening the dynamic-step schedule — all of which are paper-
 faithful parameters and must stay at the paper values for replication runs.
+
+### Follow-up pass bugs (first HPC runs)
+
+Two issues surfaced the first time `--use-torch-compile` ran on the cluster.
+Both are fixed; this section records them so the decisions don't get
+re-reverted later.
+
+1. **`load_state_dict` key mismatch after compile.**
+   `FDSimulator.setup()` saves `_initial_client_states` from the raw modules,
+   then `_maybe_compile_models()` replaces `self.client_models[cid]` with a
+   `torch._dynamo.OptimizedModule` whose `state_dict` prefixes every key
+   with `_orig_mod.`. The reset-at-start-of-run path (`FDSimulator.run()`)
+   then failed with "Missing key(s) _orig_mod.conv1.weight / Unexpected key(s)
+   conv1.weight".
+   **Fix:** new `_unwrap_compiled(m)` helper at the top of `fd_simulator.py`
+   returns `m._orig_mod` when present and `m` otherwise. Both the save and
+   load sites route through it so the key namespaces match regardless of
+   whether compile succeeded for a given module. Order-independent; works
+   whether compile is applied before or after the save.
+
+2. **CUDA-graph output-buffer aliasing under `mode="reduce-overhead"`.**
+   The first successful compile then failed at eval time with
+   "RuntimeError: accessing tensor output of CUDAGraphs that has been
+   overwritten by a subsequent run." `reduce-overhead` mode captures CUDA
+   graphs; each graph replay writes into the same output buffer, so calling
+   a compiled model a second time aliases over the first call's output
+   tensor. The FD loop calls multiple compiled models back-to-back inside
+   `_evaluate_clients_cached` (and inside the client phase's stream
+   dispatch) and needs to read each output after later calls, which the
+   aliasing breaks.
+   **Fix:** `_maybe_compile_models` now uses `torch.compile(m)` (default
+   Inductor mode, no CUDA graphs) instead of `mode="reduce-overhead"`. The
+   Inductor kernel fusion still fires; only the CUDA-graph replay is
+   dropped. If a future optimisation pass wants CUDA graphs back, every
+   consumer of a compiled-model output must `.clone()` the output before
+   the next compiled-model call, OR call
+   `torch.compiler.cudagraph_mark_step_begin()` between successive
+   invocations. Don't re-enable `reduce-overhead` without doing one of
+   those.
+
+3. **TF32 warning from Inductor.**
+   Inductor emits `UserWarning: TensorFloat32 tensor cores ... not enabled`
+   when compile is active but the TF32 matmul path is off. Enabling TF32
+   gives a measurable speedup on Ampere+ tensor cores at the cost of a
+   few bits of matmul precision; it is harmless for FD training where
+   outputs are already run through softmax.
+   **Fix:** `set_seed(seed, performance_mode=True)` now also calls
+   `torch.set_float32_matmul_precision("high")` and enables
+   `torch.backends.cuda.matmul.allow_tf32` /
+   `torch.backends.cudnn.allow_tf32`. Only happens in performance mode; the
+   deterministic path is untouched.

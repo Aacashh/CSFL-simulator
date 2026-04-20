@@ -54,6 +54,19 @@ def set_seed(seed: int, deterministic: bool = True, performance_mode: bool = Fal
             torch.use_deterministic_algorithms(False)
         except Exception:
             pass
+        # Enable TF32 on Ampere+ tensor cores (TensorFloat32 matmul path). This silences
+        # the torch.compile / Inductor UserWarning about "TensorFloat32 tensor cores ...
+        # not enabled" and gives a meaningful speedup on large conv/linear layers at the
+        # cost of a few bits of mantissa precision on matmul/conv outputs.
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
+        try:
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+        except Exception:
+            pass
     elif deterministic:
         # Strict deterministic mode for exact reproducibility
         torch.backends.cudnn.deterministic = True
