@@ -3,7 +3,8 @@
 # Next-SOTA FD Experiment Suite — validates CALM-FD against LQTS + baselines
 #
 # Key differences from scripts/run_all_experiments.sh:
-#   - CIFAR-10 FD uses FD-CNN1/2/3 (paper models), not ResNet18-FD/MobileNet/ShuffleNet
+#   - CIFAR-10 FD uses ResNet18/MobileNetV2/ShuffleNetV2 (paper Table IV CIFAR pool),
+#     MNIST FD uses FD-CNN1/2/3 (paper Table IV MNIST pool)
 #   - 2 local epochs (was 1) — matches Mu et al.
 #   - New-baseline N=30, K=10 (was N=50, K=15) — brings data/client up to 1667
 #   - Paper replication experiment runs FIRST as anchor
@@ -43,8 +44,13 @@ done
 # =============================================================================
 # Shared config — paper-matched
 # =============================================================================
-# CIFAR-10 model pool: paper's CNN_1/2/3 (FD-CNN1 @ 545K, FD-CNN2 @ 266K, FD-CNN3 @ 264K params on CIFAR-10)
-CIFAR_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
+# Paper-matched heterogeneity pools (Mu et al. Table IV):
+#   - CIFAR-10 + STL-10  → ResNet18 / MobileNetV2 / ShuffleNetV2 (the deep pool)
+#   - MNIST   + FMNIST   → CNN_1 / CNN_2 / CNN_3 (the Table III small CNN pool)
+# Using the wrong pool (e.g. CNN_1/2/3 on CIFAR) under-parameterises the task by ~10x
+# and costs several pp of final server accuracy — the paper's Table IV heterogeneity
+# results are explicitly reported for these pool-dataset combinations.
+CIFAR_MODELS="ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 
 # Base FD block — paper-matched (Mu et al. §VI): 2 local epochs, 2 distill epochs, Adam lr 0.001,
@@ -174,7 +180,7 @@ run_one() {
 GLOBAL_START=$(date +%s)
 TOTAL_PLANNED=$(compute_total_planned)
 
-log "CALM-FD Next-SOTA Suite (CIFAR-10 paper-matched, FD-CNN1/2/3, 2 local epochs)"
+log "CALM-FD Next-SOTA Suite (paper-matched pools: CIFAR→ResNet/MobileNet/ShuffleNet, MNIST→CNN_1/2/3, 2 local epochs)"
 echo "  Device:     ${DEVICE}"
 echo "  Mode:       $([ "$FAST_FLAG" = "--fast-mode" ] && echo "FAST (debug)" || echo "FULL")"
 echo "  Resume:     ${RESUME}"
@@ -196,7 +202,7 @@ if should_run 1; then
         ${BASE_FD} \
         --dataset CIFAR-10 --public-dataset STL-10 \
         --partition dirichlet --dirichlet-alpha 0.5 \
-        --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+        --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
         --total-clients 15 --clients-per-round 15 --rounds 200 \
         --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
         --seed 42
@@ -214,7 +220,7 @@ if should_run 2; then
         ${BASE_FD} \
         --dataset CIFAR-10 --public-dataset STL-10 \
         --partition dirichlet --dirichlet-alpha 0.5 \
-        --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+        --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
         --total-clients 30 --clients-per-round 10 --rounds 200 \
         --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
         --seed 42
@@ -240,7 +246,7 @@ if should_run 3; then
             ${BASE_FD} \
             --dataset CIFAR-10 --public-dataset STL-10 \
             --partition dirichlet --dirichlet-alpha 0.5 \
-            --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
             --total-clients 30 --clients-per-round 10 --rounds 200 \
             ${flags} \
             --seed 42
@@ -263,7 +269,7 @@ if should_run 4; then
             ${BASE_FD} \
             --dataset CIFAR-10 --public-dataset STL-10 \
             --partition dirichlet --dirichlet-alpha "${alpha}" \
-            --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
             --total-clients 30 --clients-per-round 10 --rounds 200 \
             --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
             --seed 42
@@ -285,7 +291,7 @@ if should_run 5; then
             ${BASE_FD} \
             --dataset CIFAR-10 --public-dataset STL-10 \
             --partition dirichlet --dirichlet-alpha 0.5 \
-            --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
             --total-clients 30 --clients-per-round ${K} --rounds 200 \
             --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
             --seed 42
@@ -309,7 +315,7 @@ if should_run 6; then
             ${BASE_FD} \
             --dataset CIFAR-10 --public-dataset STL-10 \
             --partition dirichlet --dirichlet-alpha 0.5 \
-            --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
             --total-clients ${N} --clients-per-round ${K} --rounds 200 \
             --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
             --seed 42
@@ -347,7 +353,7 @@ if should_run 8; then
         ${BASE_FD} \
         --dataset CIFAR-10 --public-dataset STL-10 \
         --partition dirichlet --dirichlet-alpha 0.5 \
-        --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+        --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
         --total-clients 30 --clients-per-round 10 --rounds 200 \
         --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
         --seed 42
@@ -369,7 +375,7 @@ if should_run 9; then
             ${BASE_FD} \
             --dataset CIFAR-10 --public-dataset STL-10 \
             --partition dirichlet --dirichlet-alpha 0.5 \
-            --model FD-CNN1 --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
             --total-clients 30 --clients-per-round 10 --rounds 200 \
             --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
             --seed ${s}
