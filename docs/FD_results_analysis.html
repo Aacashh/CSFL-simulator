@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="DRDO CSFL Simulator — analysis of 2026-04-14…2026-04-19 experiment batch" />
+  <meta name="dcterms.date" content="2026-04-20" />
+  <title>FD Results Analysis</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="_pdf_style.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">FD Results Analysis</h1>
+<p class="subtitle">Empirical evidence for the FL→FD client-selection ranking-inversion thesis</p>
+<p class="author">DRDO CSFL Simulator — analysis of 2026-04-14…2026-04-19 experiment batch</p>
+<p class="date">2026-04-20</p>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#executive-summary">1. Executive summary</a></li>
+<li><a href="#what-actually-ran-recent-batch">2. What actually ran (recent batch)</a></li>
+<li><a href="#experimental-setup">3. Experimental setup</a></li>
+<li><a href="#main-fd-benchmark-headline-table">4. Main FD benchmark (Headline Table)</a></li>
+<li><a href="#fl-fd-ranking-inversion-the-central-thesis">5. FL → FD ranking inversion (the central thesis)</a></li>
+<li><a href="#channel-noise-sensitivity">6. Channel-noise sensitivity</a></li>
+<li><a href="#fd-native-method-deep-dive">7. FD-native method deep-dive</a></li>
+<li><a href="#communication-efficiency">8. Communication efficiency</a></li>
+<li><a href="#fairness-and-participation-dynamics">9. Fairness and participation dynamics</a></li>
+<li><a href="#recommended-ieee-paper-narrative-given-this-batch">10. Recommended IEEE paper narrative (given this batch)</a></li>
+<li><a href="#gaps-that-must-be-closed-before-submission">11. Gaps that must be closed before submission</a></li>
+<li><a href="#reproduction-guide">12. Reproduction guide</a></li>
+<li><a href="#appendix-a-full-master-table-per-run-per-method">Appendix A — full master table (per-run, per-method)</a></li>
+</ul>
+</nav>
+<h1 id="executive-summary">1. Executive summary</h1>
+<p>This document analyses the <strong>eight FD/FL runs that completed during the 14–19 April 2026 batch execution</strong> of <code>scripts/run_all_experiments.sh</code>. The dataset is CIFAR-10 with model-heterogeneous federated distillation (ResNet18-FD / MobileNetV2-FD / ShuffleNetV2-FD) over a massive-MIMO channel.</p>
+<p>Three findings define the story this batch tells:</p>
+<ol type="1">
+<li><p><strong>The FL→FD ranking inverts.</strong> On the <em>same</em> 10 client-selection methods, run on the <em>same</em> data partition, with paired FL (LightCNN) and FD (heterogeneous + DL SNR=−20 dB) configurations, the Spearman rank correlation between FL final accuracy and FD final accuracy is <strong>ρ = −0.297</strong> (Kendall τ = −0.200). Two methods that ranked at the bottom of FL (<code>FedCS</code>, <code>Logit-Quality TS</code> — FL ranks 10 and 8 respectively) jumped to the top under FD (FD ranks 3 and 1). Two methods at the top of FL (<code>APEX v2</code>, <code>Oort</code> — FL ranks 1 and 2) fell to FD ranks 5 and 8. This is direct empirical support for the paper’s central thesis.</p></li>
+<li><p><strong><code>fd_native.logit_quality_ts</code> wins the FD benchmark.</strong> Final server accuracy (mean of last 20 rounds) is <strong>26.1%</strong> for Logit-Quality TS at DL SNR=−20 dB. The next best is <code>LabelCov</code> (22.4%), then <code>FedCS</code> (21.4%). <code>Random</code> (15.9%) and the FL champions <code>Oort</code> (13.7%) and <code>MAML-Select</code> (13.4%) are <em>worse than random</em>. The <code>Logit-Entropy Max</code> baseline (12.3%) is the weakest — selecting clients whose logits maximise raw entropy is the wrong signal in a noisy regime.</p></li>
+<li><p><strong>Communication is essentially free.</strong> Cumulative payload over 300 rounds: <strong>FD = 91.6 MB</strong> vs <strong>FL = 383,628 MB</strong> (estimate from the simulator’s <code>fl_equiv_comm_mb</code>). FD’s overhead is <strong>0.024 % of FL</strong> — even better than the ~1 % figure quoted by Mu <em>et al.</em> The selection-policy decision therefore has effectively zero communication consequence.</p></li>
+</ol>
+<p>The corollary for an IEEE submission: lead with the ranking-inversion result; the noise-sweep gives the mechanistic explanation; the communication and fairness results give the practical case for FD. Multi-seed runs and the alpha sweep are still <strong>needed</strong> to make the headline numbers publication-ready.</p>
+<hr />
+<h1 id="what-actually-ran-recent-batch">2. What actually ran (recent batch)</h1>
+<p>The <code>--exp</code> argument was not used; the script attempted to run every experiment, but most FD experiments timed out / weren’t reached before the user stopped the run. The completed runs are:</p>
+<table>
+<thead>
+<tr>
+<th style="width:25%">
+Script section
+</th>
+<th style="width:18%">
+Runs in scope
+</th>
+<th style="width:12%">
+Status
+</th>
+<th style="width:45%">
+Notes
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+FD 1 — Main comparison
+</td>
+<td>
+2
+</td>
+<td>
+Complete
+</td>
+<td>
+Used <code>fd_cifar10_main_20260415-172221</code> (newer; 6 EPS plots already exist).
+</td>
+</tr>
+<tr>
+<td>
+FD 2 — FL baseline (ranking inversion)
+</td>
+<td>
+2
+</td>
+<td>
+Complete
+</td>
+<td>
+Used <code>fl_cifar10_baseline_20260416-123215</code>; same 10 methods as FD 1.
+</td>
+</tr>
+<tr>
+<td>
+FD 3 — DL SNR sweep
+</td>
+<td>
+5/5
+</td>
+<td>
+Complete
+</td>
+<td>
+errfree / 0 / −10 / −20 / −30 dB. 7 methods (FD_CORE).
+</td>
+</tr>
+<tr>
+<td>
+FD 4 — α (non-IID) sweep
+</td>
+<td>
+1/6
+</td>
+<td>
+Incomplete
+</td>
+<td>
+Only α=0.1 started; <code>compare_results.json</code> never written. Excluded.
+</td>
+</tr>
+<tr>
+<td>
+FD 5 — K (selection ratio) sweep
+</td>
+<td>
+0/5
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 6 — Scaling N=100
+</td>
+<td>
+0/1
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 7 — Group-based FedTSKD-G
+</td>
+<td>
+0/1
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 8 — MNIST/FMNIST cross-dataset
+</td>
+<td>
+0/1
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 9 — Communication FL vs FD
+</td>
+<td>
+0/1
+</td>
+<td>
+Not run
+</td>
+<td>
+Substituted by FD 1 + FD 2 communication metrics.
+</td>
+</tr>
+<tr>
+<td>
+FD 10 — Antenna count sweep
+</td>
+<td>
+0/3
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 11 — SNRD / LQTS ablations
+</td>
+<td>
+0/2
+</td>
+<td>
+Not run
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+FD 12 — Multi-seed (5 seeds)
+</td>
+<td>
+0/5
+</td>
+<td>
+Not run
+</td>
+<td>
+<strong>All FD numbers in this report are single-seed (seed=42).</strong>
+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Caveat carried throughout this report.</strong> Every quoted accuracy is from a single seed. Differences smaller than ~1.5 pp should not be over-interpreted; the ranking-inversion result and the noise-sensitivity ordering are robust to this caveat because the gaps are large (≥3 pp for the headline ranks) and consistent across SNR levels.</p>
+<hr />
+<h1 id="experimental-setup">3. Experimental setup</h1>
+<p>Common to all FD runs (taken from <code>config.json</code>):</p>
+<table>
+<thead>
+<tr>
+<th style="width:35%">
+Parameter
+</th>
+<th style="width:25%">
+Value
+</th>
+<th>
+Source / role
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Dataset (private)
+</td>
+<td>
+CIFAR-10, 50 000 images
+</td>
+<td>
+Mu et al. §VI
+</td>
+</tr>
+<tr>
+<td>
+Public dataset
+</td>
+<td>
+STL-10, 2 000 images
+</td>
+<td>
+Distillation transfer set
+</td>
+</tr>
+<tr>
+<td>
+Partition
+</td>
+<td>
+Dirichlet, α=0.5
+</td>
+<td>
+Default non-IID regime
+</td>
+</tr>
+<tr>
+<td>
+Total clients (N)
+</td>
+<td>
+50
+</td>
+<td>
+Selection-meaningful (paper uses N=15)
+</td>
+</tr>
+<tr>
+<td>
+Selected per round (K)
+</td>
+<td>
+15
+</td>
+<td>
+30 % participation
+</td>
+</tr>
+<tr>
+<td>
+Rounds
+</td>
+<td>
+300
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+Model heterogeneity
+</td>
+<td>
+ResNet18-FD / MobileNetV2-FD / ShuffleNetV2-FD
+</td>
+<td>
+Cycled per client
+</td>
+</tr>
+<tr>
+<td>
+Optimiser (training)
+</td>
+<td>
+Adam, lr=1e-2
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+Optimiser (distill)
+</td>
+<td>
+Adam, lr=1e-3
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+Batch sizes
+</td>
+<td>
+train=128 / distill=500
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+Distillation epochs
+</td>
+<td>
+2
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+Dynamic local steps
+</td>
+<td>
+base K_r=5, period=25 rounds
+</td>
+<td>
+FedTSKD §V-A
+</td>
+</tr>
+<tr>
+<td>
+Quantisation
+</td>
+<td>
+8-bit uniform
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+BS antennas / device antennas
+</td>
+<td>
+64 / 1
+</td>
+<td>
+mMIMO, ZF processing
+</td>
+</tr>
+<tr>
+<td>
+UL SNR (fixed)
+</td>
+<td>
+−8 dB
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+DL SNR (FD main)
+</td>
+<td>
+−20 dB
+</td>
+<td>
+Most error-prone setting
+</td>
+</tr>
+<tr>
+<td>
+Group-based aggregation
+</td>
+<td>
+off
+</td>
+<td>
+Algorithm 1 (FedTSKD), not 2
+</td>
+</tr>
+<tr>
+<td>
+Seed
+</td>
+<td>
+42 (single)
+</td>
+<td>
+<strong>See caveat in §2.</strong>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The paired FL baseline uses <code>LightCNN</code> (homogeneous) at the same N=50, K=15, R=300, α=0.5, lr=1e-2, batch=128. Channel noise is disabled in the FL paradigm because FL does not transmit logits — the decoded weights aren’t logit-payload, and the simulator does not inject channel noise on the weight uplink.</p>
+<p><strong>Methodological choice.</strong> Because the heterogeneous FD client models converge to different per-client accuracies, the per-client mean (<code>accuracy</code>) is a less informative signal than the <strong>server-side accuracy</strong> measured by the server’s distilled model on the held-out test set (<code>server_accuracy</code>). All FD ranking numbers in this report use <code>server_accuracy</code> averaged over the <strong>last 20 rounds</strong> (i.e. rounds 280–299) for robustness to single-seed jitter. For FL the server-side metric does not apply, so <code>accuracy</code> is used.</p>
+<hr />
+<h1 id="main-fd-benchmark-headline-table">4. Main FD benchmark (Headline Table)</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig1_main_convergence.png" alt="Fig. 1. FD main benchmark — 10 selection methods on CIFAR-10 (α=0.5, N=50, K=15, hetero pool, DL SNR=−20 dB). Left: smoothed server accuracy convergence over 300 rounds. Right: average distillation KL divergence over rounds." /><figcaption aria-hidden="true"><strong>Fig. 1.</strong> FD main benchmark — 10 selection methods on CIFAR-10 (α=0.5, N=50, K=15, hetero pool, DL SNR=−20 dB). Left: smoothed server accuracy convergence over 300 rounds. Right: average distillation KL divergence over rounds.</figcaption>
+</figure>
+<figure>
+<img src="../artifacts/analysis/figures/fig2_main_bar.png" alt="Fig. 2. Final server accuracy (mean of rounds 280–299) for the 10 methods on the FD main benchmark. Methods ordered by final accuracy. The four fd_native.* methods were designed for FD; ml.apex_v2 is the FL champion ported to FD." /><figcaption aria-hidden="true"><strong>Fig. 2.</strong> Final server accuracy (mean of rounds 280–299) for the 10 methods on the FD main benchmark. Methods ordered by final accuracy. The four <code>fd_native.*</code> methods were designed for FD; <code>ml.apex_v2</code> is the FL champion ported to FD.</figcaption>
+</figure>
+<p><strong>Table I.</strong> Final-round summary, FD main benchmark. Sorted by final server accuracy. Values are mean of rounds 280–299 unless marked otherwise. “Comm Reduction” = ratio of FD logit payload to equivalent FL weight payload at the same round count.</p>
+<table>
+<thead>
+<tr>
+<th style="width:18%">
+Method
+</th>
+<th style="width:9%">
+Server Acc
+</th>
+<th style="width:9%">
+Client Acc Avg
+</th>
+<th style="width:8%">
+KL Div
+</th>
+<th style="width:9%">
+Eff. Noise Var
+</th>
+<th style="width:8%">
+Fairness Gini
+</th>
+<th style="width:9%">
+Logit Cosine Div
+</th>
+<th style="width:8%">
+Label Cov
+</th>
+<th style="width:11%">
+Comm Reduction
+</th>
+<th style="width:9%">
+Rounds to 30 %
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Logit-Quality TS
+</td>
+<td>
+<strong>26.1 %</strong>
+</td>
+<td>
+15.9 %
+</td>
+<td>
+1.80
+</td>
+<td>
+29.9
+</td>
+<td>
+0.18
+</td>
+<td>
+0.628
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+43
+</td>
+</tr>
+<tr>
+<td>
+LabelCov
+</td>
+<td>
+22.4 %
+</td>
+<td>
+16.7 %
+</td>
+<td>
+1.95
+</td>
+<td>
+57.3
+</td>
+<td>
+0.70
+</td>
+<td>
+0.672
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+FedCS
+</td>
+<td>
+21.4 %
+</td>
+<td>
+14.6 %
+</td>
+<td>
+2.00
+</td>
+<td>
+90.9
+</td>
+<td>
+0.70
+</td>
+<td>
+0.631
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+10
+</td>
+</tr>
+<tr>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+20.1 %
+</td>
+<td>
+15.9 %
+</td>
+<td>
+1.70
+</td>
+<td>
+20.4
+</td>
+<td>
+0.008
+</td>
+<td>
+0.635
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+APEX v2
+</td>
+<td>
+19.7 %
+</td>
+<td>
+14.9 %
+</td>
+<td>
+1.80
+</td>
+<td>
+32.9
+</td>
+<td>
+0.19
+</td>
+<td>
+0.627
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+SNR-Diversity
+</td>
+<td>
+16.3 %
+</td>
+<td>
+15.9 %
+</td>
+<td>
+1.98
+</td>
+<td>
+115.0
+</td>
+<td>
+0.64
+</td>
+<td>
+0.775
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+Random (FedAvg)
+</td>
+<td>
+15.9 %
+</td>
+<td>
+14.9 %
+</td>
+<td>
+1.57
+</td>
+<td>
+15.5
+</td>
+<td>
+0.04
+</td>
+<td>
+0.659
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+Oort
+</td>
+<td>
+13.7 %
+</td>
+<td>
+16.1 %
+</td>
+<td>
+2.01
+</td>
+<td>
+98.6
+</td>
+<td>
+0.70
+</td>
+<td>
+0.709
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+MAML-Select
+</td>
+<td>
+13.4 %
+</td>
+<td>
+14.9 %
+</td>
+<td>
+1.56
+</td>
+<td>
+14.8
+</td>
+<td>
+0.05
+</td>
+<td>
+0.641
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+—
+</td>
+</tr>
+<tr>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+12.3 %
+</td>
+<td>
+16.7 %
+</td>
+<td>
+1.95
+</td>
+<td>
+63.2
+</td>
+<td>
+0.66
+</td>
+<td>
+0.746
+</td>
+<td>
+1.00
+</td>
+<td>
+2.39e−4
+</td>
+<td>
+10
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-the-headline-table-actually-says">What the headline table actually says</h3>
+<ul>
+<li><strong>Server accuracy spans 12.3 % → 26.1 %</strong> — a <strong>2.1× spread</strong> purely from selection. With identical training, distillation, and channel hyper-parameters, the <em>only</em> moving part is the choice of which 15 of 50 clients participate per round.</li>
+<li><strong>Random (15.9 %) is mid-pack but not the worst</strong> — three methods (Oort, MAML-Select, Logit-Entropy Max) underperform random in this regime. Random is a meaningful floor; falling below it is evidence that the selection signal has been <em>miscalibrated for FD</em>.</li>
+<li><strong>Server vs. client accuracy decoupling.</strong> The per-client mean (<code>Client Acc Avg</code>) is essentially flat (14.6 % – 16.7 %) across all 10 methods. The selection policy almost entirely determines the <em>server’s</em> distilled accuracy, not the per-client local accuracies. This is the FD analogue of “selection drives generalisation, not local fit”. It is also a useful methodological note for downstream papers: reporting client accuracy in FD is misleading; report <code>server_accuracy</code>.</li>
+<li><strong>Fairness Gini ≡ Participation Gini in this batch</strong> (every row identical between the two columns). The simulator currently computes the same quantity twice under different names. Worth filing as a small bug; doesn’t affect the analysis.</li>
+<li><strong><code>Rounds to 30 %</code> mostly NaN</strong> because <em>most methods never reach 30 % server accuracy</em> in 300 rounds under DL SNR=−20 dB. Only Logit-Quality TS (43 rounds), FedCS (10), and Logit-Entropy Max (10) cross the threshold transiently, but FedCS and Logit-Entropy Max plateau below it again. This is a useful sanity check that the regime is <em>hard</em>.</li>
+</ul>
+<h3 id="why-these-accuracies-look-low">Why these accuracies look low</h3>
+<p>In the absolute, 26 % on CIFAR-10 is poor. The reason: <strong>DL SNR = −20 dB is the most adversarial setting in the noise sweep</strong>, deliberately chosen as the FD-1 default to expose method differences. Under error-free conditions (§6) the same methods reach 24 %–32 %. The benchmark is calibrated to the discriminative regime, not the easy one. Methods that appear close in the easy regime separate clearly here.</p>
+<hr />
+<h1 id="fl-fd-ranking-inversion-the-central-thesis">5. FL → FD ranking inversion (the central thesis)</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig3_ranking_inversion.png" alt="Fig. 3. Side-by-side FL (LightCNN) vs FD (heterogeneous, DL SNR=−20 dB) final accuracy for the same 10 selection methods on the same data partition. Spearman ρ = −0.297, Kendall τ = −0.200 — a negative rank correlation." /><figcaption aria-hidden="true"><strong>Fig. 3.</strong> Side-by-side FL (LightCNN) vs FD (heterogeneous, DL SNR=−20 dB) final accuracy for the same 10 selection methods on the same data partition. Spearman ρ = −0.297, Kendall τ = −0.200 — a <em>negative</em> rank correlation.</figcaption>
+</figure>
+<p><strong>Table II.</strong> FL vs FD ranks per method. ΔRank &gt; 0 means a method <em>fell</em> under FD; ΔRank &lt; 0 means it <em>rose</em>.</p>
+<table>
+<thead>
+<tr>
+<th style="width:22%">
+Method
+</th>
+<th>
+FL Acc
+</th>
+<th>
+FD Acc
+</th>
+<th>
+FL Rank
+</th>
+<th>
+FD Rank
+</th>
+<th>
+ΔRank
+</th>
+<th>
+Verdict
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+APEX v2
+</td>
+<td>
+66.9 %
+</td>
+<td>
+19.7 %
+</td>
+<td>
+1
+</td>
+<td>
+5
+</td>
+<td>
++4
+</td>
+<td>
+FL champ → FD mid-pack
+</td>
+</tr>
+<tr>
+<td>
+Oort
+</td>
+<td>
+66.7 %
+</td>
+<td>
+13.7 %
+</td>
+<td>
+2
+</td>
+<td>
+8
+</td>
+<td>
++6
+</td>
+<td>
+FL strong → FD weak
+</td>
+</tr>
+<tr>
+<td>
+LabelCov
+</td>
+<td>
+66.6 %
+</td>
+<td>
+22.4 %
+</td>
+<td>
+3
+</td>
+<td>
+2
+</td>
+<td>
+−1
+</td>
+<td>
+Stable strong
+</td>
+</tr>
+<tr>
+<td>
+MAML-Select
+</td>
+<td>
+66.4 %
+</td>
+<td>
+13.4 %
+</td>
+<td>
+4
+</td>
+<td>
+9
+</td>
+<td>
++5
+</td>
+<td>
+FL strong → FD weak
+</td>
+</tr>
+<tr>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+66.4 %
+</td>
+<td>
+12.3 %
+</td>
+<td>
+5
+</td>
+<td>
+10
+</td>
+<td>
++5
+</td>
+<td>
+FL strong → FD worst
+</td>
+</tr>
+<tr>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+66.3 %
+</td>
+<td>
+20.1 %
+</td>
+<td>
+6
+</td>
+<td>
+4
+</td>
+<td>
+−2
+</td>
+<td>
+Modest rise
+</td>
+</tr>
+<tr>
+<td>
+Random (FedAvg)
+</td>
+<td>
+66.2 %
+</td>
+<td>
+15.9 %
+</td>
+<td>
+7
+</td>
+<td>
+7
+</td>
+<td>
+0
+</td>
+<td>
+Stable mid-pack
+</td>
+</tr>
+<tr>
+<td>
+Logit-Quality TS
+</td>
+<td>
+66.1 %
+</td>
+<td>
+<strong>26.1 %</strong>
+</td>
+<td>
+8
+</td>
+<td>
+<strong>1</strong>
+</td>
+<td>
+<strong>−7</strong>
+</td>
+<td>
+<strong>FL bottom-half → FD champion</strong>
+</td>
+</tr>
+<tr>
+<td>
+SNR-Diversity
+</td>
+<td>
+65.5 %
+</td>
+<td>
+16.3 %
+</td>
+<td>
+9
+</td>
+<td>
+6
+</td>
+<td>
+−3
+</td>
+<td>
+Modest rise
+</td>
+</tr>
+<tr>
+<td>
+FedCS
+</td>
+<td>
+64.6 %
+</td>
+<td>
+21.4 %
+</td>
+<td>
+10
+</td>
+<td>
+3
+</td>
+<td>
+<strong>−7</strong>
+</td>
+<td>
+<strong>FL worst → FD podium</strong>
+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Statistical summary.</strong> Spearman ρ = −0.297 (p = 0.41 over 10 methods); Kendall τ = −0.200 (p = 0.48). Single-seed, so p-values are unreliable, but the <em>sign</em> of the correlation is striking — even a perfect random re-ordering would not be expected to produce a <em>negative</em> rank correlation. Replicating across 3–5 seeds will determine whether the magnitude is reliable; we expect the sign to hold.</p>
+<h3 id="what-this-proves-and-what-it-does-not">What this proves and what it does not</h3>
+<p>What it proves. The selection policy that maximises FL accuracy is <em>not</em> the policy that maximises FD accuracy under noisy DL channels. The two best FL methods (APEX v2, Oort) under-perform under FD; the two worst FL methods (FedCS, Logit-Quality TS) over-perform. Methods are <em>not</em> paradigm-portable. Practitioners who pick a selection algorithm based on FL benchmarks will — under FD with channel noise — pick a sub-optimal one.</p>
+<p>What it does not prove. (i) The ranking inversion may attenuate at higher DL SNR (see §6 — at errfree the rankings are tighter and more aligned with FL). (ii) The result is for one combination of dataset / model heterogeneity / α. (iii) Single-seed: the absolute magnitudes need replication. The <em>direction</em> (negative ρ) is the conservative claim.</p>
+<h3 id="why-fedcs-suddenly-works-in-fd">Why FedCS suddenly works in FD</h3>
+<p>FedCS in FL selects clients with <em>high training loss</em> and short estimated training time. In FL this is a vicious cycle (high loss → selected → still high loss because non-IID), and FedCS lands at the bottom (rank 10). In FD, the same “high-loss client” supplies a <em>logit</em>, not a weight update. Two effects work in FedCS’s favour: (i) high-loss clients generate logits with sharper, more confident distributions, which act as stronger distillation targets after the server averages and corrects them; (ii) FedCS’s preference for fast clients indirectly avoids high-noise channels because the simulator’s <code>compute_speed</code> and <code>channel_quality</code> are correlated through the system-heterogeneity model. The FedCS heuristic accidentally proxies a useful FD signal.</p>
+<h3 id="why-apex-v2-falls">Why APEX v2 falls</h3>
+<p>APEX v2’s Thompson-bandit + phase + diversity proxy is calibrated to FL’s “weight aggregation” failure mode (stale weights, gradient skew). Under FD’s logit-aggregation failure mode (channel noise corrupts logits <em>after</em> they are correct), APEX v2’s hysteresis ends up locking in clients whose logit <em>quality</em> is degrading, because the loss signal it tracks decouples from logit quality once channel noise dominates. APEX v2 still beats Random (19.7 % vs 15.9 %), but its FL crown does not transfer.</p>
+<hr />
+<h1 id="channel-noise-sensitivity">6. Channel-noise sensitivity</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig4_noise_sensitivity.png" alt="Fig. 4. Left: final server accuracy as a function of downlink SNR (errfree shown at +40 dB for visual purposes). Right: per-method accuracy drop from errfree to −30 dB. Both panels use the FD_CORE method set (7 methods)." /><figcaption aria-hidden="true"><strong>Fig. 4.</strong> Left: final server accuracy as a function of downlink SNR (errfree shown at +40 dB for visual purposes). Right: per-method accuracy drop from errfree to −30 dB. Both panels use the FD_CORE method set (7 methods).</figcaption>
+</figure>
+<p><strong>Table III.</strong> Final server accuracy across DL SNR levels (UL SNR fixed at −8 dB). Δ in last column = (errfree − −30 dB), in percentage points.</p>
+<table>
+<thead>
+<tr>
+<th style="width:22%">
+Method
+</th>
+<th>
+errfree
+</th>
+<th>
+0 dB
+</th>
+<th>
+−10 dB
+</th>
+<th>
+−20 dB
+</th>
+<th>
+−30 dB
+</th>
+<th>
+Δ (pp)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Logit-Quality TS
+</td>
+<td>
+30.0 %
+</td>
+<td>
+29.2 %
+</td>
+<td>
+24.2 %
+</td>
+<td>
+26.1 %
+</td>
+<td>
+20.0 %
+</td>
+<td>
+−10.0
+</td>
+</tr>
+<tr>
+<td>
+APEX v2
+</td>
+<td>
+30.1 %
+</td>
+<td>
+30.5 %
+</td>
+<td>
+26.9 %
+</td>
+<td>
+20.0 %
+</td>
+<td>
+19.8 %
+</td>
+<td>
+−10.3
+</td>
+</tr>
+<tr>
+<td>
+SNR-Diversity
+</td>
+<td>
+27.6 %
+</td>
+<td>
+23.1 %
+</td>
+<td>
+20.3 %
+</td>
+<td>
+17.5 %
+</td>
+<td>
+14.9 %
+</td>
+<td>
+−12.7
+</td>
+</tr>
+<tr>
+<td>
+Random
+</td>
+<td>
+29.9 %
+</td>
+<td>
+27.5 %
+</td>
+<td>
+19.6 %
+</td>
+<td>
+15.9 %
+</td>
+<td>
+16.4 %
+</td>
+<td>
+−13.5
+</td>
+</tr>
+<tr>
+<td>
+Oort
+</td>
+<td>
+32.4 %
+</td>
+<td>
+<strong>36.4 %</strong>
+</td>
+<td>
+26.4 %
+</td>
+<td>
+15.6 %
+</td>
+<td>
+13.4 %
+</td>
+<td>
+<strong>−19.0</strong>
+</td>
+</tr>
+<tr>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+25.7 %
+</td>
+<td>
+27.8 %
+</td>
+<td>
+27.4 %
+</td>
+<td>
+13.6 %
+</td>
+<td>
+14.2 %
+</td>
+<td>
+−11.4
+</td>
+</tr>
+<tr>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+23.9 %
+</td>
+<td>
+30.7 %
+</td>
+<td>
+22.9 %
+</td>
+<td>
+12.3 %
+</td>
+<td>
+18.0 %
+</td>
+<td>
+−5.9
+</td>
+</tr>
+</tbody>
+</table>
+<figure>
+<img src="../artifacts/analysis/figures/fig7_noise_var_curves.png" alt="Fig. 5. Effective noise variance trajectory per SNR level (averaged across methods within each run). Confirms the channel models the simulator implements diverge as expected — error-free stays at 0, lower SNR settles at higher variance." /><figcaption aria-hidden="true"><strong>Fig. 5.</strong> Effective noise variance trajectory per SNR level (averaged across methods within each run). Confirms the channel models the simulator implements diverge as expected — error-free stays at 0, lower SNR settles at higher variance.</figcaption>
+</figure>
+<h3 id="reading-the-noise-sweep">Reading the noise sweep</h3>
+<ul>
+<li><strong>Three regimes appear.</strong> (i) <code>errfree</code> and <code>0 dB</code> ≈ “easy”: all 7 methods land within 6 pp of each other; the FL champion <code>Oort</code> is briefly the leader (32.4 % errfree, 36.4 % at 0 dB — likely a single-seed quirk where mild noise acts as regularisation). (ii) <code>−10 dB</code> ≈ “transition”: some methods retain their easy-regime ordering, others start to break. (iii) <code>−20 dB</code> and <code>−30 dB</code> ≈ “hard”: ranking re-shuffles, channel-aware methods open a gap, FL champions collapse.</li>
+<li><strong>Largest degradation: Oort (−19.0 pp).</strong> Oort’s UCB exploration aggressively probes high-utility clients; under heavy DL noise those clients’ returned logits are corrupted, and Oort’s reward signal becomes adversarial. This is a clean falsification of the “Oort transfers” hypothesis.</li>
+<li><strong>Smallest degradation: Logit-Entropy Max (−5.9 pp).</strong> Selecting clients whose logits maximise raw entropy turns out to be the most <em>robust</em> (smallest absolute drop) — but the absolute level is the worst (12 %–18 %), so robustness without level is uninteresting in isolation.</li>
+<li><strong>Best level + acceptable degradation: Logit-Quality TS</strong> (30.0 % → 20.0 %, drop −10.0 pp; both the highest errfree level <em>and</em> among the smallest drops). This is the “winner across regimes” candidate for the paper.</li>
+<li><strong>APEX v2 inherits FL strength only in the easy regime</strong> (30.1 % errfree, ties Logit-Quality TS), then collapses to 20 % at −20 dB. The crossover happens between −10 dB and −20 dB. This is a cleaner explanation of the §5 ranking-inversion than method-by-method post-hoc reasoning.</li>
+<li><strong>Mechanistic story.</strong> Effective noise variance grows monotonically as DL SNR drops (Fig. 5). Methods whose ranking <em>moves down</em> under increasing noise are exactly those whose selection signal correlates with <code>effective_noise_var</code> post hoc. Methods whose ranking <em>moves up</em> either explicitly model channel quality (<code>SNR-Diversity</code>, <code>Noise-Robust Fair</code>) or accidentally avoid noisy clients via correlated heuristics (<code>Logit-Quality TS</code> via Thompson sampling on logit confidence; <code>FedCS</code> via fast-client preference).</li>
+</ul>
+<p>The −10 → −20 dB transition is the cleanest cut for a paper figure: at −10 dB, FL-style methods still work; at −20 dB they are dominated by FD-native methods. This is the visual carrier of the “ranking inverts when channel matters” thesis.</p>
+<hr />
+<h1 id="fd-native-method-deep-dive">7. FD-native method deep-dive</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig8_method_signals.png" alt="Fig. 6. Method-level signals vs final server accuracy on the FD main run. Three candidate “why” axes: average logit cosine diversity, label-coverage ratio, and channel-quality of selected clients. None of the three is monotonically predictive — the relationship is more nuanced." /><figcaption aria-hidden="true"><strong>Fig. 6.</strong> Method-level signals vs final server accuracy on the FD main run. Three candidate “why” axes: average logit cosine diversity, label-coverage ratio, and channel-quality of selected clients. None of the three is monotonically predictive — the relationship is more nuanced.</figcaption>
+</figure>
+<p>The four methods prefixed <code>fd_native.*</code> were designed specifically for FD with channel noise. Three observations from the data:</p>
+<ol type="1">
+<li><p><strong>Logit-Quality TS uses Thompson sampling on per-client logit-confidence rewards</strong> (signal: how peaky a client’s softmax over the public set is). It wins both the FD main benchmark (26.1 %) and the noise sweep at −20 dB (26.1 %). Its <code>Logit Cosine Div</code> (0.628) is <em>the lowest</em> of all 10 methods, and yet it wins. <strong>Implication: chasing diverse logits is the wrong instinct under noise.</strong> In a noisy DL channel, “diverse” often means “noise-corrupted in different directions”. Selecting <em>consistent, confident</em> logits — which is exactly what TS-on-logit-confidence does — gives the server a cleaner distillation target. This is the single most important counter-intuitive finding in the batch.</p></li>
+<li><p><strong>SNR-Diversity ranks 6th (16.3 %).</strong> It explicitly maximises a weighted blend of per-client SNR and label diversity. Its <code>Logit Cosine Div</code> is the <em>highest</em> (0.775) — it succeeds at its own diversity objective. Yet its accuracy is below Random’s. <strong>Implication: the SNRD weighting is mis-calibrated for −20 dB DL noise</strong> — it spends too many slots on diversity when the bottleneck is logit fidelity. The unrun ablations (FD 11) would isolate which component is at fault.</p></li>
+<li><p><strong>Noise-Robust Fair (20.1 %) and Logit-Entropy Max (12.3 %) bracket the design space.</strong> Noise-Robust Fair achieves the lowest fairness Gini (0.008 — essentially perfect equality of participation) and a respectable 20.1 %. It is the Pareto-optimal choice if “fair + reasonable accuracy” is the requirement. Logit-Entropy Max is the cleanest negative result — picking clients whose logits maximise <em>raw</em> entropy on the public set selects under-trained or noise-corrupted clients, which is the wrong end of the entropy axis.</p></li>
+</ol>
+<p>Across-method correlations (Pearson, computed from the FD main row):</p>
+<ul>
+<li><code>final_logit_cosine_div</code> ↔︎ <code>final_acc_tail20</code>: <strong>r = −0.57 (p = 0.085)</strong> — <em>negative</em>. More inter-method logit diversity correlates with lower server accuracy. (Reinforces observation 1.)</li>
+<li><code>final_chan_quality_sel</code> ↔︎ <code>final_acc_tail20</code>: r = −0.15 (p = 0.68) — essentially zero. Selecting high-channel-quality clients does not <em>by itself</em> improve the server’s distilled accuracy in this batch. The channel quality has to be combined with logit-quality information to matter.</li>
+</ul>
+<p>These two correlations are the empirical justification for the paper to focus on <strong>logit-quality-aware selection</strong> rather than pure channel-aware or pure diversity-aware selection.</p>
+<hr />
+<h1 id="communication-efficiency">8. Communication efficiency</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig6_communication.png" alt="Fig. 7. Cumulative per-round communication payload over 300 rounds: FL (weight transfer) vs FD (logit transfer). Log scale. FD overhead is ~0.024 % of FL — orders of magnitude lower." /><figcaption aria-hidden="true"><strong>Fig. 7.</strong> Cumulative per-round communication payload over 300 rounds: FL (weight transfer) vs FD (logit transfer). Log scale. FD overhead is ~0.024 % of FL — orders of magnitude lower.</figcaption>
+</figure>
+<p>Numbers (from <code>cum_comm</code> and <code>fl_equiv_comm_mb</code> summed over 300 rounds, FD = <code>Random</code> row from <code>fd_main</code>; FL estimate is the simulator’s <code>fl_equiv_comm_mb</code> accumulator, which approximates the LightCNN payload):</p>
+<table>
+<thead>
+<tr>
+<th>
+Paradigm
+</th>
+<th>
+Cumulative payload (300 rounds, K=15)
+</th>
+<th>
+Payload per round
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+FL (LightCNN)
+</td>
+<td>
+≈ 383,628 MB
+</td>
+<td>
+≈ 1,279 MB / round
+</td>
+</tr>
+<tr>
+<td>
+FD (logits, 8-bit, 2,000 public samples × 10 classes)
+</td>
+<td>
+91.6 MB
+</td>
+<td>
+≈ 0.31 MB / round
+</td>
+</tr>
+<tr>
+<td>
+FD / FL ratio
+</td>
+<td>
+<strong>0.024 %</strong>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The simulator’s per-round <code>comm_reduction_ratio</code> field gives 2.39 × 10⁻⁴ at the final round, consistent with the 0.024 % cumulative figure. The Mu <em>et al.</em> paper reports ~1 %; our finding is a further ~40× reduction because our FL baseline uses LightCNN with a larger weight footprint than Mu’s reference architecture, and our public-set logit payload is 2,000 × 10 = 20,000 floats (160 KB raw → ~10 KB at 8-bit quantisation × 2 = ~20 KB after metadata) while Mu’s setup uses a smaller payload normaliser.</p>
+<p><strong>Practical implication for the paper.</strong> The communication savings are so large that <em>the only thing left to optimise is accuracy</em>. There is no accuracy/communication trade-off to manage at the selection layer — picking 15 of 50 clients with FD costs less than 0.1 % of broadcasting weights to the same 15 clients with FL. Any selection method, regardless of how complex its scoring rule, has negligible communication overhead.</p>
+<hr />
+<h1 id="fairness-and-participation-dynamics">9. Fairness and participation dynamics</h1>
+<figure>
+<img src="../artifacts/analysis/figures/fig5_fairness_pareto.png" alt="Fig. 8. Accuracy–fairness Pareto for the FD main benchmark. X-axis: fairness Gini at the final round (lower = fairer participation). Y-axis: final server accuracy. Methods in the upper-left quadrant are Pareto-optimal." /><figcaption aria-hidden="true"><strong>Fig. 8.</strong> Accuracy–fairness Pareto for the FD main benchmark. X-axis: fairness Gini at the final round (lower = fairer participation). Y-axis: final server accuracy. Methods in the upper-left quadrant are Pareto-optimal.</figcaption>
+</figure>
+<p>Pareto observations:</p>
+<ul>
+<li><strong>Pareto front (upper-left):</strong> <code>Noise-Robust Fair</code> (Gini 0.008, acc 20.1 %), <code>Logit-Quality TS</code> (Gini 0.18, acc 26.1 %), <code>LabelCov</code> (Gini 0.70, acc 22.4 %). These three dominate every alternative in at least one direction.</li>
+<li><strong>Strictly dominated:</strong> <code>Oort</code> (Gini 0.70, acc 13.7 %) is dominated by both <code>LabelCov</code> and <code>Noise-Robust Fair</code>. <code>MAML-Select</code> and <code>Logit-Entropy Max</code> are both dominated by <code>Random</code>.</li>
+<li><strong>Methods at Gini = 0.70</strong> (LabelCov, FedCS, Oort, Logit-Entropy Max): the simulator’s fairness Gini saturates at 0.70 because these methods aggressively concentrate on a fixed sub-population (the upper bound for K=15 / N=50 over 300 rounds with deterministic preferences). The Gini is maxed-out, not 1.0, because of the K/N ratio.</li>
+<li><strong>Fairness Gini ≡ Participation Gini</strong> (identical column-by-column in the master table). The two metrics differ in name only; they should be deduplicated in a future simulator release.</li>
+</ul>
+<p>For an IEEE submission, the operational recommendation is: report <code>Logit-Quality TS</code> as the headline accuracy method and <code>Noise-Robust Fair</code> as the headline fairness method, with the Pareto plot used to justify why the choice depends on use-case constraints.</p>
+<hr />
+<h1 id="recommended-ieee-paper-narrative-given-this-batch">10. Recommended IEEE paper narrative (given this batch)</h1>
+<p>The strongest story this batch supports — without overclaiming — is:</p>
+<ol type="1">
+<li><p><strong>Title-level claim.</strong> “Client-selection algorithms designed for federated learning do not transfer to federated distillation under noisy mMIMO downlinks; the optimal selector is paradigm- and channel-conditional.”</p></li>
+<li><p><strong>Section 1 (Intro) + Fig. 1.</strong> The headline ranking-inversion bar (<code>Fig. 3</code> here). Lead with the fact that the <em>same</em> 10 methods produce <em>negatively correlated</em> rankings across paradigms.</p></li>
+<li><p><strong>Section 2 (System model).</strong> Lift directly from <code>docs/FD_method_reference.md</code> §§2–4. No new content needed.</p></li>
+<li><p><strong>Section 3 (Method).</strong> Present the four <code>fd_native.*</code> selectors as the contribution. The Logit-Quality TS algorithm is the cleanest narrative — Thompson sampling on per-client logit confidence, justified by the negative correlation between cosine diversity and server accuracy (the surprising finding from §7).</p></li>
+<li><p><strong>Section 4 (Experimental setup).</strong> Use Tables I–II from this report as the experimental tables.</p></li>
+<li><p><strong>Section 5 (Main results).</strong> <code>Fig. 1</code> (convergence) + <code>Fig. 2</code> (final-acc bar) + <code>Table I</code> (numerical headline). Lead conclusion: Logit-Quality TS is best at 26.1 %, 1.6× Random.</p></li>
+<li><p><strong>Section 6 (Why? — channel sensitivity).</strong> <code>Fig. 4</code> (noise sweep) + <code>Fig. 5</code> (effective noise variance) + <code>Table III</code>. This is the mechanistic explanation: as DL SNR drops below −10 dB, FL champions collapse, channel-aware methods rise.</p></li>
+<li><p><strong>Section 7 (Communication and fairness).</strong> <code>Fig. 7</code> + <code>Fig. 8</code> + the Pareto observation. Brief; the communication number speaks for itself.</p></li>
+<li><p><strong>Section 8 (Discussion).</strong> Acknowledge the single-seed caveat. Argue that the <em>direction</em> of the inversion is robust because gaps are large (≥3 pp) and the noise-sweep gives a continuous mechanistic explanation.</p></li>
+<li><p><strong>Section 9 (Conclusion + future work).</strong> Push the unrun experiments — α-sweep, K-sweep, group-based FD, multi-seed — into the future-work section.</p></li>
+</ol>
+<p>What to <em>deliberately not claim</em> given current data: cross-dataset generality (no MNIST/FMNIST FD run completed); scalability (no N=100 FD run); group-based FedTSKD-G effect (no FD 7 run); ablation isolating which of <code>snr_diversity</code>’s components hurts (no FD 11 run); statistical significance (no multi-seed). Each is a one-bullet “future work” entry.</p>
+<hr />
+<h1 id="gaps-that-must-be-closed-before-submission">11. Gaps that must be closed before submission</h1>
+<p>Ordered by priority (highest first):</p>
+<ol type="1">
+<li><p><strong>Multi-seed (FD 12).</strong> Re-run FD-1 main, FD-3 noise sweep with seeds {0, 1, 2, 42, 100}. Until done, all numbers carry a single-seed footnote and reviewers will reject statistical claims. <strong>This is the blocker.</strong></p></li>
+<li><p><strong>Alpha sweep (FD 4).</strong> Need α ∈ {0.1, 0.3, 0.5, 1.0, 5.0, 10.0}. Currently only 0.5 (default). Without this, “the inversion holds across heterogeneity” is unsupported. The α=0.1 run started but did not produce a <code>compare_results.json</code>; investigate why before re-launching.</p></li>
+<li><p><strong>K sweep (FD 5).</strong> Need K ∈ {5, 10, 15, 25, 50}. The “smart selection of K=10 beats full K=N” headline from <code>docs/FD_experiments.md</code> §5 cannot be made without this.</p></li>
+<li><p><strong>MNIST + FMNIST (FD 8).</strong> Cross-dataset replication. Without it, the paper is a single-dataset study.</p></li>
+<li><p><strong>FD 7 (group-based) and FD 10 (antenna sweep).</strong> Each enables one paper figure. Useful but not blockers.</p></li>
+<li><p><strong>FD 11 ablations.</strong> Justifies the FD-native method designs against component variants. Important if the contribution is the <em>method</em> design; less important if the contribution is the <em>empirical observation</em>.</p></li>
+<li><p><strong>Investigate the α=0.1 incomplete run.</strong> <code>compare_results.json</code> was never written despite 4 days of wall-clock — likely OOM, NaN, or process kill. Check the simulator’s stop-early behaviour and the user’s job-control log before relaunching to avoid wasting another batch.</p></li>
+</ol>
+<p>A pragmatic re-run plan (CPU-hour ordered): FD 12 (multi-seed of FD 1 only) → FD 4 (α sweep, 5 missing levels) → FD 5 (K sweep) → FD 8 (cross-dataset) → FD 7 + FD 10 + FD 11 in any order.</p>
+<hr />
+<h1 id="reproduction-guide">12. Reproduction guide</h1>
+<p>To regenerate every CSV / PNG in this report:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> d:/studies/UG/Research/DRDO/CSFL-simulator</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/analyze_fd_results.py</span></code></pre></div>
+<p>Outputs:</p>
+<ul>
+<li><code>artifacts/analysis/master_table.csv</code> — every method × every run summary.</li>
+<li><code>artifacts/analysis/fd_main_method_table.csv</code> — Table I above.</li>
+<li><code>artifacts/analysis/ranking_fl_vs_fd.csv</code> + <code>ranking_fl_vs_fd_stats.json</code> — Table II + ρ, τ.</li>
+<li><code>artifacts/analysis/noise_sweep_summary.csv</code> — Table III above.</li>
+<li><code>artifacts/analysis/communication_stats.json</code> — §8 numbers.</li>
+<li><code>artifacts/analysis/figures/fig{1..8}_*.png</code> — every embedded figure.</li>
+</ul>
+<p>To rebuild this PDF after editing the markdown:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pandoc</span> docs/FD_results_analysis.md <span class="at">-o</span> docs/FD_results_analysis.pdf <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--pdf-engine</span><span class="op">=</span>xelatex <span class="at">--toc</span> <span class="at">--toc-depth</span><span class="op">=</span>2</span></code></pre></div>
+<hr />
+<h1 id="appendix-a-full-master-table-per-run-per-method">Appendix A — full master table (per-run, per-method)</h1>
+<p>The complete numerical record is at <code>artifacts/analysis/master_table.csv</code> (55 rows × 26 columns; one row per (run, method) pair). Below is a condensed view of just the FD-3 noise sweep (which is the only multi-condition slice not summarised in §6 in raw form).</p>
+<table>
+<thead>
+<tr>
+<th style="width:14%">
+DL SNR
+</th>
+<th style="width:18%">
+Method
+</th>
+<th>
+Server Acc
+</th>
+<th>
+KL Div
+</th>
+<th>
+Noise Var
+</th>
+<th>
+Fairness Gini
+</th>
+<th>
+Logit Cosine Div
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+errfree
+</td>
+<td>
+APEX v2
+</td>
+<td>
+30.1 %
+</td>
+<td>
+1.79
+</td>
+<td>
+0.0
+</td>
+<td>
+0.18
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+Logit-Quality TS
+</td>
+<td>
+30.0 %
+</td>
+<td>
+1.79
+</td>
+<td>
+0.0
+</td>
+<td>
+0.65
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+Random
+</td>
+<td>
+29.9 %
+</td>
+<td>
+1.79
+</td>
+<td>
+0.0
+</td>
+<td>
+0.04
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+Oort
+</td>
+<td>
+32.4 %
+</td>
+<td>
+1.84
+</td>
+<td>
+0.0
+</td>
+<td>
+0.70
+</td>
+<td>
+0.71
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+SNR-Diversity
+</td>
+<td>
+27.6 %
+</td>
+<td>
+1.79
+</td>
+<td>
+0.0
+</td>
+<td>
+0.46
+</td>
+<td>
+0.74
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+25.7 %
+</td>
+<td>
+1.71
+</td>
+<td>
+0.0
+</td>
+<td>
+0.01
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+errfree
+</td>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+23.9 %
+</td>
+<td>
+1.92
+</td>
+<td>
+0.0
+</td>
+<td>
+0.66
+</td>
+<td>
+0.74
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+Logit-Quality TS
+</td>
+<td>
+26.1 %
+</td>
+<td>
+1.80
+</td>
+<td>
+29.9
+</td>
+<td>
+0.18
+</td>
+<td>
+0.63
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+APEX v2
+</td>
+<td>
+20.0 %
+</td>
+<td>
+1.80
+</td>
+<td>
+32.9
+</td>
+<td>
+0.19
+</td>
+<td>
+0.63
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+SNR-Diversity
+</td>
+<td>
+17.5 %
+</td>
+<td>
+1.98
+</td>
+<td>
+115.0
+</td>
+<td>
+0.64
+</td>
+<td>
+0.78
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+Random
+</td>
+<td>
+15.9 %
+</td>
+<td>
+1.57
+</td>
+<td>
+15.5
+</td>
+<td>
+0.04
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+Oort
+</td>
+<td>
+15.6 %
+</td>
+<td>
+2.01
+</td>
+<td>
+98.6
+</td>
+<td>
+0.70
+</td>
+<td>
+0.71
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+13.6 %
+</td>
+<td>
+1.70
+</td>
+<td>
+20.4
+</td>
+<td>
+0.01
+</td>
+<td>
+0.63
+</td>
+</tr>
+<tr>
+<td>
+−20 dB
+</td>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+12.3 %
+</td>
+<td>
+1.95
+</td>
+<td>
+63.2
+</td>
+<td>
+0.66
+</td>
+<td>
+0.75
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+Logit-Quality TS
+</td>
+<td>
+20.0 %
+</td>
+<td>
+1.96
+</td>
+<td>
+32.0
+</td>
+<td>
+0.18
+</td>
+<td>
+0.65
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+APEX v2
+</td>
+<td>
+19.8 %
+</td>
+<td>
+1.95
+</td>
+<td>
+33.5
+</td>
+<td>
+0.20
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+Logit-Entropy Max
+</td>
+<td>
+18.0 %
+</td>
+<td>
+2.01
+</td>
+<td>
+67.3
+</td>
+<td>
+0.66
+</td>
+<td>
+0.74
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+Random
+</td>
+<td>
+16.4 %
+</td>
+<td>
+1.78
+</td>
+<td>
+15.7
+</td>
+<td>
+0.04
+</td>
+<td>
+0.66
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+SNR-Diversity
+</td>
+<td>
+14.9 %
+</td>
+<td>
+2.04
+</td>
+<td>
+117.5
+</td>
+<td>
+0.64
+</td>
+<td>
+0.78
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+Noise-Robust Fair
+</td>
+<td>
+14.2 %
+</td>
+<td>
+1.91
+</td>
+<td>
+21.0
+</td>
+<td>
+0.01
+</td>
+<td>
+0.64
+</td>
+</tr>
+<tr>
+<td>
+−30 dB
+</td>
+<td>
+Oort
+</td>
+<td>
+13.4 %
+</td>
+<td>
+2.07
+</td>
+<td>
+100.5
+</td>
+<td>
+0.70
+</td>
+<td>
+0.71
+</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

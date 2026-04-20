@@ -1,0 +1,114 @@
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm 16mm;
+  @bottom-center { content: counter(page) " / " counter(pages); font-size: 9pt; color: #777; }
+}
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, "DejaVu Sans", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+h1 { font-size: 18pt; border-bottom: 2px solid #444; padding-bottom: 4px; margin-top: 22pt; }
+h2 { font-size: 14pt; color: #1c3d6b; margin-top: 18pt; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+h3 { font-size: 11.5pt; color: #2a2a2a; margin-top: 14pt; }
+h4 { font-size: 10.5pt; color: #444; margin-top: 12pt; }
+
+p { margin: 6pt 0; text-align: justify; }
+ul, ol { margin: 6pt 0 6pt 22pt; padding: 0; }
+li { margin: 3pt 0; }
+
+code, pre {
+  font-family: "Consolas", "Courier New", "DejaVu Sans Mono", monospace;
+  font-size: 9.5pt;
+}
+pre {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  padding: 8pt;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+code {
+  background: #f1f3f5;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 8pt auto;
+  page-break-inside: avoid;
+}
+
+/* Captions: any <p><em>...</em></p> appearing right after an <img> -> small + centred */
+img + p, p > em:first-child:last-child {
+  font-size: 9.5pt;
+  text-align: center;
+  color: #444;
+}
+
+/* TABLE STYLING — the critical part for wrapping */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;          /* forces column widths to be respected */
+  margin: 10pt 0;
+  font-size: 9pt;
+  page-break-inside: avoid;
+}
+
+th, td {
+  border: 1px solid #c0c4ca;
+  padding: 5px 7px;
+  vertical-align: top;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;       /* break long tokens like fd_native.logit_quality_ts */
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+th {
+  background: #e9eef5;
+  color: #1a3a6b;
+  font-weight: 600;
+  text-align: left;
+}
+
+tbody tr:nth-child(odd)  { background: #fafbfc; }
+tbody tr:nth-child(even) { background: #ffffff; }
+
+/* Numbers right-aligned when whole cell looks numeric — done with a class fallback */
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+blockquote {
+  border-left: 3px solid #888;
+  padding: 4pt 10pt;
+  margin: 8pt 0;
+  color: #444;
+  background: #fafafa;
+}
+
+a { color: #1c5fa8; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+hr { border: 0; border-top: 1px solid #ccc; margin: 14pt 0; }
+
+/* Strong elements inside bullets — keep readable */
+strong { color: #1a1a1a; }
+
+/* Page-breakable headings */
+h1 { page-break-before: auto; page-break-after: avoid; }
+h2, h3 { page-break-after: avoid; }
