@@ -8,7 +8,7 @@ Tests both:
 This helps verify whether the models have sufficient capacity for CIFAR-10
 before running expensive federated distillation experiments.
 
-Usage: Just run all cells in Google Colab (GPU runtime recommended).
+Usage: Just run all cells in Google Colab (GPU runtime recommended)
 """
 
 import torch
