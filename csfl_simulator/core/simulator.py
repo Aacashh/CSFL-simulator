@@ -52,7 +52,10 @@ class SimConfig:
     reward_weights: Dict[str, float] = field(default_factory=lambda: {"acc": 0.6, "time": 0.2, "fair": 0.1, "dp": 0.1})
     # Performance/diagnostics knobs
     track_grad_norm: bool = False
-    parallel_clients: int = 0  # 0 = off (sequential)
+    # Auto-detect parallel client training (bounded to 8 or by VRAM).
+    # Set to 0 to force sequential execution (legacy).
+    # Set to N>0 to force exactly N parallel streams.
+    parallel_clients: int = -1
     name: Optional[str] = None  # Named run (used as folder name under artifacts/runs/)
     # Paradigm selection: "fl" (Federated Learning) or "fd" (Federated Distillation)
     paradigm: str = "fl"

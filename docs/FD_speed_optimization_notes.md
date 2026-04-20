@@ -219,3 +219,86 @@ Then compare `t_clients_phase`, `t_server_phase`, `t_eval_phase`, and
    `t_eval_phase` can be the gating phase. Raise `--eval-every` further, or
    enable `--eval-subsample 2000` so intermediate rounds evaluate on a fixed
    2 000-sample subset (the final round still uses the full test set).
+
+## Follow-up pass (post first-pass benchmarking)
+
+After the first-pass changes above, Experiment 1 in
+`scripts/run_next_sota_experiments.sh` (CIFAR-10, 15 clients, K=15, ResNet18/
+MobileNetV2/ShuffleNetV2 pool, 135 SGD steps/round, AMP on) was still running
+at roughly **50 s per round**. A second audit found that the existing
+parallelism infrastructure was not running at all on that workload, and two of
+the opt-in speed flags were never being passed by the benchmark script.
+
+### What was still broken
+
+- **`SimConfig.parallel_clients` defaulted to `0`** — the "sequential /
+  legacy" branch. Every call site of `parallel_clients` gates the parallel
+  path on `!= 0` (`simulator.py::setup`, `simulator.py::run`,
+  `fd_simulator.py::setup::_max_parallel detection`, and the FL
+  `parallel.py::create_trainer` factory), so `_max_parallel` collapsed to `1`
+  and both the client-phase stream dispatch in `run()` and the new
+  stream-parallel client eval in `_evaluate_clients_cached` (tier 1.3) fell
+  into their sequential fallback. All 15 clients were processed serially.
+- **`--use-torch-compile` and `--channels-last` were never set** by the
+  experiment shell scripts. They default off because compilation can fail on
+  unusual layers; the shell scripts were the intended place to opt in, but
+  never did.
+
+### Changes in this pass
+
+1. **`SimConfig.parallel_clients: int = 0` → `-1`** (auto-detect).
+   Corresponding `argparse` default in `csfl_simulator/__main__.py` updated
+   to `-1` so CLI usage matches. Every call site already handled `-1`: the
+   `create_trainer` factory only returns `None` for the literal `0`, and
+   `ParallelTrainer.__init__` explicitly branches on `-1` for auto-detect.
+   On CPU, `-1` falls through to the `max(1, max_parallel) = 1` branch, which
+   is sequential — no regression for CPU-only runs.
+2. **New `PERF_FLAGS` block in `scripts/run_next_sota_experiments.sh` and
+   `scripts/run_all_experiments.sh`.** On CUDA, the flag string is
+   `--use-amp --use-torch-compile --channels-last`. Off CUDA, it is empty
+   (AMP uses `GradScaler` which does not work on CPU; `channels_last` needs
+   a 4D tensor; `torch.compile` would at best be a no-op). The existing
+   `--device ${DEVICE}` gate continues to control both.
+3. **Chunked public-dataset inference in `_generate_logits` and the
+   server-on-public block in `run()`.** Previously both issued a single
+   forward pass over the full 2000-sample public tensor. They now loop by
+   `cfg.distillation_batch_size` (500 by default), matching the chunk size
+   already used by `_local_distill` / `_server_distill` and letting the
+   AMP autocast / cuDNN kernels pipeline with other work on the same CUDA
+   stream.
+4. **Task 4A — verified, no code change needed.** `_generate_logits` is
+   already called from inside `_process_client`, which is dispatched across
+   CUDA streams by the client-phase loop in `run()` (batched at
+   `self._max_parallel`). After Task 1 makes `_max_parallel > 1` the default,
+   inference parallelises without additional rewrite.
+
+### Expected effect on Experiment 1
+
+With the first-pass changes plus this follow-up pass, Experiment 1 should
+drop from ~50 s per round to roughly **15–25 s per round** (2–3× further
+speedup). The breakdown of the remaining time:
+
+- `t_clients_phase`: 15 clients dispatched across ≤ 8 CUDA streams (VRAM-
+  bounded auto-detection) with `torch.compile` + `channels_last` on each
+  client model — single-digit seconds on an A100.
+- `t_server_phase`: one server distill pass (compiled model) plus chunked
+  server inference on 2000 public samples — ~1–3 s.
+- `t_eval_phase`: full-pool per-user accuracy across 15 stream-parallel
+  client forward passes on the cached test set — sub-second on most rounds,
+  ~5 s on the 10th round when intermediate eval fires.
+
+Further reductions require deviating from paper-matched settings (larger
+batch, fewer local steps, fewer distill epochs) and should only be done for
+non-replication experiments.
+
+### Compute floor
+
+There is a hard compute floor that no further optimisation can break.
+Experiment 1 is 15 clients × 135 SGD steps × batch 128 of
+ResNet18-on-CIFAR-10, which is ~259 000 training samples plus one backward
+pass per step, per round, even before distillation and channel simulation.
+On an A100 with AMP and CUDA-stream parallelism bounded to 8 concurrent
+clients, the realistic lower bound is ~15 s per round. Getting below 10 s
+would require dropping the batch size ceiling, cutting `local_epochs` back
+to 1, or shortening the dynamic-step schedule — all of which are paper-
+faithful parameters and must stay at the paper values for replication runs.
