@@ -104,6 +104,10 @@ class SimConfig:
     # MMSE attenuates uplink noise by 1/(1 + 1/(SNR*N_BS)) relative to ZF, becoming
     # equivalent to ZF in the high-SNR regime.
     combining_scheme: str = "zf"
+    # Per-phase timing: when True, prints a one-line round-by-round breakdown of time spent
+    # in the client phase (LD+LT+LI), server aggregation+distill, evaluation, and other.
+    # Timings are always recorded in metrics.json regardless of this flag (overhead: ~5us/round).
+    profile: bool = False
 
 
 class FLSimulator:
