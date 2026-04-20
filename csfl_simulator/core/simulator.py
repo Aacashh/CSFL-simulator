@@ -124,9 +124,11 @@ class SimConfig:
     # way. See docs/FD_speed_optimization_notes.md.
     performance_mode: bool = True
     # Torch compile: when True and PyTorch >= 2.1 on CUDA, wraps each client model and the
-    # server model in torch.compile(mode="reduce-overhead"). Adds 10-60s first-round compile
-    # cost, but can deliver 20-40% sustained speedup. Off by default because compilation
-    # can fail on some model zoo layers; failures fall back to uncompiled silently.
+    # server model in torch.compile() with the default Inductor mode. Adds 10-60s first-round
+    # compile cost, but can deliver 20-40% sustained speedup. Off by default because
+    # compilation can fail on some model zoo layers; failures fall back to uncompiled
+    # silently. The default mode avoids CUDA-graph output-buffer aliasing — see
+    # FDSimulator._maybe_compile_models for why mode="reduce-overhead" is NOT used.
     use_torch_compile: bool = False
     # Channels-last memory format: when True, converts CNN models and cached tensors to
     # torch.channels_last. 10-20% speedup on Ampere+ GPUs for conv-heavy models. Only

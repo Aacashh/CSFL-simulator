@@ -391,6 +391,15 @@ class FDSimulator:
         Off by default because compilation can fail on unusual layers. Each failure
         is caught and the uncompiled model is kept instead — the simulator stays
         functional even if only some models compile. Requires PyTorch >= 2.1.
+
+        Mode choice — uses the default Inductor mode, NOT ``mode="reduce-overhead"``.
+        The reduce-overhead mode uses CUDA graphs, which reuse a single output buffer
+        across successive calls of the same graph. The FD loop calls multiple compiled
+        models back-to-back (in _evaluate_clients_cached and the client phase) and
+        needs to read each output after later calls, which the graph-captured buffer
+        aliasing breaks with a "accessing tensor output of CUDAGraphs that has been
+        overwritten" RuntimeError. The default mode still gives Inductor kernel
+        fusion without the CUDA-graph aliasing hazard.
         """
         if not hasattr(torch, "compile"):
             print("[FD setup] torch.compile not available (requires PyTorch >= 2.1) — skipping.", flush=True)
@@ -405,7 +414,7 @@ class FDSimulator:
                 self.client_models[cid] = compiled_cache[key]
                 continue
             try:
-                cm = torch.compile(m, mode="reduce-overhead")
+                cm = torch.compile(m)  # default mode, see docstring
                 self.client_models[cid] = cm
                 compiled_cache[key] = cm
                 n_compiled += 1
@@ -413,7 +422,7 @@ class FDSimulator:
                 n_failed += 1
                 print(f"[FD setup] torch.compile failed for client {cid}: {e}", flush=True)
         try:
-            self.server_model = torch.compile(self.server_model, mode="reduce-overhead")
+            self.server_model = torch.compile(self.server_model)  # default mode
             n_compiled += 1
         except Exception as e:
             n_failed += 1
