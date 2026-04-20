@@ -7,6 +7,14 @@ Implements the FedTSKD and FedTSKD-G algorithms from:
 
 The selection interface is identical to FL — all 47+ existing client
 selection methods work unchanged.
+
+NOTE: This implementation uses constant learning rates. Theorem 1 of the
+paper assumes eta_t = beta_0 / (t + beta_1) decay for its O(1/t) convergence
+bound. Empirical convergence rates may therefore differ from the theoretical
+O(1/t) predicted in §IV; in particular, late-training behaviour is controlled
+by Adam's running-moment scaling rather than by the theorem's step-size
+decay. Swap in a time-decayed LR schedule if the theorem bound is being
+empirically verified.
 """
 from __future__ import annotations
 
@@ -148,7 +156,10 @@ class FDSimulator:
             model = get_model(arch_name, cfg.dataset, num_classes, device=self.device)
             self.client_models[cid] = model
 
-        init_system_state(self.clients, {})
+        init_system_state(self.clients, {
+            "paradigm": "fd",
+            "channel_threshold": cfg.channel_threshold,
+        })
 
         # --- Server model (same architecture as first client for simplicity) ---
         server_arch = pool_names[0]
@@ -167,6 +178,7 @@ class FDSimulator:
                 ul_snr_db=cfg.ul_snr_db,
                 dl_snr_db=cfg.dl_snr_db,
                 quantization_bits=cfg.quantization_bits,
+                combining=cfg.combining_scheme,
             )
 
         # --- Save initial states for fair multi-method comparisons ---
@@ -387,7 +399,7 @@ class FDSimulator:
                             pass
                     opt.step()
                 last_loss = float(loss.item())
-                if cfg.fast_mode and step > 0:
+                if cfg.smoke_test_mode and step > 0:
                     return last_loss, grad_norm
             return last_loss, grad_norm
 
@@ -432,7 +444,7 @@ class FDSimulator:
                     opt.step()
                 last_loss = float(loss.item())
                 step += 1
-                if cfg.fast_mode and step > 1:
+                if cfg.smoke_test_mode and step > 1:
                     return last_loss, grad_norm
         return last_loss, grad_norm
 
@@ -498,7 +510,7 @@ class FDSimulator:
                         opt.step()
                     total_loss += loss.item()
                     n_batches += 1
-                    if cfg.fast_mode and n_batches > 1:
+                    if cfg.smoke_test_mode and n_batches > 1:
                         return total_loss / n_batches
         else:
             for epoch in range(num_epochs):
@@ -522,7 +534,7 @@ class FDSimulator:
                         opt.step()
                     total_loss += loss.item()
                     n_batches += 1
-                    if cfg.fast_mode and n_batches > 1:
+                    if cfg.smoke_test_mode and n_batches > 1:
                         return total_loss / n_batches
 
         return total_loss / max(1, n_batches)
@@ -564,7 +576,7 @@ class FDSimulator:
                         opt.step()
                     total_loss += loss.item()
                     n_batches += 1
-                    if cfg.fast_mode and n_batches > 1:
+                    if cfg.smoke_test_mode and n_batches > 1:
                         return total_loss / n_batches
         else:
             for epoch in range(num_epochs):
@@ -588,7 +600,7 @@ class FDSimulator:
                         opt.step()
                     total_loss += loss.item()
                     n_batches += 1
-                    if cfg.fast_mode and n_batches > 1:
+                    if cfg.smoke_test_mode and n_batches > 1:
                         return total_loss / n_batches
 
         return total_loss / max(1, n_batches)
@@ -653,7 +665,11 @@ class FDSimulator:
             rnd_start = time.perf_counter()
 
             # Phase 1: Update environment & select clients
-            simulate_round_env(self.clients, {"paradigm": "fd", "channel_threshold": cfg.channel_threshold}, rnd)
+            simulate_round_env(self.clients, {
+                "paradigm": "fd",
+                "channel_threshold": cfg.channel_threshold,
+                "static_channel_groups": cfg.static_channel_groups,
+            }, rnd)
 
             sel_start = time.perf_counter()
             ids, scores, state = self.registry.invoke(
@@ -791,8 +807,15 @@ class FDSimulator:
             else:
                 aggregated_logits = logit_avg(logit_list, weights)
 
-            # Phase 6: Server-side distillation
+            # Phase 6: Server-side distillation.
+            # Paper Eq. 18 introduces omega_D ~ N(0, sigma_D^2 * I) as a small-variance
+            # Gaussian perturbation on the server's aggregated logits (representing the
+            # residual distillation uncertainty after aggregation). We model it as an
+            # additive noise term before server distillation. Set cfg.server_distill_sigma
+            # to 0 to disable.
             server_target = aggregated_logits
+            if self.channel is not None and cfg.server_distill_sigma > 0:
+                server_target = server_target + torch.randn_like(server_target) * cfg.server_distill_sigma
             server_kl = self._server_distill(server_target, cfg.distillation_epochs)
 
             # Server predicts on public dataset → logits for next round's downlink
@@ -829,8 +852,10 @@ class FDSimulator:
             quant_bytes = cfg.quantization_bits / 8.0
             # Uplink: K clients send logits; Downlink: server broadcasts logits
             logit_comm_kb = (len(ids) * n_pub * C * quant_bytes + n_pub * C * quant_bytes) / 1024.0
-            # FL equivalent: 2 * K * model_size_bytes
-            fl_model_bytes = self.model_params_count * 4.0
+            # FL equivalent: 2 * K * model_size_bytes.
+            # Paper Fig. 10 reports FL with 16-bit quantization (2 bytes/param), not fp32.
+            # Using 4 bytes/param here would inflate FL comm by 2x, overstating FD's savings.
+            fl_model_bytes = self.model_params_count * 2.0  # 16-bit quantization per paper Fig. 10
             fl_equiv_comm_mb = 2.0 * len(ids) * fl_model_bytes / (1024.0 * 1024.0)
             comm_reduction = logit_comm_kb / 1024.0 / max(fl_equiv_comm_mb, 1e-10)
 
@@ -846,7 +871,10 @@ class FDSimulator:
             eval_every = max(1, cfg.eval_every)
             do_eval = (rnd % eval_every == 0) or (rnd == cfg.rounds - 1) or (rnd == 0)
             if do_eval:
-                m = self._evaluate_clients(sample_ids=ids)
+                # Evaluate ALL clients on eval rounds (paper's per-user avg metric).
+                # Previously passed sample_ids=ids which only evaluated selected clients,
+                # biasing `client_accuracy_avg` toward the selection policy.
+                m = self._evaluate_clients(sample_ids=None)
                 server_m = self._evaluate_server()
                 m["server_accuracy"] = server_m.get("accuracy", 0.0)
                 m["server_loss"] = server_m.get("loss", 0.0)
@@ -886,7 +914,7 @@ class FDSimulator:
                 "dynamic_steps_kr": K_r_current,
                 "num_good_channel": n_good,
                 "num_bad_channel": n_bad,
-                "client_accuracy_avg": m.get("accuracy", 0.0),
+                "client_accuracy_avg": m.get("avg_per_client_accuracy", 0.0),
                 "client_accuracy_std": m.get("accuracy_std", 0.0),
                 # New FD-native metrics
                 "logit_entropy_avg": (sum(logit_entropy_vals) / len(logit_entropy_vals)) if logit_entropy_vals else 0.0,
@@ -964,8 +992,15 @@ class FDSimulator:
 
         Uses GPU-cached test data when available to avoid DataLoader overhead.
         Iterates test data once per chunk, running all client models per chunk.
+
+        When sample_ids is None, evaluates ALL total_clients — the paper's per-user
+        averaged accuracy metric. Previously defaulted to the first 10 clients,
+        which biased metrics when total_clients > 10.
         """
-        ids_to_eval = sample_ids or list(range(min(self.cfg.total_clients, 10)))
+        if sample_ids is None:
+            ids_to_eval = list(range(self.cfg.total_clients))
+        else:
+            ids_to_eval = list(sample_ids)
         n_clients = len(ids_to_eval)
 
         # Set all models to eval mode
@@ -1054,8 +1089,14 @@ class FDSimulator:
         import statistics
         acc_std = statistics.stdev(all_accs) if len(all_accs) > 1 else 0.0
 
+        # Per-client accuracy averaging (paper's metric: average of each client's own test acc).
+        # Distinct from `accuracy` which is pooled across all (prediction, label) pairs and
+        # double-counts each test sample once per evaluated client.
+        avg_per_client_accuracy = sum(all_accs) / max(len(all_accs), 1)
+
         return {
-            "accuracy": accuracy,
+            "accuracy": accuracy,                       # pooled: micro-averaged over all samples*clients
+            "avg_per_client_accuracy": avg_per_client_accuracy,  # paper metric: mean of per-client accs
             "loss": total_loss / max(n_samples, 1),
             "f1": f1,
             "precision": precision,

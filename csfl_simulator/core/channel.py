@@ -21,6 +21,11 @@ class MIMOChannel:
         ul_snr_db: Uplink   SNR in dB               (paper default -8)
         dl_snr_db: Downlink SNR in dB               (paper default -20)
         quantization_bits: Uniform quantization bits (paper default 8)
+        combining: Combining / detection scheme at the BS. "zf" (zero-forcing,
+            paper default) gives exact interference cancellation but amplifies noise
+            as N_D/(2*SNR*N_BS). "mmse" (minimum-mean-squared-error) attenuates
+            the same noise by a 1/(1 + 1/(SNR*N_BS)) factor (see paper §VI-C),
+            becoming equivalent to ZF in the high-SNR regime.
     """
 
     def __init__(
@@ -30,12 +35,16 @@ class MIMOChannel:
         ul_snr_db: float = -8.0,
         dl_snr_db: float = -20.0,
         quantization_bits: int = 8,
+        combining: str = "zf",
     ):
         self.n_bs = n_bs
         self.n_device = n_device
         self.ul_snr_db = ul_snr_db
         self.dl_snr_db = dl_snr_db
         self.quantization_bits = quantization_bits
+        self.combining = (combining or "zf").lower()
+        if self.combining not in ("zf", "mmse"):
+            raise ValueError(f"Unknown combining scheme: {combining!r}. Use 'zf' or 'mmse'.")
 
     # ------------------------------------------------------------------
     # Quantization
@@ -70,9 +79,17 @@ class MIMOChannel:
 
         We parameterise via SNR_{UL} = P_{UL} / \sigma^2, so:
             noise_var = N_D / (2 * SNR_UL_linear * N_BS)
+
+        For MMSE combining, the receiver attenuates the noise by a
+        1 / (1 + 1/(SNR_UL * N_BS)) factor, asymptotically matching ZF for
+        SNR * N_BS -> inf (paper §VI-C, Fig. 7).
         """
         snr_lin = 10.0 ** (self.ul_snr_db / 10.0)
         noise_var = self.n_device / (2.0 * snr_lin * self.n_bs)
+        if self.combining == "mmse":
+            # MMSE attenuation factor: 1 / (1 + 1/(SNR*N_BS))
+            mmse_att = 1.0 / (1.0 + 1.0 / max(snr_lin * self.n_bs, 1e-12))
+            noise_var *= mmse_att
         noise = torch.randn_like(logits) * math.sqrt(max(noise_var, 0.0))
         return logits + noise
 

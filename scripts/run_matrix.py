@@ -44,7 +44,7 @@ def run_once(dataset: str, partition: str, alpha: float, total_clients: int, K: 
         model=("CNN-MNIST" if "MNIST" in dataset.upper() else "LightCIFAR"),
         device="auto",
         seed=int(seed),
-        fast_mode=bool(fast),
+        smoke_test_mode=bool(fast),
         time_budget=(float(time_budget) if time_budget and time_budget > 0 else None),
         energy_budget=(float(energy_budget) if energy_budget and energy_budget > 0 else None),
         bytes_budget=(float(bytes_budget) if bytes_budget and bytes_budget > 0 else None),

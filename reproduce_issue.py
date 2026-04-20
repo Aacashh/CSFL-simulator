@@ -22,7 +22,7 @@ def run_simulation():
         batch_size=32,
         parallel_clients=2, # Enable parallel to trigger potential issues
         device="cuda", # Force CUDA if available
-        fast_mode=True # Fail fast
+        smoke_test_mode=True  # Fail fast
     )
     
     try:

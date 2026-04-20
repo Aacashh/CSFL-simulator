@@ -109,7 +109,7 @@ class ParallelTrainer:
         client_ids: List[int],
         client_loaders: Dict[int, Any],
         local_epochs: int,
-        fast_mode: bool = False,
+        smoke_test_mode: bool = False,
         seed_offset: int = 0
     ) -> List[Tuple[Dict[str, torch.Tensor], int, float, float]]:
         """
@@ -119,7 +119,7 @@ class ParallelTrainer:
             client_ids: List of client IDs to train
             client_loaders: Dict mapping client ID to DataLoader
             local_epochs: Number of local training epochs
-            fast_mode: If True, break after 2 batches
+            smoke_test_mode: If True, break after 2 batches
             seed_offset: Seed offset for reproducibility (typically round number)
         
         Returns:
@@ -137,7 +137,7 @@ class ParallelTrainer:
                 batch_ids,
                 client_loaders,
                 local_epochs,
-                fast_mode,
+                smoke_test_mode,
                 seed_offset
             )
             results.extend(batch_results)
@@ -149,7 +149,7 @@ class ParallelTrainer:
         client_ids: List[int],
         client_loaders: Dict[int, Any],
         local_epochs: int,
-        fast_mode: bool,
+        smoke_test_mode: bool,
         seed_offset: int
     ) -> List[Tuple[Dict[str, torch.Tensor], int, float, float]]:
         """Train a batch of clients in parallel using CUDA streams."""
@@ -158,13 +158,13 @@ class ParallelTrainer:
         if self.is_cuda and len(client_ids) > 1:
             # Parallel training with CUDA streams
             batch_results = self._train_batch_cuda_streams(
-                client_ids, client_loaders, local_epochs, fast_mode, seed_offset
+                client_ids, client_loaders, local_epochs, smoke_test_mode, seed_offset
             )
         else:
             # Sequential training (CPU or single client)
             for idx, cid in enumerate(client_ids):
                 result = self._train_single_client(
-                    cid, client_loaders[cid], local_epochs, fast_mode, seed_offset, idx
+                    cid, client_loaders[cid], local_epochs, smoke_test_mode, seed_offset, idx
                 )
                 batch_results.append(result)
         
@@ -175,7 +175,7 @@ class ParallelTrainer:
         client_ids: List[int],
         client_loaders: Dict[int, Any],
         local_epochs: int,
-        fast_mode: bool,
+        smoke_test_mode: bool,
         seed_offset: int
     ) -> List[Tuple[Dict[str, torch.Tensor], int, float, float]]:
         """Train clients in parallel using CUDA streams."""
@@ -192,7 +192,7 @@ class ParallelTrainer:
                 
                 # Train on this stream
                 result = self._train_single_client_on_stream(
-                    cid, client_loaders[cid], local_epochs, fast_mode, idx
+                    cid, client_loaders[cid], local_epochs, smoke_test_mode, idx
                 )
                 futures.append(result)
         
@@ -207,7 +207,7 @@ class ParallelTrainer:
         cid: int,
         loader: Any,
         local_epochs: int,
-        fast_mode: bool,
+        smoke_test_mode: bool,
         seed_offset: int,
         replica_idx: int
     ) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
@@ -218,14 +218,14 @@ class ParallelTrainer:
         if self.is_cuda:
             torch.cuda.manual_seed_all(client_seed)
         
-        return self._train_single_client_on_stream(cid, loader, local_epochs, fast_mode, replica_idx)
+        return self._train_single_client_on_stream(cid, loader, local_epochs, smoke_test_mode, replica_idx)
     
     def _train_single_client_on_stream(
         self,
         cid: int,
         loader: Any,
         local_epochs: int,
-        fast_mode: bool,
+        smoke_test_mode: bool,
         replica_idx: int
     ) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
         """Core training logic for a single client on a specific model replica."""
@@ -262,7 +262,7 @@ class ParallelTrainer:
                 opt.step()
                 last_loss = float(loss.item())
                 
-                if fast_mode and bi > 1:
+                if smoke_test_mode and bi > 1:
                     break
         
         # Export weights (clone to avoid sharing memory)
