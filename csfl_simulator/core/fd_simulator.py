@@ -49,6 +49,17 @@ from .system import init_system_state, simulate_round_env
 from .simulator import SimConfig
 
 
+def _unwrap_compiled(m: nn.Module) -> nn.Module:
+    """Return the underlying nn.Module, peeling off torch.compile's OptimizedModule.
+
+    torch.compile wraps a module and prefixes every state_dict key with
+    "_orig_mod.". Any save/load path that must stay agnostic to whether compile
+    was applied routes through this helper so the key set stays consistent.
+    Returns the argument unchanged for plain modules.
+    """
+    return getattr(m, "_orig_mod", m)
+
+
 class FDSimulator:
     """Federated Distillation simulator following Algorithms 1 & 2 of the paper.
 
@@ -190,13 +201,17 @@ class FDSimulator:
             )
 
         # --- Save initial states for fair multi-method comparisons ---
+        # Always target the underlying nn.Module, not the torch.compile wrapper,
+        # so keys don't gain/lose the "_orig_mod." prefix if tier 3 compile is
+        # applied later. _unwrap_compiled() is the inverse of torch.compile()
+        # and a no-op on uncompiled modules.
         with torch.no_grad():
             self._initial_client_states = {
-                cid: {k: v.clone() for k, v in m.state_dict().items()}
+                cid: {k: v.clone() for k, v in _unwrap_compiled(m).state_dict().items()}
                 for cid, m in self.client_models.items()
             }
             self._initial_server_state = {
-                k: v.clone() for k, v in self.server_model.state_dict().items()
+                k: v.clone() for k, v in _unwrap_compiled(self.server_model).state_dict().items()
             }
 
         # --- Save config ---
@@ -806,11 +821,13 @@ class FDSimulator:
             )
 
         # --- Reset state for fair multi-method comparison ---
+        # Unwrap torch.compile wrappers before load_state_dict so the saved keys
+        # (no "_orig_mod." prefix; see _unwrap_compiled) match the target module.
         if hasattr(self, '_initial_client_states'):
             for cid, sd in self._initial_client_states.items():
-                self.client_models[cid].load_state_dict(sd)
+                _unwrap_compiled(self.client_models[cid]).load_state_dict(sd)
         if hasattr(self, '_initial_server_state'):
-            self.server_model.load_state_dict(self._initial_server_state)
+            _unwrap_compiled(self.server_model).load_state_dict(self._initial_server_state)
         self.history = {"state": {}, "selected": []}
         for c in self.clients:
             c.last_loss = 0.0
