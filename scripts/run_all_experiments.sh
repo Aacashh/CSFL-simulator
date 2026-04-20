@@ -39,8 +39,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---- Shared config -----------------------------------------------------------
+# Speed flags: only engaged on CUDA.
+#   --use-amp            Mixed precision (GradScaler breaks on CPU, hence the gate).
+#   --use-torch-compile  Wraps each client + the server model with torch.compile. Adds
+#                        ~30-60 s of first-round compile time, then yields 20-40 %
+#                        sustained speedup across every subsequent round.
+#   --channels-last      channels_last memory format. 10-20 % faster on Ampere+ GPUs
+#                        for conv-heavy CIFAR workloads. No-op on MNIST single-channel
+#                        inputs.
+PERF_FLAGS=""
+if [[ "$DEVICE" == "cuda" ]]; then
+    PERF_FLAGS="--use-amp --use-torch-compile --channels-last"
+fi
+
 BASE_FL="--track-grad-norm --device ${DEVICE} ${FAST_FLAG}"
-BASE_FD="--paradigm fd --public-dataset-size 2000 --dynamic-steps --dynamic-steps-base 5 --dynamic-steps-period 25 --batch-size 128 --distillation-batch-size 500 --distillation-lr 0.001 --distillation-epochs 2 --temperature 1.0 --fd-optimizer adam --n-bs-antennas 64 --quantization-bits 8 --device ${DEVICE} ${FAST_FLAG}"
+BASE_FD="--paradigm fd --public-dataset-size 2000 --dynamic-steps --dynamic-steps-base 5 --dynamic-steps-period 25 --batch-size 128 --distillation-batch-size 500 --distillation-lr 0.001 --distillation-epochs 2 --temperature 1.0 --fd-optimizer adam --n-bs-antennas 64 --quantization-bits 8 ${PERF_FLAGS} --device ${DEVICE} ${FAST_FLAG}"
 
 SEEDS=(42 123 456)
 

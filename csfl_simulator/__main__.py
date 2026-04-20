@@ -57,7 +57,8 @@ def _add_sim_args(p: argparse.ArgumentParser):
     p.add_argument("--energy-budget", type=float, default=None, help="Energy budget per round")
     p.add_argument("--bytes-budget", type=float, default=None, help="Bytes budget per round")
     p.add_argument("--track-grad-norm", action="store_true", default=False, help="Track gradient norms")
-    p.add_argument("--parallel-clients", type=int, default=0, help="Parallel client training (0=off, -1=auto)")
+    p.add_argument("--parallel-clients", type=int, default=-1,
+                    help="Parallel client training (-1=auto [default], 0=off, N>0=fixed)")
     p.add_argument("--output", "-o", default=None, help="Output JSON path (auto-generated if not specified)")
     p.add_argument("--dp-sigma", type=float, default=0.0, help="DP Gaussian noise sigma")
     p.add_argument("--dp-epsilon-per-round", type=float, default=0.0, help="DP epsilon budget per round")

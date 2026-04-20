@@ -53,12 +53,20 @@ done
 CIFAR_MODELS="ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 
-# Speed flags: AMP only on CUDA (GradScaler breaks on CPU); profile always on so the
-# first few rounds' wall-clock is visible live; eval-every 10 halves eval cost vs the
-# default 5 without hurting final-accuracy reports (final round is always evaluated).
-AMP_FLAG=""
+# Speed flags: only engaged on CUDA.
+#   --use-amp            Mixed precision (GradScaler breaks on CPU, hence the gate).
+#   --use-torch-compile  Wraps each client + the server model with torch.compile. Adds
+#                        ~30-60 s of first-round compile time, then yields 20-40 %
+#                        sustained speedup across every subsequent round.
+#   --channels-last      channels_last memory format. 10-20 % faster on Ampere+ GPUs
+#                        for conv-heavy CIFAR workloads (ResNet18 / MobileNetV2 /
+#                        ShuffleNetV2).  No-op on MNIST single-channel inputs.
+# profile is always on so the first few rounds' wall-clock is visible live; eval-every 10
+# halves eval cost vs. the default 5 without hurting final-accuracy reports (final round
+# is always evaluated).
+PERF_FLAGS=""
 if [[ "$DEVICE" == "cuda" ]]; then
-    AMP_FLAG="--use-amp"
+    PERF_FLAGS="--use-amp --use-torch-compile --channels-last"
 fi
 
 # Base FD block — paper-matched (Mu et al. §VI): 2 local epochs, 2 distill epochs, Adam lr 0.001,
@@ -73,7 +81,7 @@ BASE_FD="--paradigm fd \
          --n-bs-antennas 64 --quantization-bits 8 \
          --eval-every 10 \
          --profile \
-         ${AMP_FLAG} \
+         ${PERF_FLAGS} \
          --device ${DEVICE} ${FAST_FLAG}"
 
 # Method sets

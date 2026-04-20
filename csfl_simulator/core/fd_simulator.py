@@ -604,12 +604,24 @@ class FDSimulator:
 
     @torch.inference_mode()
     def _generate_logits(self, cid: int) -> torch.Tensor:
-        """Run client model on public dataset, returning logits of shape (N_pub, C)."""
+        """Run client model on public dataset, returning logits of shape (N_pub, C).
+
+        Chunked by ``cfg.distillation_batch_size`` so the forward passes stay inside
+        a size that fits AMP pipelining and matches the batch size used by
+        ``_local_distill``/``_server_distill``. On the full 2000-sample public set
+        with 500-batch chunks this issues 4 launches per client, each of which can
+        overlap with the rest of the client's CUDA stream — see
+        FD_speed_optimization_notes.md follow-up pass.
+        """
         model = self.client_models[cid]
         model.eval()
+        bs = max(1, int(self.cfg.distillation_batch_size))
         if self._public_x_cache is not None:
+            parts: List[torch.Tensor] = []
             with torch.amp.autocast("cuda", enabled=self._use_amp):
-                return model(self._public_x_cache).float()  # always return fp32 logits
+                for i in range(0, self._public_x_cache.size(0), bs):
+                    parts.append(model(self._public_x_cache[i:i + bs]).float())
+            return parts[0] if len(parts) == 1 else torch.cat(parts, dim=0)
         all_logits = []
         for x, *_ in self.public_loader:
             x = x.to(self.device)
@@ -996,11 +1008,20 @@ class FDSimulator:
                 server_target = server_target + torch.randn_like(server_target) * cfg.server_distill_sigma
             server_kl = self._server_distill(server_target, cfg.distillation_epochs)
 
-            # Server predicts on public dataset → logits for next round's downlink
+            # Server predicts on public dataset → logits for next round's downlink.
+            # Chunked by cfg.distillation_batch_size to match _generate_logits and keep
+            # the forward pass stream-friendly (see follow-up pass in the speed notes).
             self.server_model.eval()
+            bs = max(1, int(cfg.distillation_batch_size))
             with torch.inference_mode():
                 if self._public_x_cache is not None:
-                    server_logits = self.server_model(self._public_x_cache)
+                    server_parts: List[torch.Tensor] = []
+                    for i in range(0, self._public_x_cache.size(0), bs):
+                        server_parts.append(self.server_model(self._public_x_cache[i:i + bs]))
+                    server_logits = (
+                        server_parts[0] if len(server_parts) == 1
+                        else torch.cat(server_parts, dim=0)
+                    )
                 else:
                     server_preds = []
                     for x, *_ in self.public_loader:
