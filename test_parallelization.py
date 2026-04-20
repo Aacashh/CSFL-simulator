@@ -43,7 +43,7 @@ def run_test():
         "model": "CNN-MNIST",
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "seed": 42,
-        "fast_mode": True,
+        "smoke_test_mode": True,
     }
     
     print("\nConfiguration:")

@@ -44,8 +44,15 @@ def _add_sim_args(p: argparse.ArgumentParser):
     p.add_argument("--model", default="CNN-MNIST", help="Model architecture (CNN-MNIST, LightCNN, ResNet18)")
     p.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")
     p.add_argument("--seed", type=int, default=42, help="Random seed")
-    p.add_argument("--fast-mode", action="store_true", default=True, help="Fast mode (break after 2 batches)")
-    p.add_argument("--no-fast-mode", dest="fast_mode", action="store_false", help="Disable fast mode")
+    # Smoke-test mode (formerly --fast-mode). Default OFF — only use for debugging. The old
+    # --fast-mode / --no-fast-mode flag names are kept as aliases so existing shell scripts keep
+    # working; internally they set cfg.smoke_test_mode.
+    p.add_argument("--fast-mode", "--smoke-test-mode",
+                   dest="smoke_test_mode", action="store_true", default=False,
+                   help="Smoke-test mode: 1 training step + 1-2 distill batches per round (debug only)")
+    p.add_argument("--no-fast-mode", "--no-smoke-test-mode",
+                   dest="smoke_test_mode", action="store_false",
+                   help="Disable smoke-test mode (default)")
     p.add_argument("--time-budget", type=float, default=None, help="Time budget per round")
     p.add_argument("--energy-budget", type=float, default=None, help="Energy budget per round")
     p.add_argument("--bytes-budget", type=float, default=None, help="Bytes budget per round")
@@ -125,7 +132,7 @@ def _args_to_config(args) -> SimConfig:
         model=args.model,
         device=args.device,
         seed=args.seed,
-        fast_mode=args.fast_mode,
+        smoke_test_mode=args.smoke_test_mode,
         time_budget=args.time_budget,
         energy_budget=args.energy_budget,
         bytes_budget=args.bytes_budget,

@@ -19,6 +19,12 @@ def init_system_state(clients: List[ClientInfo], knobs: Dict[str, Any]):
         # regional carbon intensity proxy (gCO2/kWh)
         c.region_carbon_g_per_kwh = random.uniform(200.0, 600.0)
         c.tier = 0 if c.compute_speed < 0.8 else (1 if c.compute_speed < 1.2 else 2)
+        # FedTSKD-G static channel group: fixed at setup based on initial channel_quality
+        # vs a threshold (default 0.5). This matches the paper's Algorithm 2 which assigns
+        # each user to a group ONCE based on persistent channel-strength estimate, not per
+        # round after the channel_quality random walk has drifted.
+        threshold = knobs.get("channel_threshold", 0.5)
+        c.meta["static_channel_group"] = "good" if c.channel_quality > threshold else "bad"
 
 
 def simulate_round_env(clients: List[ClientInfo], knobs: Dict[str, Any], round_idx: int):
@@ -38,8 +44,15 @@ def simulate_round_env(clients: List[ClientInfo], knobs: Dict[str, Any], round_i
         except Exception:
             c.estimated_energy = c.estimated_duration
 
-        # FD-specific: classify channel group for FedTSKD-G
+        # FD-specific: classify channel group for FedTSKD-G.
+        # Paper (Algorithm 2) assigns each user to a group ONCE based on persistent channel
+        # strength — not re-classified each round as channel_quality drifts. When
+        # static_channel_groups=True (default), we use the group fixed at setup; otherwise
+        # we fall back to the drifting per-round classification.
         if knobs.get("paradigm") == "fd":
             threshold = knobs.get("channel_threshold", 0.5)
-            c.meta["channel_group"] = "good" if c.channel_quality > threshold else "bad"
+            if knobs.get("static_channel_groups", True) and "static_channel_group" in c.meta:
+                c.meta["channel_group"] = c.meta["static_channel_group"]
+            else:
+                c.meta["channel_group"] = "good" if c.channel_quality > threshold else "bad"
             c.meta["channel_beta"] = c.channel_quality ** 2

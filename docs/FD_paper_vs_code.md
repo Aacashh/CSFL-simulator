@@ -319,3 +319,80 @@ With K=10/N=30, clients selected in round 0 may not be selected again until roun
 ### TO VERIFY
 - Data augmentation in training transforms
 - Whether temperature T=1.0 matches paper's intent (paper doesn't specify)
+
+---
+
+## 13. Fixed in revision 2026-04-20-b
+
+These deviations from Mu et al. 2024 were identified during the Exp-1 paper-replication autopsy (server accuracy plateaued at 44–46% vs the paper's 50%+ target) and fixed in a single revision. Cross-reference each item to the paper section that motivated the fix.
+
+### Correctness-critical
+
+- **`fast_mode` renamed to `smoke_test_mode`; default flipped from `True` to `False`.**
+  - Files: `core/simulator.py` (field + default), `core/fd_simulator.py` (6 inline uses), `core/parallel.py` (function parameter + 7 call sites), `__main__.py` (CLI wiring), `app/main.py` (Streamlit checkbox), `app/export.py` (backwards-compat read), `test_parallelization.py`, `reproduce_issue.py`, `scripts/run_matrix.py`.
+  - CLI flags `--fast-mode` / `--no-fast-mode` kept as aliases for `--smoke-test-mode` / `--no-smoke-test-mode` so existing shell scripts (`run_all_experiments.sh`, `run_next_sota_experiments.sh`, etc.) continue to work unchanged.
+  - Rationale: the True default silently capped training at 2 batches per round, producing ~45% accuracy ceilings in any run that didn't explicitly pass `--no-fast-mode`.
+
+- **`_evaluate_clients` now evaluates ALL clients by default** (`core/fd_simulator.py`).
+  - Changed call in `run()`: `_evaluate_clients(sample_ids=ids)` → `_evaluate_clients(sample_ids=None)`.
+  - Changed default fallback inside `_evaluate_clients`: previously evaluated only `range(min(total_clients, 10))`, now evaluates `range(total_clients)`.
+  - Rationale: evaluating only the selection-policy-chosen clients entangles the selection policy with the metric, giving different methods an unfair advantage. The paper's per-user averaged metric requires evaluating every client each eval round.
+
+- **Paper-metric `avg_per_client_accuracy` added to `_compute_eval_metrics`** (`core/fd_simulator.py`).
+  - Existing `accuracy` (micro-pooled over all `[client × sample]` predictions) retained for backwards compatibility.
+  - New `avg_per_client_accuracy` = mean of each client's own accuracy — matches Mu et al. Table IV's "Overall" row semantics (average across clients, not across test samples).
+  - `m["client_accuracy_avg"]` now sources from `avg_per_client_accuracy`.
+
+### Paper-faithfulness
+
+- **Server-side distillation uncertainty `σ_D²` (Eq. 18).**
+  - New `SimConfig.server_distill_sigma: float = 0.01` (`core/simulator.py`).
+  - In `run()`, `core/fd_simulator.py`: additive Gaussian noise `omega_D ~ N(0, sigma_D^2 I)` is applied to `server_target` immediately before `_server_distill(...)` when both the channel model is enabled and `server_distill_sigma > 0`.
+
+- **FL-equivalent communication cost now uses 16-bit quantisation (2 bytes/param).**
+  - `core/fd_simulator.py`: `fl_model_bytes = params_count * 4.0` → `fl_model_bytes = params_count * 2.0`, matching paper Fig. 10.
+  - Prior 4-byte assumption overstated FL cost by 2×, inflating the reported FD comm-reduction ratio.
+
+- **FedTSKD-G static channel groups (Algorithm 2).**
+  - New `ClientInfo.meta["static_channel_group"]` assigned once in `init_system_state` (`core/system.py`) based on initial `channel_quality` and `channel_threshold`.
+  - `simulate_round_env` now prefers the static group when `knobs["static_channel_groups"] == True` (default); legacy per-round re-classification stays available via `SimConfig.static_channel_groups = False`.
+  - `FDSimulator.setup()` now passes the FD paradigm and channel threshold into `init_system_state` so the static group is correctly populated.
+  - Rationale: the paper assigns groups once based on persistent channel-strength estimates, not the drifting per-round `channel_quality` random walk; per-round reclassification caused group flapping that undermines the paper's grouped-aggregation stability.
+
+### Transparency
+
+- **Temperature comment added** (`core/simulator.py`): "Paper implicitly uses T=1.0 (Eq. 3); KD literature suggests T=3–4 for soft-target benefit."
+
+- **Constant-LR deviation note added** to `core/fd_simulator.py` module docstring: explicitly flags that the paper's Theorem 1 assumes η_t = β₀/(t+β₁) step-size decay for its O(1/t) convergence bound, whereas our implementation uses constant LRs (Adam's running-moment scaling compensates behaviourally but the theorem bound isn't directly empirically validated).
+
+### Optional
+
+- **MMSE combining scheme** added to `MIMOChannel` (`core/channel.py`).
+  - New `combining: str = "zf"` constructor parameter; `"mmse"` attenuates uplink noise by `1 / (1 + 1/(SNR·N_BS))` relative to ZF, matching paper §VI-C Fig. 7.
+  - New `SimConfig.combining_scheme: str = "zf"` wired through to `MIMOChannel(combining=cfg.combining_scheme)` in `FDSimulator.setup()`.
+  - Enables paper-faithful reproduction of the ZF-vs-MMSE ablation (paper Fig. 7).
+
+### What this revision does NOT change
+
+- Round ordering LD → LT → LI (already correct).
+- KL divergence formula + T² scaling (already correct).
+- Uplink/downlink noise variance formulas (already match Eqs. 16 and 22 after fix 7 above for the FL-comm accounting; the channel formulas themselves were already right).
+- Selection-method interface (unchanged — all 47+ existing selectors still work).
+- Reproducibility: all new noise injection uses `torch.randn_like` which is seeded by the existing `set_seed` call in `FDSimulator.__init__`.
+
+### Verification
+
+Run after applying all fixes:
+```bash
+python test.py            # trivial print sanity
+python test_partition.py  # Dirichlet partition check
+# 5-round FD smoke test (non-trivial accuracy progression expected)
+python -m csfl_simulator run --paradigm fd --method fd_native.calm_fd \
+    --dataset MNIST --model FD-CNN1 --public-dataset FMNIST --public-dataset-size 500 \
+    --total-clients 10 --clients-per-round 4 --rounds 5 --local-epochs 1 \
+    --distillation-epochs 1 --distillation-batch-size 100 --batch-size 32 \
+    --channel-noise --ul-snr-db -8 --dl-snr-db -20 --group-based \
+    --seed 42 --device cpu
+```
+
+Success criteria: metrics.json shows accuracy increasing over the 5 rounds (not flat at ~10% or NaN).

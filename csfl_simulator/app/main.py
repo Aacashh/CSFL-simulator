@@ -214,8 +214,8 @@ with st.sidebar:
                                 help="Hardware to run training on:\n• auto: Automatically detect GPU if available\n• cpu: Use CPU only\n• cuda: Force GPU (NVIDIA)")
     seed = st.number_input("Seed", 0, 10_000, 42,
                           help="Random seed for reproducibility. Same seed = same results. Useful for comparing different methods fairly.")
-    fast_mode = st.checkbox("Fast mode (few batches)", True,
-                           help="When enabled, uses fewer batches per epoch for faster testing. Disable for full training runs.")
+    smoke_test_mode = st.checkbox("Smoke-test mode (few batches)", False,
+                           help="Debug-only: when enabled, uses only 1 training step + 1-2 distill batches per round. Disable for real runs.")
     pretrained = st.checkbox("Load pretrained (if available)", False,
                             help="Load pre-trained model weights if available. Useful for transfer learning or continuing from a checkpoint.")
 
@@ -289,7 +289,7 @@ if init_btn:
         model=model,
         device=device_choice,
         seed=int(seed),
-        fast_mode=fast_mode,
+        smoke_test_mode=smoke_test_mode,
         pretrained=pretrained,
         size_distribution=(size_dist_choice if ('enable_size_skew' in locals() and enable_size_skew) else "uniform"),
         size_lognormal_mu=float(size_mu) if 'size_mu' in locals() else 0.0,

@@ -40,7 +40,8 @@ class SimConfig:
     model: str = "CNN-MNIST"
     device: str = "auto"
     seed: int = 42
-    fast_mode: bool = True
+    # When True, runs only 1 training step and 1-2 distill batches per round. Use ONLY for debugging.
+    smoke_test_mode: bool = False
     pretrained: bool = False
     time_budget: Optional[float] = None
     energy_budget: Optional[float] = None
@@ -62,6 +63,8 @@ class SimConfig:
     # Distillation hyperparameters
     distillation_epochs: int = 2         # S distillation steps per round (paper: 2)
     distillation_batch_size: int = 500   # Batch size for distillation (paper: 500)
+    # Paper implicitly uses T=1.0 (Eq. 3); KD literature suggests T=3-4 for soft-target benefit.
+    # Kept at 1.0 for paper-faithfulness; sweep 1.0/2.0/4.0 when exploring KD improvements.
     temperature: float = 1.0             # Softmax temperature for KL divergence
     distillation_lr: float = 0.001       # Learning rate for distillation (paper: Adam 0.001)
     # Dynamic training steps (FedTSKD)
@@ -86,6 +89,21 @@ class SimConfig:
     # Performance tuning
     eval_every: int = 5                  # Evaluate every N rounds (0 = every round)
     use_amp: bool = False                # Mixed precision (AMP) — faster on Turing+ GPUs
+    # Server-side distillation target uncertainty (Eq. 18 of Mu et al. 2024): models the
+    # small-variance Gaussian residual omega_D that arises because the server-side
+    # aggregated logits are an approximation of the true consensus. Added to the server's
+    # distillation target before the server distills. Set to 0 to disable.
+    server_distill_sigma: float = 0.01
+    # FedTSKD-G static channel groups (paper Algorithm 2): when True, each client is
+    # assigned to a good/bad channel group ONCE at setup based on its initial
+    # channel_quality, and stays in that group for the entire run. When False (legacy),
+    # the group is recomputed every round after the channel_quality random walk, which
+    # can cause group flapping and hurts the grouped-aggregation stability.
+    static_channel_groups: bool = True
+    # mMIMO uplink combining scheme: "zf" (paper default) or "mmse" (paper §VI-C Fig. 7).
+    # MMSE attenuates uplink noise by 1/(1 + 1/(SNR*N_BS)) relative to ZF, becoming
+    # equivalent to ZF in the high-SNR regime.
+    combining_scheme: str = "zf"
 
 
 class FLSimulator:
@@ -340,7 +358,7 @@ class FLSimulator:
                         pass
                 opt.step()
                 last_loss = float(loss.item())
-                if self.cfg.fast_mode and bi > 1:
+                if self.cfg.smoke_test_mode and bi > 1:
                     break
         # Export weights safely (clone tensors)
         with torch.no_grad():
@@ -456,7 +474,7 @@ class FLSimulator:
                     client_ids=ids,
                     client_loaders=self.client_loaders,
                     local_epochs=self.cfg.local_epochs,
-                    fast_mode=self.cfg.fast_mode,
+                    smoke_test_mode=self.cfg.smoke_test_mode,
                     seed_offset=rnd
                 )
                 # Process results

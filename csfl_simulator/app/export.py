@@ -166,7 +166,7 @@ opt = optim.SGD(model.parameters(), lr=float(CONFIG['lr']))
     nb.cells.append(nbf.v4.new_code_cell("""
 K = int(CONFIG['clients_per_round'])
 rounds = int(CONFIG['rounds'])
-fast = bool(CONFIG.get('fast_mode', True))
+fast = bool(CONFIG.get('smoke_test_mode', CONFIG.get('fast_mode', False)))
 
 history = {"selected": []}
 
