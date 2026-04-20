@@ -431,6 +431,53 @@ methods:
     params: {w_diversity: 0.25, w_recency: 0.0}
     type: fd_native
     trainable: true
+  # CALM-FD: Confidence-blended Adaptive Logit-quality Matching for Federated
+  # Distillation. Successor to LQTS — adds confidence-blended reward, adaptive
+  # variance floor, stale-posterior guard, channel-floor filter, and proxy-space
+  # anti-collusion. Designed from the Apr-2026 batch analysis.
+  - key: fd_native.calm_fd
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (LQTS + confidence + adaptive + channel-floor)"
+    origin: proposed
+    params: {w_cosine: 0.65, w_confidence: 0.35, ema_alpha: 0.3, base_variance_floor: 0.05, noise_expand_gain: 2.0, stale_rounds_factor: 2.0, stale_variance_inflate: 0.30, w_ts: 0.70, w_recency: 0.15, w_collusion_penalty: 0.15, channel_floor_percentile: 5.0}
+    type: fd_native
+    trainable: true
+  # Ablation variants — each disables one CALM-FD enhancement to isolate its effect.
+  - key: fd_native.calm_fd_no_confidence
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (no confidence blend)"
+    origin: ablation
+    params: {disable_confidence_blend: true}
+    type: fd_native
+    trainable: true
+  - key: fd_native.calm_fd_no_adaptive_var
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (no adaptive variance)"
+    origin: ablation
+    params: {disable_adaptive_variance: true}
+    type: fd_native
+    trainable: true
+  - key: fd_native.calm_fd_no_stale_guard
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (no stale guard)"
+    origin: ablation
+    params: {disable_stale_guard: true}
+    type: fd_native
+    trainable: true
+  - key: fd_native.calm_fd_no_channel_filter
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (no channel filter)"
+    origin: ablation
+    params: {disable_channel_filter: true}
+    type: fd_native
+    trainable: true
+  - key: fd_native.calm_fd_no_collusion
+    module: csfl_simulator.selection.fd_native.calm_fd
+    display_name: "CALM-FD (no collusion penalty)"
+    origin: ablation
+    params: {disable_collusion_penalty: true}
+    type: fd_native
+    trainable: true
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"
