@@ -66,7 +66,7 @@ MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 # is always evaluated).
 PERF_FLAGS=""
 if [[ "$DEVICE" == "cuda" ]]; then
-    PERF_FLAGS="--use-amp --use-torch-compile --channels-last"
+    PERF_FLAGS="--use-amp --channels-last"
 fi
 
 # Base FD block — paper-matched (Mu et al. §VI): 2 local epochs, 2 distill epochs, Adam lr 0.001,

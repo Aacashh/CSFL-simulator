@@ -331,12 +331,14 @@ class FDSimulator:
         if self.device.startswith("cuda"):
             try:
                 if self._public_x_cache is not None and self._public_x_cache.size(0) > 0:
-                    dummy_shape = (1,) + tuple(self._public_x_cache.shape[1:])
+                    prewarm_bs = max(self.cfg.batch_size, self.cfg.distillation_batch_size)
+                    dummy_shape = (prewarm_bs,) + tuple(self._public_x_cache.shape[1:])
                     dummy = torch.zeros(dummy_shape, device=self.device, dtype=self._public_x_cache.dtype)
                 else:
                     sample_x, _ = train_ds[0]
                     if isinstance(sample_x, torch.Tensor):
-                        dummy = torch.zeros((1,) + tuple(sample_x.shape), device=self.device, dtype=sample_x.dtype)
+                        prewarm_bs = max(self.cfg.batch_size, self.cfg.distillation_batch_size)
+                        dummy = torch.zeros((prewarm_bs,) + tuple(sample_x.shape), device=self.device, dtype=sample_x.dtype)
                     else:
                         dummy = None
                 if dummy is not None:
