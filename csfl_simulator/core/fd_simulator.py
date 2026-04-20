@@ -252,6 +252,11 @@ class FDSimulator:
 
         # --- Performance: cache training data on GPU (skip if insufficient VRAM) ---
         self._client_data_cache: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
+        # When the cache holds CIFAR tensors, augmentation is re-applied live on GPU
+        # in _local_train; the cache itself is deliberately un-augmented so each
+        # epoch sees fresh crops/flips instead of frozen-at-setup samples.
+        self._cache_augments_on_gpu = False
+        is_cifar = self.cfg.dataset.lower() in ("cifar10", "cifar-10", "cifar100", "cifar-100")
         if self.device.startswith("cuda"):
             try:
                 free_mem, _ = torch.cuda.mem_get_info()
@@ -264,17 +269,45 @@ class FDSimulator:
                 total_bytes = len(train_ds) * bytes_per_sample
                 # Only cache if >1GB remains free after caching
                 if total_bytes < free_mem - 1024 ** 3:
-                    for cid in range(cfg.total_clients):
-                        xs, ys = [], []
-                        for x, y in self.client_loaders[cid]:
-                            xs.append(x)
-                            ys.append(y)
-                        self._client_data_cache[cid] = (
-                            torch.cat(xs, dim=0).to(self.device),
-                            torch.cat(ys, dim=0).to(self.device),
-                        )
+                    if is_cifar:
+                        # Swap to a no-augment transform so cached tensors are clean.
+                        from torchvision import transforms as _tvtfm
+                        if self.cfg.dataset.lower() in ("cifar10", "cifar-10"):
+                            mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
+                        else:
+                            mean, std = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+                        no_aug_tfm = _tvtfm.Compose([
+                            _tvtfm.ToTensor(),
+                            _tvtfm.Normalize(mean, std),
+                        ])
+                        original_tfm = getattr(train_ds, "transform", None)
+                        train_ds.transform = no_aug_tfm
+                        try:
+                            for cid in range(cfg.total_clients):
+                                xs, ys = [], []
+                                for x, y in self.client_loaders[cid]:
+                                    xs.append(x)
+                                    ys.append(y)
+                                self._client_data_cache[cid] = (
+                                    torch.cat(xs, dim=0).to(self.device),
+                                    torch.cat(ys, dim=0).to(self.device),
+                                )
+                            self._cache_augments_on_gpu = True
+                        finally:
+                            train_ds.transform = original_tfm
+                    else:
+                        for cid in range(cfg.total_clients):
+                            xs, ys = [], []
+                            for x, y in self.client_loaders[cid]:
+                                xs.append(x)
+                                ys.append(y)
+                            self._client_data_cache[cid] = (
+                                torch.cat(xs, dim=0).to(self.device),
+                                torch.cat(ys, dim=0).to(self.device),
+                            )
             except Exception:
                 self._client_data_cache.clear()
+                self._cache_augments_on_gpu = False
 
         # --- Performance: AMP (mixed precision) ---
         # bf16 on Ampere+ has the same dynamic range as fp32, so no GradScaler is
@@ -324,6 +357,15 @@ class FDSimulator:
                     self._max_parallel = auto
             except Exception:
                 self._max_parallel = 2
+
+        # Pre-allocate CUDA streams once. Allocating per-round added measurable
+        # overhead (200 rounds * up to 4 streams = 800 stream allocs).
+        self._client_streams: List[torch.cuda.Stream] = []
+        if self.device.startswith("cuda"):
+            try:
+                self._client_streams = [torch.cuda.Stream() for _ in range(self._max_parallel)]
+            except Exception:
+                self._client_streams = []
 
         # --- Tier 3 optional: torch.compile ---
         if cfg.use_torch_compile and self.device.startswith("cuda"):
@@ -582,6 +624,20 @@ class FDSimulator:
         # instead of one per SGD step. See FD_speed_optimization_notes.md tier 1.7.
         loss_buffer: Optional[torch.Tensor] = None
 
+        # GPU-side augmentation for the un-augmented CIFAR cache built in setup().
+        # Reflection-pad-4 + random 32x32 crop + 50% horizontal flip; matches the
+        # torchvision transform used by the DataLoader fallback path.
+        def _augment_gpu_batch(x: torch.Tensor) -> torch.Tensor:
+            if not getattr(self, "_cache_augments_on_gpu", False):
+                return x
+            x = F.pad(x, (4, 4, 4, 4), mode="reflect")
+            h = torch.randint(0, 9, (1,), device=x.device).item()
+            w = torch.randint(0, 9, (1,), device=x.device).item()
+            x = x[:, :, h:h + 32, w:w + 32]
+            if torch.rand((), device=x.device).item() < 0.5:
+                x = torch.flip(x, dims=[-1])
+            return x
+
         # Fast path: GPU-cached training data (no DataLoader overhead)
         if cid in self._client_data_cache:
             x_all, y_all = self._client_data_cache[cid]
@@ -589,7 +645,7 @@ class FDSimulator:
             bs = cfg.batch_size
             for step in range(num_steps):
                 idx = (step * bs) % n
-                x = x_all[idx:idx + bs]
+                x = _augment_gpu_batch(x_all[idx:idx + bs])
                 y = y_all[idx:idx + bs]
                 opt.zero_grad(set_to_none=True)
                 with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
@@ -715,6 +771,12 @@ class FDSimulator:
         T = cfg.temperature
         model = self.client_models[cid]
         model.train()
+        # Public-set distillation has a distribution shift vs the test set; freezing
+        # BN running stats stops them drifting toward public stats. No-op under GN.
+        if bool(getattr(cfg, "freeze_bn_on_distill", True)):
+            for m in model.modules():
+                if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+                    m.eval()
         opt = self._get_distill_opt(cid)
         n_batches = 0
         target_logits = target_logits.to(self.device)
@@ -789,6 +851,11 @@ class FDSimulator:
         T = cfg.temperature
         model = self.server_model
         model.train()
+        # Same rationale as _local_distill: freeze BN stats on public-set distill batches.
+        if bool(getattr(self.cfg, "freeze_bn_on_distill", True)):
+            for m in model.modules():
+                if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+                    m.eval()
         opt = self._get_server_distill_opt()
         n_batches = 0
         aggregated_logits = aggregated_logits.to(self.device)
@@ -987,7 +1054,10 @@ class FDSimulator:
                 batch_ids = ids[batch_start:batch_start + self._max_parallel]
 
                 if is_cuda and len(batch_ids) > 1:
-                    streams = [torch.cuda.Stream() for _ in batch_ids]
+                    if self._client_streams and len(self._client_streams) >= len(batch_ids):
+                        streams = self._client_streams[:len(batch_ids)]
+                    else:
+                        streams = [torch.cuda.Stream() for _ in batch_ids]
                     results: List[Tuple[float, torch.Tensor]] = [None] * len(batch_ids)  # type: ignore
                     for i, cid in enumerate(batch_ids):
                         with torch.cuda.stream(streams[i]):
@@ -1079,7 +1149,11 @@ class FDSimulator:
             server_target = aggregated_logits
             if self.channel is not None and cfg.server_distill_sigma > 0:
                 server_target = server_target + torch.randn_like(server_target) * cfg.server_distill_sigma
-            server_kl = self._server_distill(server_target, cfg.distillation_epochs)
+            # Warmup: extra server-distill epochs in the first few rounds to escape the
+            # near-uniform-logit fixed point that otherwise wastes 20-30 rounds.
+            sd_epochs = (cfg.server_warmup_epochs if rnd < cfg.server_warmup_rounds
+                         else cfg.distillation_epochs)
+            server_kl = self._server_distill(server_target, sd_epochs)
 
             # Server predicts on public dataset → logits for next round's downlink.
             # Chunked by cfg.distillation_batch_size to match _generate_logits and keep
@@ -1411,9 +1485,15 @@ class FDSimulator:
         total_loss = float(total_loss_t.item()) if total_loss_t is not None else 0.0
         per_client_correct = [int(t.item()) if t is not None else 0 for t in per_client_correct_t]
 
-        # Single GPU->CPU transfer for labels and predictions
-        all_ys = torch.cat(all_ys_parts).cpu().tolist()
-        all_preds = torch.cat(all_preds_parts).cpu().tolist()
+        # Skip the pooled GPU->CPU label/pred transfer on intermediate rounds: sklearn's
+        # f1/precision/recall over up-to-500k pairs is expensive and unused for diagnostics.
+        # Final rounds (and any forced full-eval) still produce full pooled arrays.
+        is_final_or_forced = bool(getattr(self, "_eval_full_override", False))
+        if is_final_or_forced:
+            all_ys = torch.cat(all_ys_parts).cpu().tolist()
+            all_preds = torch.cat(all_preds_parts).cpu().tolist()
+        else:
+            all_ys, all_preds = [], []
         n_samples = N_test * n_clients
 
         return self._compute_eval_metrics(ids_to_eval, per_client_correct, per_client_total,
@@ -1424,15 +1504,24 @@ class FDSimulator:
         """Compute accuracy, F1, precision, recall from accumulated predictions."""
         all_accs = [c / max(t, 1) for c, t in zip(per_client_correct, per_client_total)]
 
-        try:
-            from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-            accuracy = accuracy_score(all_ys, all_preds)
-            f1 = f1_score(all_ys, all_preds, average='macro', zero_division=0)
-            precision = precision_score(all_ys, all_preds, average='macro', zero_division=0)
-            recall = recall_score(all_ys, all_preds, average='macro', zero_division=0)
-        except ImportError:
-            accuracy = sum(1 for y, p in zip(all_ys, all_preds) if y == p) / max(len(all_ys), 1)
+        if not all_ys:
+            # Intermediate-round fast path: sklearn skipped. Pooled accuracy from per-client
+            # counts is mathematically identical to accuracy_score on the pooled list because
+            # every client evaluates the same test set, so per_client_total[i] == N_test.
+            total_correct = sum(per_client_correct)
+            total_seen = sum(per_client_total)
+            accuracy = total_correct / max(total_seen, 1)
             f1 = precision = recall = 0.0
+        else:
+            try:
+                from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+                accuracy = accuracy_score(all_ys, all_preds)
+                f1 = f1_score(all_ys, all_preds, average='macro', zero_division=0)
+                precision = precision_score(all_ys, all_preds, average='macro', zero_division=0)
+                recall = recall_score(all_ys, all_preds, average='macro', zero_division=0)
+            except ImportError:
+                accuracy = sum(1 for y, p in zip(all_ys, all_preds) if y == p) / max(len(all_ys), 1)
+                f1 = precision = recall = 0.0
 
         import statistics
         acc_std = statistics.stdev(all_accs) if len(all_accs) > 1 else 0.0

@@ -139,6 +139,13 @@ class SimConfig:
     # the config seed). The final round always uses the full test set. Off by default
     # because it introduces a small bias; on 200-round runs can deliver 10x eval speedup.
     eval_subsample: int = 0
+    # Server-distill warmup: extra epochs in early rounds to escape the cold-start
+    # fixed point where near-uniform client logits yield a near-uniform server.
+    server_warmup_rounds: int = 10
+    server_warmup_epochs: int = 8
+    # Freeze BN running stats during distillation (no-op under GroupNorm).
+    # Defense-in-depth for any model that still has BN (e.g., CSFL_KEEP_BN=1).
+    freeze_bn_on_distill: bool = True
 
 
 class FLSimulator:

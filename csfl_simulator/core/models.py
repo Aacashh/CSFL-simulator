@@ -5,6 +5,27 @@ import torch.nn.functional as F
 from torchvision.models import resnet18
 
 
+def _replace_bn_with_gn(module: nn.Module, num_groups: int = 8) -> None:
+    """Recursively replace BatchNorm{1,2}d with GroupNorm in-place.
+
+    BN running stats get contaminated when training alternates between private
+    (post-norm mean ~ 0) and public (CIFAR-normalized STL-10, mean ~ -0.18)
+    distributions, costing ~10-15 pp on the eval set. GN has no running stats.
+    """
+    for name, child in module.named_children():
+        if isinstance(child, (nn.BatchNorm2d, nn.BatchNorm1d)):
+            ng = min(num_groups, child.num_features)
+            while ng > 1 and child.num_features % ng != 0:
+                ng -= 1
+            gn = nn.GroupNorm(num_groups=ng, num_channels=child.num_features, affine=child.affine)
+            if child.affine:
+                gn.weight.data.copy_(child.weight.data)
+                gn.bias.data.copy_(child.bias.data)
+            setattr(module, name, gn)
+        else:
+            _replace_bn_with_gn(child, num_groups)
+
+
 def _match_channels(x: torch.Tensor, expected: int) -> torch.Tensor:
     c = x.shape[1]
     if c == expected:
@@ -260,6 +281,11 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
         model = ShuffleNetV2FD(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     else:
         raise ValueError(f"Unknown model: {name}")
+    # Swap BN -> GN to avoid running-stat drift across mixed private/public batches.
+    # CSFL_KEEP_BN=1 preserves legacy BN for paper-literal reproductions.
+    import os
+    if not os.environ.get("CSFL_KEEP_BN"):
+        _replace_bn_with_gn(model, num_groups=8)
     model = model.to(device)
     return model
 
