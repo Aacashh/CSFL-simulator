@@ -277,8 +277,25 @@ class FDSimulator:
                 self._client_data_cache.clear()
 
         # --- Performance: AMP (mixed precision) ---
+        # bf16 on Ampere+ has the same dynamic range as fp32, so no GradScaler is
+        # required. This eliminates the per-optimizer-step CPU<->GPU sync that
+        # serialized all "parallel" clients through a single scaler object. Falls
+        # back to fp16 + GradScaler on pre-Ampere so the code still works on
+        # older hardware.
         self._use_amp = cfg.use_amp and self.device.startswith("cuda")
-        self._scaler = torch.amp.GradScaler("cuda", enabled=self._use_amp) if self._use_amp else None
+        self._amp_dtype = torch.float32  # sentinel when AMP is off
+        self._scaler = None
+        if self._use_amp:
+            try:
+                major, _ = torch.cuda.get_device_capability(0)
+                if major >= 8:
+                    self._amp_dtype = torch.bfloat16
+                else:
+                    self._amp_dtype = torch.float16
+                    self._scaler = torch.amp.GradScaler("cuda", enabled=True)
+            except Exception:
+                self._amp_dtype = torch.float16
+                self._scaler = torch.amp.GradScaler("cuda", enabled=True)
 
         # --- Performance: pre-allocated client optimizers ---
         self._client_train_opts: Dict[int, optim.Optimizer] = {}
@@ -295,7 +312,10 @@ class FDSimulator:
                 model_mem = sum(p.numel() * p.element_size() for p in self.server_model.parameters())
                 per_client = model_mem * 4  # model + grads + optimizer + activations
                 usable = int(free_mem * 0.5)
-                auto = max(1, min(usable // max(per_client, 1), 8))
+                # Cap at 4 instead of 8. With heterogeneous architectures and per-client
+                # model instances, the PyTorch caching-allocator global lock makes 8-wide
+                # dispatch slower than 4-wide on a single GPU. Override via --parallel-clients.
+                auto = max(1, min(usable // max(per_client, 1), 4))
                 if cfg.parallel_clients == -1:
                     self._max_parallel = auto
                 elif cfg.parallel_clients > 0:
@@ -330,20 +350,25 @@ class FDSimulator:
         # unique architecture and on the server model so the tax is paid at setup time.
         if self.device.startswith("cuda"):
             try:
+                warm_sizes = sorted({
+                    int(self.cfg.batch_size),
+                    int(self.cfg.distillation_batch_size),
+                    512,
+                })
+                ref_shape = None
+                ref_dtype = torch.float32
                 if self._public_x_cache is not None and self._public_x_cache.size(0) > 0:
-                    prewarm_bs = max(self.cfg.batch_size, self.cfg.distillation_batch_size)
-                    dummy_shape = (prewarm_bs,) + tuple(self._public_x_cache.shape[1:])
-                    dummy = torch.zeros(dummy_shape, device=self.device, dtype=self._public_x_cache.dtype)
+                    ref_shape = tuple(self._public_x_cache.shape[1:])
+                    ref_dtype = self._public_x_cache.dtype
                 else:
                     sample_x, _ = train_ds[0]
                     if isinstance(sample_x, torch.Tensor):
-                        prewarm_bs = max(self.cfg.batch_size, self.cfg.distillation_batch_size)
-                        dummy = torch.zeros((prewarm_bs,) + tuple(sample_x.shape), device=self.device, dtype=sample_x.dtype)
-                    else:
-                        dummy = None
-                if dummy is not None:
-                    seen_ids = set()
+                        ref_shape = tuple(sample_x.shape)
+                        ref_dtype = sample_x.dtype
+                if ref_shape is not None:
+                    seen_ids: set = set()
                     warmed = 0
+                    amp_dtype = getattr(self, "_amp_dtype", torch.float32)
                     with torch.inference_mode():
                         for cid, m in self.client_models.items():
                             if id(m) in seen_ids:
@@ -351,18 +376,32 @@ class FDSimulator:
                             seen_ids.add(id(m))
                             try:
                                 m.eval()
-                                _ = m(dummy)
+                                for bs in warm_sizes:
+                                    dummy = torch.zeros((bs,) + ref_shape, device=self.device, dtype=ref_dtype)
+                                    if self._use_amp:
+                                        with torch.amp.autocast("cuda", enabled=True, dtype=amp_dtype):
+                                            _ = m(dummy)
+                                    else:
+                                        _ = m(dummy)
+                                    del dummy
                                 warmed += 1
                             except Exception:
                                 pass
                         try:
                             self.server_model.eval()
-                            _ = self.server_model(dummy)
+                            for bs in warm_sizes:
+                                dummy = torch.zeros((bs,) + ref_shape, device=self.device, dtype=ref_dtype)
+                                if self._use_amp:
+                                    with torch.amp.autocast("cuda", enabled=True, dtype=amp_dtype):
+                                        _ = self.server_model(dummy)
+                                else:
+                                    _ = self.server_model(dummy)
+                                del dummy
                             warmed += 1
                         except Exception:
                             pass
                     torch.cuda.synchronize()
-                    print(f"[FD setup] pre-warmed cuDNN kernels on {warmed} model(s).", flush=True)
+                    print(f"[FD setup] pre-warmed cuDNN kernels on {warmed} model(s) across {len(warm_sizes)} batch sizes.", flush=True)
             except Exception:
                 pass
 
@@ -498,7 +537,11 @@ class FDSimulator:
         if cid not in self._client_train_opts:
             model = self.client_models[cid]
             if self.cfg.fd_optimizer == "adam":
-                self._client_train_opts[cid] = optim.Adam(model.parameters(), lr=self.cfg.distillation_lr)
+                self._client_train_opts[cid] = optim.Adam(
+                    model.parameters(),
+                    lr=self.cfg.distillation_lr,
+                    fused=self.device.startswith("cuda"),
+                )
             else:
                 self._client_train_opts[cid] = optim.SGD(model.parameters(), lr=self.cfg.lr)
         return self._client_train_opts[cid]
@@ -508,6 +551,7 @@ class FDSimulator:
         if cid not in self._client_distill_opts:
             self._client_distill_opts[cid] = optim.Adam(
                 self.client_models[cid].parameters(), lr=self.cfg.distillation_lr,
+                fused=self.device.startswith("cuda"),
             )
         return self._client_distill_opts[cid]
 
@@ -516,6 +560,7 @@ class FDSimulator:
         if self._server_distill_opt is None:
             self._server_distill_opt = optim.Adam(
                 self.server_model.parameters(), lr=self.cfg.distillation_lr,
+                fused=self.device.startswith("cuda"),
             )
         return self._server_distill_opt
 
@@ -547,7 +592,7 @@ class FDSimulator:
                 x = x_all[idx:idx + bs]
                 y = y_all[idx:idx + bs]
                 opt.zero_grad(set_to_none=True)
-                with torch.amp.autocast("cuda", enabled=use_amp):
+                with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                     out = model(x)
                     loss = criterion(out, y)
                 if scaler is not None:
@@ -593,7 +638,7 @@ class FDSimulator:
                     break
                 x, y = x.to(self.device), y.to(self.device)
                 opt.zero_grad(set_to_none=True)
-                with torch.amp.autocast("cuda", enabled=use_amp):
+                with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                     out = model(x)
                     loss = criterion(out, y)
                 if scaler is not None:
@@ -644,14 +689,14 @@ class FDSimulator:
         bs = max(1, int(self.cfg.distillation_batch_size))
         if self._public_x_cache is not None:
             parts: List[torch.Tensor] = []
-            with torch.amp.autocast("cuda", enabled=self._use_amp):
+            with torch.amp.autocast("cuda", enabled=self._use_amp, dtype=self._amp_dtype):
                 for i in range(0, self._public_x_cache.size(0), bs):
                     parts.append(model(self._public_x_cache[i:i + bs]).float())
             return parts[0] if len(parts) == 1 else torch.cat(parts, dim=0)
         all_logits = []
         for x, *_ in self.public_loader:
             x = x.to(self.device)
-            with torch.amp.autocast("cuda", enabled=self._use_amp):
+            with torch.amp.autocast("cuda", enabled=self._use_amp, dtype=self._amp_dtype):
                 all_logits.append(model(x).float())
         return torch.cat(all_logits, dim=0)
 
@@ -690,7 +735,7 @@ class FDSimulator:
                     x_batch = public_x[i:i + cfg.distillation_batch_size]
                     q_batch = q_full[i:i + cfg.distillation_batch_size]
                     opt.zero_grad(set_to_none=True)
-                    with torch.amp.autocast("cuda", enabled=use_amp):
+                    with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                         log_p = F.log_softmax(model(x_batch) / T, dim=-1)
                         loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
@@ -714,7 +759,7 @@ class FDSimulator:
                     q_batch = q_full[offset:offset + bs]
                     offset += bs
                     opt.zero_grad(set_to_none=True)
-                    with torch.amp.autocast("cuda", enabled=use_amp):
+                    with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                         log_p = F.log_softmax(model(x) / T, dim=-1)
                         loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
@@ -763,7 +808,7 @@ class FDSimulator:
                     x_batch = public_x[i:i + cfg.distillation_batch_size]
                     q_batch = q_full[i:i + cfg.distillation_batch_size]
                     opt.zero_grad(set_to_none=True)
-                    with torch.amp.autocast("cuda", enabled=use_amp):
+                    with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                         log_p = F.log_softmax(model(x_batch) / T, dim=-1)
                         loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
@@ -787,7 +832,7 @@ class FDSimulator:
                     q_batch = q_full[offset:offset + bs]
                     offset += bs
                     opt.zero_grad(set_to_none=True)
-                    with torch.amp.autocast("cuda", enabled=use_amp):
+                    with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
                         log_p = F.log_softmax(model(x) / T, dim=-1)
                         loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
