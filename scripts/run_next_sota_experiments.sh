@@ -53,6 +53,14 @@ done
 CIFAR_MODELS="ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 
+# Speed flags: AMP only on CUDA (GradScaler breaks on CPU); profile always on so the
+# first few rounds' wall-clock is visible live; eval-every 10 halves eval cost vs the
+# default 5 without hurting final-accuracy reports (final round is always evaluated).
+AMP_FLAG=""
+if [[ "$DEVICE" == "cuda" ]]; then
+    AMP_FLAG="--use-amp"
+fi
+
 # Base FD block — paper-matched (Mu et al. §VI): 2 local epochs, 2 distill epochs, Adam lr 0.001,
 # 128 train batch / 500 distill batch, dynamic steps base=5 period=25, 8-bit quantisation, 64 BS antennas.
 BASE_FD="--paradigm fd \
@@ -63,6 +71,9 @@ BASE_FD="--paradigm fd \
          --distillation-lr 0.001 --distillation-epochs 2 --temperature 1.0 \
          --fd-optimizer adam \
          --n-bs-antennas 64 --quantization-bits 8 \
+         --eval-every 10 \
+         --profile \
+         ${AMP_FLAG} \
          --device ${DEVICE} ${FAST_FLAG}"
 
 # Method sets

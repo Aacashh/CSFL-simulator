@@ -691,6 +691,7 @@ class FDSimulator:
             # Parallelised across clients using CUDA streams when available
             kl_divs = []
             client_logits = {}
+            t_clients_start = time.perf_counter()
 
             def _process_client(cid: int) -> Tuple[float, torch.Tensor]:
                 """Run distill -> train -> inference for one client. Returns (kl, logits)."""
@@ -745,6 +746,8 @@ class FDSimulator:
                             kl_divs.append(kl)
                         client_logits[cid] = logits
 
+            t_clients_total = time.perf_counter() - t_clients_start
+
             # --- Per-client logit statistics (for FD-native selectors) ---
             fd_logit_stats = {}
             logit_entropy_vals = []
@@ -795,6 +798,7 @@ class FDSimulator:
                 logit_cosine_div = 0.0
 
             # Phase 5: Server aggregation
+            t_server_start = time.perf_counter()
             weights = [float(self.clients[cid].data_size) for cid in ids]
             logit_list = [client_logits[cid] for cid in ids]
 
@@ -837,13 +841,13 @@ class FDSimulator:
             else:
                 aggregated_logits = server_logits
 
+            t_server_total = time.perf_counter() - t_server_start
+
             # Phase 7: Evaluation
-            rnd_time = time.perf_counter() - rnd_start
             compute_time = max(
                 (self.clients[cid].estimated_duration for cid in ids),
                 default=0.0,
             )
-            wall_clock = prev_wall_clock + rnd_time
 
             # Communication metrics (FD overhead)
             K_r_current = self._compute_dynamic_steps(rnd, max((self.clients[cid].data_size for cid in ids), default=1))
@@ -870,6 +874,7 @@ class FDSimulator:
             # Evaluate client models — skip most rounds for speed
             eval_every = max(1, cfg.eval_every)
             do_eval = (rnd % eval_every == 0) or (rnd == cfg.rounds - 1) or (rnd == 0)
+            t_eval_start = time.perf_counter()
             if do_eval:
                 # Evaluate ALL clients on eval rounds (paper's per-user avg metric).
                 # Previously passed sample_ids=ids which only evaluated selected clients,
@@ -882,6 +887,11 @@ class FDSimulator:
                 last_eval = m.copy()
             else:
                 m = last_eval.copy()
+            t_eval_total = time.perf_counter() - t_eval_start
+
+            # Round wall-clock now includes client + server + eval (selection is its own field).
+            rnd_time = time.perf_counter() - rnd_start
+            wall_clock = prev_wall_clock + rnd_time
 
             # Fairness metrics
             counts = [c.participation_count for c in self.clients]
@@ -894,12 +904,19 @@ class FDSimulator:
             n_good = sum(1 for cid in ids if self.clients[cid].meta.get("channel_group", "good") == "good")
             n_bad = len(ids) - n_good
 
+            t_other = max(0.0, rnd_time - selection_time - t_clients_total - t_server_total - t_eval_total)
+
             m.update({
                 "round": rnd,
                 "selection_time": selection_time,
                 "compute_time": compute_time,
                 "round_time": rnd_time,
                 "wall_clock": wall_clock,
+                # --- per-phase timing (always recorded; stdout printed when cfg.profile=True) ---
+                "t_clients_phase": t_clients_total,   # LD + LT + LI across all selected clients
+                "t_server_phase": t_server_total,     # aggregation + server distill + server inference
+                "t_eval_phase": t_eval_total,         # evaluation (0 on non-eval rounds)
+                "t_other_phase": t_other,             # metrics bookkeeping + memory cleanup + misc
                 "cum_comm": cum_comm_kb / 1024.0,  # MB
                 "cum_tflops": cum_tflops,
                 "fairness_var": fairness_var,
@@ -938,6 +955,18 @@ class FDSimulator:
 
             metrics.append(m)
             prev_wall_clock = wall_clock
+
+            # --- Per-phase profile print (opt-in) ---
+            if cfg.profile:
+                eval_tag = "eval" if do_eval else "----"
+                print(
+                    f"  [r={rnd:3d} {eval_tag}] total={rnd_time:6.2f}s "
+                    f"| select={selection_time:5.2f} clients={t_clients_total:6.2f} "
+                    f"server={t_server_total:5.2f} eval={t_eval_total:5.2f} other={t_other:4.2f}s "
+                    f"| acc={m.get('server_accuracy', m.get('accuracy', 0.0)):.3f} "
+                    f"| kl={m.get('kl_divergence_avg', 0.0):.2f}",
+                    flush=True,
+                )
 
             # Progress callback
             if on_progress:

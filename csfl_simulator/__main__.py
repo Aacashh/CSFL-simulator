@@ -112,6 +112,8 @@ def _add_sim_args(p: argparse.ArgumentParser):
                     help="Evaluate every N rounds (default: 5, use 10-20 for faster runs)")
     p.add_argument("--use-amp", action="store_true", default=False,
                     help="Enable mixed precision (AMP) for faster training on Turing+ GPUs")
+    p.add_argument("--profile", action="store_true", default=False,
+                    help="Print per-round per-phase timing breakdown to stdout (timings are always recorded in metrics.json)")
 
 
 def _args_to_config(args) -> SimConfig:
@@ -165,6 +167,7 @@ def _args_to_config(args) -> SimConfig:
         fd_optimizer=getattr(args, "fd_optimizer", "adam"),
         eval_every=getattr(args, "eval_every", 5),
         use_amp=getattr(args, "use_amp", False),
+        profile=getattr(args, "profile", False),
     )
 
 
