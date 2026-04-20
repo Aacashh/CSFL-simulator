@@ -21,21 +21,40 @@ def ensure_dirs():
     (ART_ROOT / "exports").mkdir(parents=True, exist_ok=True)
 
 
-def set_seed(seed: int, deterministic: bool = True):
+def set_seed(seed: int, deterministic: bool = True, performance_mode: bool = False):
     """
     Set random seeds for reproducibility.
-    
+
     Args:
-        seed: Random seed value
-        deterministic: If True, enables strict deterministic mode (slower but reproducible)
-                      If False, allows optimizations that may vary slightly across runs
+        seed: Random seed value. Always seeds python/numpy/torch/cuda RNGs so that
+              stochastic ops (partition, noise, etc.) are reproducible at the
+              high-level-results level regardless of the other flags.
+        deterministic: If True, enables strict deterministic mode: cuDNN is forced
+              into deterministic algorithms (slower) and `torch.use_deterministic_algorithms`
+              is turned on. Required for bit-for-bit reproducibility.
+        performance_mode: If True, enables `torch.backends.cudnn.benchmark` so cuDNN
+              picks the fastest kernel for each input shape. This is the single largest
+              GPU-throughput win on FD workloads (see FD_speed_optimization_notes.md
+              tier 1.1). performance_mode implies deterministic=False and cannot be
+              combined with deterministic=True (the explicit argument wins if both
+              are passed; the caller should pick one).
     """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    
-    if deterministic:
+
+    if performance_mode:
+        # Performance mode: allow non-deterministic optimizations and pick the fastest
+        # cuDNN kernel per input shape. Seed-based reproducibility of high-level results
+        # is preserved; bit-for-bit reproducibility is not.
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+        try:
+            torch.use_deterministic_algorithms(False)
+        except Exception:
+            pass
+    elif deterministic:
         # Strict deterministic mode for exact reproducibility
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
@@ -46,9 +65,9 @@ def set_seed(seed: int, deterministic: bool = True):
             # Fallback for older PyTorch versions
             pass
     else:
-        # Performance mode: allow non-deterministic optimizations
+        # Default non-strict: no deterministic constraint, but also no cuDNN autotune.
         torch.backends.cudnn.deterministic = False
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.benchmark = False
 
 
 def autodetect_device(prefer_gpu: bool = True) -> str:

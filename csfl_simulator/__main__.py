@@ -108,10 +108,23 @@ def _add_sim_args(p: argparse.ArgumentParser):
     p.add_argument("--fd-optimizer", default="adam", choices=["adam", "sgd"],
                     help="Optimizer for FD local training (paper: adam)")
     # Performance tuning
-    p.add_argument("--eval-every", type=int, default=5,
-                    help="Evaluate every N rounds (default: 5, use 10-20 for faster runs)")
-    p.add_argument("--use-amp", action="store_true", default=False,
-                    help="Enable mixed precision (AMP) for faster training on Turing+ GPUs")
+    p.add_argument("--eval-every", type=int, default=10,
+                    help="Evaluate every N rounds (default: 10; final round always evaluated)")
+    p.add_argument("--use-amp", dest="use_amp", action="store_true", default=True,
+                    help="Enable mixed precision (AMP). Default: on when CUDA is detected.")
+    p.add_argument("--no-amp", dest="use_amp", action="store_false",
+                    help="Disable mixed precision (AMP).")
+    p.add_argument("--performance-mode", dest="performance_mode", action="store_true", default=True,
+                    help="Enable cuDNN autotune (torch.backends.cudnn.benchmark). Default: on. "
+                         "Preserves seed-level reproducibility but not bit-for-bit.")
+    p.add_argument("--no-performance-mode", dest="performance_mode", action="store_false",
+                    help="Disable cuDNN autotune for bit-for-bit reproducibility (slower).")
+    p.add_argument("--use-torch-compile", action="store_true", default=False,
+                    help="Wrap client and server models in torch.compile (tier 3.1 — experimental).")
+    p.add_argument("--channels-last", action="store_true", default=False,
+                    help="Use channels_last memory format for CNN models (tier 3.2 — Ampere+).")
+    p.add_argument("--eval-subsample", type=int, default=0,
+                    help="Subsample size for intermediate eval rounds (tier 3.3). 0 = use full test set.")
     p.add_argument("--profile", action="store_true", default=False,
                     help="Print per-round per-phase timing breakdown to stdout (timings are always recorded in metrics.json)")
 
@@ -165,8 +178,12 @@ def _args_to_config(args) -> SimConfig:
         group_based=getattr(args, "group_based", False),
         channel_threshold=getattr(args, "channel_threshold", 0.5),
         fd_optimizer=getattr(args, "fd_optimizer", "adam"),
-        eval_every=getattr(args, "eval_every", 5),
-        use_amp=getattr(args, "use_amp", False),
+        eval_every=getattr(args, "eval_every", 10),
+        use_amp=getattr(args, "use_amp", True),
+        performance_mode=getattr(args, "performance_mode", True),
+        use_torch_compile=getattr(args, "use_torch_compile", False),
+        channels_last=getattr(args, "channels_last", False),
+        eval_subsample=getattr(args, "eval_subsample", 0),
         profile=getattr(args, "profile", False),
     )
 
