@@ -87,8 +87,14 @@ class SimConfig:
     # FD optimizer
     fd_optimizer: str = "adam"           # Optimizer for FD local training (paper: adam)
     # Performance tuning
-    eval_every: int = 5                  # Evaluate every N rounds (0 = every round)
-    use_amp: bool = False                # Mixed precision (AMP) — faster on Turing+ GPUs
+    # Evaluate every N rounds (0 = every round). The final round is always evaluated,
+    # so this only affects intermediate diagnostic plots. Default 10 halves eval cost
+    # on long runs versus the old default of 5.
+    eval_every: int = 10
+    # Mixed precision (AMP). Default True: the simulator guards `_use_amp` with
+    # `cfg.use_amp and self.device.startswith("cuda")`, so this is a no-op on CPU runs.
+    # Pass --no-amp to disable.
+    use_amp: bool = True
     # Server-side distillation target uncertainty (Eq. 18 of Mu et al. 2024): models the
     # small-variance Gaussian residual omega_D that arises because the server-side
     # aggregated logits are an approximation of the true consensus. Added to the server's
@@ -108,6 +114,26 @@ class SimConfig:
     # in the client phase (LD+LT+LI), server aggregation+distill, evaluation, and other.
     # Timings are always recorded in metrics.json regardless of this flag (overhead: ~5us/round).
     profile: bool = False
+    # Performance mode: enable cuDNN autotuner (torch.backends.cudnn.benchmark = True) so
+    # cuDNN picks the fastest kernel for each input shape. This is the single largest
+    # GPU-throughput win on FD workloads (30-50% speedup on conv-heavy models). Set to
+    # False for bit-for-bit reproducibility; seed-level reproducibility is preserved either
+    # way. See docs/FD_speed_optimization_notes.md.
+    performance_mode: bool = True
+    # Torch compile: when True and PyTorch >= 2.1 on CUDA, wraps each client model and the
+    # server model in torch.compile(mode="reduce-overhead"). Adds 10-60s first-round compile
+    # cost, but can deliver 20-40% sustained speedup. Off by default because compilation
+    # can fail on some model zoo layers; failures fall back to uncompiled silently.
+    use_torch_compile: bool = False
+    # Channels-last memory format: when True, converts CNN models and cached tensors to
+    # torch.channels_last. 10-20% speedup on Ampere+ GPUs for conv-heavy models. Only
+    # applied when the model's input is 4D (N,C,H,W). Off by default.
+    channels_last: bool = False
+    # Subsampled intermediate evaluation: when > 0, non-final eval rounds evaluate on a
+    # fixed random subset of `eval_subsample` test samples (sampled once at setup using
+    # the config seed). The final round always uses the full test set. Off by default
+    # because it introduces a small bias; on 200-round runs can deliver 10x eval speedup.
+    eval_subsample: int = 0
 
 
 class FLSimulator:

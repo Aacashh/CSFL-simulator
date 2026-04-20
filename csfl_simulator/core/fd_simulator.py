@@ -15,6 +15,13 @@ O(1/t) predicted in §IV; in particular, late-training behaviour is controlled
 by Adam's running-moment scaling rather than by the theorem's step-size
 decay. Swap in a time-decayed LR schedule if the theorem bound is being
 empirically verified.
+
+Reproducibility: the default ``performance_mode=True`` in ``SimConfig`` enables
+``torch.backends.cudnn.benchmark`` so cuDNN picks the fastest kernel for each
+input shape. This preserves **seed-level** reproducibility (the same seed yields
+the same high-level results across runs on the same hardware) but NOT **bit-for-bit**
+reproducibility. Set ``performance_mode=False`` (CLI: ``--no-performance-mode``) if
+exact tensor-level reproducibility is required.
 """
 from __future__ import annotations
 
@@ -53,7 +60,8 @@ class FDSimulator:
 
     def __init__(self, config: SimConfig):
         self.cfg = config
-        set_seed(self.cfg.seed, deterministic=True)
+        perf = bool(getattr(config, "performance_mode", False))
+        set_seed(self.cfg.seed, deterministic=(not perf), performance_mode=perf)
         self.device = autodetect_device(True) if self.cfg.device == "auto" else self.cfg.device
         self.run_dir, self.run_id = new_run_dir(self.cfg.name or "fd_sim")
         self.registry = MethodRegistry()
@@ -282,6 +290,65 @@ class FDSimulator:
             except Exception:
                 self._max_parallel = 2
 
+        # --- Tier 3 optional: torch.compile ---
+        if cfg.use_torch_compile and self.device.startswith("cuda"):
+            self._maybe_compile_models()
+
+        # --- Tier 3 optional: channels_last memory format ---
+        if cfg.channels_last and self.device.startswith("cuda"):
+            self._maybe_apply_channels_last()
+
+        # --- Tier 3 optional: fixed eval subsample indices ---
+        self._eval_subsample_indices: Optional[torch.Tensor] = None
+        self._eval_full_override: bool = False
+        if cfg.eval_subsample > 0 and self._test_x_cache is not None:
+            n_test = self._test_x_cache.size(0)
+            k = min(int(cfg.eval_subsample), n_test)
+            g = torch.Generator(device="cpu").manual_seed(int(cfg.seed))
+            perm = torch.randperm(n_test, generator=g)[:k]
+            self._eval_subsample_indices = perm.to(self.device)
+
+        # --- Tier 1.2: pre-warm cuDNN kernels ---
+        # The first forward pass on a new input shape triggers cuDNN algorithm selection
+        # (1-5s stall per model). With heterogeneous client architectures this stall would
+        # hit on every architecture the first time it's used. Fire one dummy forward per
+        # unique architecture and on the server model so the tax is paid at setup time.
+        if self.device.startswith("cuda"):
+            try:
+                if self._public_x_cache is not None and self._public_x_cache.size(0) > 0:
+                    dummy_shape = (1,) + tuple(self._public_x_cache.shape[1:])
+                    dummy = torch.zeros(dummy_shape, device=self.device, dtype=self._public_x_cache.dtype)
+                else:
+                    sample_x, _ = train_ds[0]
+                    if isinstance(sample_x, torch.Tensor):
+                        dummy = torch.zeros((1,) + tuple(sample_x.shape), device=self.device, dtype=sample_x.dtype)
+                    else:
+                        dummy = None
+                if dummy is not None:
+                    seen_ids = set()
+                    warmed = 0
+                    with torch.inference_mode():
+                        for cid, m in self.client_models.items():
+                            if id(m) in seen_ids:
+                                continue
+                            seen_ids.add(id(m))
+                            try:
+                                m.eval()
+                                _ = m(dummy)
+                                warmed += 1
+                            except Exception:
+                                pass
+                        try:
+                            self.server_model.eval()
+                            _ = self.server_model(dummy)
+                            warmed += 1
+                        except Exception:
+                            pass
+                    torch.cuda.synchronize()
+                    print(f"[FD setup] pre-warmed cuDNN kernels on {warmed} model(s).", flush=True)
+            except Exception:
+                pass
+
     def _adapt_server_for_groups(self):
         """Double the server model's last FC layer for FedTSKD-G."""
         # Find the last Linear layer
@@ -298,6 +365,83 @@ class FDSimulator:
             for p in parts[:-1]:
                 parent = getattr(parent, p)
             setattr(parent, parts[-1], new_fc)
+
+    # ------------------------------------------------------------------
+    # Tier 3 optional performance helpers
+    # ------------------------------------------------------------------
+
+    def _maybe_compile_models(self):
+        """Wrap each client model and the server model with torch.compile (tier 3.1).
+
+        Off by default because compilation can fail on unusual layers. Each failure
+        is caught and the uncompiled model is kept instead — the simulator stays
+        functional even if only some models compile. Requires PyTorch >= 2.1.
+        """
+        if not hasattr(torch, "compile"):
+            print("[FD setup] torch.compile not available (requires PyTorch >= 2.1) — skipping.", flush=True)
+            return
+        n_compiled = 0
+        n_failed = 0
+        # Cache compile results by model identity to avoid recompiling shared arch instances.
+        compiled_cache: Dict[int, nn.Module] = {}
+        for cid, m in self.client_models.items():
+            key = id(m)
+            if key in compiled_cache:
+                self.client_models[cid] = compiled_cache[key]
+                continue
+            try:
+                cm = torch.compile(m, mode="reduce-overhead")
+                self.client_models[cid] = cm
+                compiled_cache[key] = cm
+                n_compiled += 1
+            except Exception as e:
+                n_failed += 1
+                print(f"[FD setup] torch.compile failed for client {cid}: {e}", flush=True)
+        try:
+            self.server_model = torch.compile(self.server_model, mode="reduce-overhead")
+            n_compiled += 1
+        except Exception as e:
+            n_failed += 1
+            print(f"[FD setup] torch.compile failed for server: {e}", flush=True)
+        print(f"[FD setup] torch.compile: {n_compiled} compiled, {n_failed} failed.", flush=True)
+
+    def _maybe_apply_channels_last(self):
+        """Convert CNN models and cached tensors to channels_last memory format (tier 3.2).
+
+        Off by default; 10-20% speedup on Ampere+ GPUs for conv-heavy models.  Only
+        applied when the cached public tensor is 4D (N,C,H,W).
+        """
+        cache = self._public_x_cache
+        if cache is None or cache.dim() != 4:
+            print("[FD setup] channels_last skipped: no 4D public tensor cache.", flush=True)
+            return
+        try:
+            # Convert cached tensors
+            self._public_x_cache = self._public_x_cache.contiguous(memory_format=torch.channels_last)
+            if self._test_x_cache is not None and self._test_x_cache.dim() == 4:
+                self._test_x_cache = self._test_x_cache.contiguous(memory_format=torch.channels_last)
+            for cid, (xs, ys) in list(self._client_data_cache.items()):
+                if xs.dim() == 4:
+                    self._client_data_cache[cid] = (
+                        xs.contiguous(memory_format=torch.channels_last), ys,
+                    )
+            # Convert models (skip already-converted shared instances)
+            seen = set()
+            for cid, m in self.client_models.items():
+                if id(m) in seen:
+                    continue
+                seen.add(id(m))
+                try:
+                    m.to(memory_format=torch.channels_last)
+                except Exception:
+                    pass
+            try:
+                self.server_model.to(memory_format=torch.channels_last)
+            except Exception:
+                pass
+            print("[FD setup] channels_last applied.", flush=True)
+        except Exception as e:
+            print(f"[FD setup] channels_last failed: {e}", flush=True)
 
     # ------------------------------------------------------------------
     # Dynamic training steps (Section V-A)
@@ -360,10 +504,12 @@ class FDSimulator:
         criterion = nn.CrossEntropyLoss()
         opt = self._get_train_opt(cid)
 
-        last_loss = 0.0
         grad_norm = 0.0
         use_amp = self._use_amp
         scaler = self._scaler
+        # Defer loss->float conversion until the end of the call: one GPU->CPU sync
+        # instead of one per SGD step. See FD_speed_optimization_notes.md tier 1.7.
+        loss_buffer: Optional[torch.Tensor] = None
 
         # Fast path: GPU-cached training data (no DataLoader overhead)
         if cid in self._client_data_cache:
@@ -374,7 +520,7 @@ class FDSimulator:
                 idx = (step * bs) % n
                 x = x_all[idx:idx + bs]
                 y = y_all[idx:idx + bs]
-                opt.zero_grad()
+                opt.zero_grad(set_to_none=True)
                 with torch.amp.autocast("cuda", enabled=use_amp):
                     out = model(x)
                     loss = criterion(out, y)
@@ -398,9 +544,11 @@ class FDSimulator:
                         except Exception:
                             pass
                     opt.step()
-                last_loss = float(loss.item())
+                loss_buffer = loss.detach()
                 if cfg.smoke_test_mode and step > 0:
+                    last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
                     return last_loss, grad_norm
+            last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
             return last_loss, grad_norm
 
         # Fallback: DataLoader-based training
@@ -418,7 +566,7 @@ class FDSimulator:
                 if step >= num_steps:
                     break
                 x, y = x.to(self.device), y.to(self.device)
-                opt.zero_grad()
+                opt.zero_grad(set_to_none=True)
                 with torch.amp.autocast("cuda", enabled=use_amp):
                     out = model(x)
                     loss = criterion(out, y)
@@ -442,17 +590,19 @@ class FDSimulator:
                         except Exception:
                             pass
                     opt.step()
-                last_loss = float(loss.item())
+                loss_buffer = loss.detach()
                 step += 1
                 if cfg.smoke_test_mode and step > 1:
+                    last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
                     return last_loss, grad_norm
+        last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
         return last_loss, grad_norm
 
     # ------------------------------------------------------------------
     # Inference on public dataset (Eq. 13)
     # ------------------------------------------------------------------
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def _generate_logits(self, cid: int) -> torch.Tensor:
         """Run client model on public dataset, returning logits of shape (N_pub, C)."""
         model = self.client_models[cid]
@@ -483,11 +633,16 @@ class FDSimulator:
         model = self.client_models[cid]
         model.train()
         opt = self._get_distill_opt(cid)
-        total_loss = 0.0
         n_batches = 0
         target_logits = target_logits.to(self.device)
         use_amp = self._use_amp
         scaler = self._scaler
+        # Precompute softmax targets once per call (tier 1.5): target_logits does not change
+        # across epochs/batches, so F.softmax(t/T, dim=-1) only needs to run once.
+        with torch.no_grad():
+            q_full = F.softmax(target_logits / T, dim=-1)
+        # Accumulate per-batch loss as a GPU tensor and convert once at the end (tier 1.7).
+        loss_sum: Optional[torch.Tensor] = None
 
         # Use cached public data if available (avoids CPU->GPU transfer)
         if self._public_x_cache is not None:
@@ -495,12 +650,11 @@ class FDSimulator:
             for epoch in range(num_epochs):
                 for i in range(0, public_x.size(0), cfg.distillation_batch_size):
                     x_batch = public_x[i:i + cfg.distillation_batch_size]
-                    t_batch = target_logits[i:i + cfg.distillation_batch_size]
-                    opt.zero_grad()
+                    q_batch = q_full[i:i + cfg.distillation_batch_size]
+                    opt.zero_grad(set_to_none=True)
                     with torch.amp.autocast("cuda", enabled=use_amp):
                         log_p = F.log_softmax(model(x_batch) / T, dim=-1)
-                        q = F.softmax(t_batch / T, dim=-1)
-                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                        loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
                         scaler.scale(loss).backward()
                         scaler.step(opt)
@@ -508,23 +662,23 @@ class FDSimulator:
                     else:
                         loss.backward()
                         opt.step()
-                    total_loss += loss.item()
+                    detached = loss.detach()
+                    loss_sum = detached if loss_sum is None else loss_sum + detached
                     n_batches += 1
                     if cfg.smoke_test_mode and n_batches > 1:
-                        return total_loss / n_batches
+                        return float(loss_sum.item() / n_batches) if loss_sum is not None else 0.0
         else:
             for epoch in range(num_epochs):
                 offset = 0
                 for x, *_ in self.public_loader:
                     x = x.to(self.device)
                     bs = x.size(0)
-                    t_batch = target_logits[offset:offset + bs]
+                    q_batch = q_full[offset:offset + bs]
                     offset += bs
-                    opt.zero_grad()
+                    opt.zero_grad(set_to_none=True)
                     with torch.amp.autocast("cuda", enabled=use_amp):
                         log_p = F.log_softmax(model(x) / T, dim=-1)
-                        q = F.softmax(t_batch / T, dim=-1)
-                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                        loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
                         scaler.scale(loss).backward()
                         scaler.step(opt)
@@ -532,12 +686,15 @@ class FDSimulator:
                     else:
                         loss.backward()
                         opt.step()
-                    total_loss += loss.item()
+                    detached = loss.detach()
+                    loss_sum = detached if loss_sum is None else loss_sum + detached
                     n_batches += 1
                     if cfg.smoke_test_mode and n_batches > 1:
-                        return total_loss / n_batches
+                        return float(loss_sum.item() / n_batches) if loss_sum is not None else 0.0
 
-        return total_loss / max(1, n_batches)
+        if loss_sum is None or n_batches == 0:
+            return 0.0
+        return float(loss_sum.item() / n_batches)
 
     # ------------------------------------------------------------------
     # Server-side distillation
@@ -550,23 +707,27 @@ class FDSimulator:
         model = self.server_model
         model.train()
         opt = self._get_server_distill_opt()
-        total_loss = 0.0
         n_batches = 0
         aggregated_logits = aggregated_logits.to(self.device)
         use_amp = self._use_amp
         scaler = self._scaler
+        # Precompute softmax targets once per call (tier 1.5): aggregated_logits is fixed
+        # across the distillation epochs, so F.softmax(t/T, dim=-1) only needs to run once.
+        with torch.no_grad():
+            q_full = F.softmax(aggregated_logits / T, dim=-1)
+        # Accumulate per-batch loss as a GPU tensor and convert once at the end (tier 1.7).
+        loss_sum: Optional[torch.Tensor] = None
 
         if self._public_x_cache is not None:
             public_x = self._public_x_cache
             for epoch in range(num_epochs):
                 for i in range(0, public_x.size(0), cfg.distillation_batch_size):
                     x_batch = public_x[i:i + cfg.distillation_batch_size]
-                    t_batch = aggregated_logits[i:i + cfg.distillation_batch_size]
-                    opt.zero_grad()
+                    q_batch = q_full[i:i + cfg.distillation_batch_size]
+                    opt.zero_grad(set_to_none=True)
                     with torch.amp.autocast("cuda", enabled=use_amp):
                         log_p = F.log_softmax(model(x_batch) / T, dim=-1)
-                        q = F.softmax(t_batch / T, dim=-1)
-                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                        loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
                         scaler.scale(loss).backward()
                         scaler.step(opt)
@@ -574,23 +735,23 @@ class FDSimulator:
                     else:
                         loss.backward()
                         opt.step()
-                    total_loss += loss.item()
+                    detached = loss.detach()
+                    loss_sum = detached if loss_sum is None else loss_sum + detached
                     n_batches += 1
                     if cfg.smoke_test_mode and n_batches > 1:
-                        return total_loss / n_batches
+                        return float(loss_sum.item() / n_batches) if loss_sum is not None else 0.0
         else:
             for epoch in range(num_epochs):
                 offset = 0
                 for x, *_ in self.public_loader:
                     x = x.to(self.device)
                     bs = x.size(0)
-                    t_batch = aggregated_logits[offset:offset + bs]
+                    q_batch = q_full[offset:offset + bs]
                     offset += bs
-                    opt.zero_grad()
+                    opt.zero_grad(set_to_none=True)
                     with torch.amp.autocast("cuda", enabled=use_amp):
                         log_p = F.log_softmax(model(x) / T, dim=-1)
-                        q = F.softmax(t_batch / T, dim=-1)
-                        loss = F.kl_div(log_p, q, reduction='batchmean') * (T * T)
+                        loss = F.kl_div(log_p, q_batch, reduction='batchmean') * (T * T)
                     if scaler is not None:
                         scaler.scale(loss).backward()
                         scaler.step(opt)
@@ -598,12 +759,15 @@ class FDSimulator:
                     else:
                         loss.backward()
                         opt.step()
-                    total_loss += loss.item()
+                    detached = loss.detach()
+                    loss_sum = detached if loss_sum is None else loss_sum + detached
                     n_batches += 1
                     if cfg.smoke_test_mode and n_batches > 1:
-                        return total_loss / n_batches
+                        return float(loss_sum.item() / n_batches) if loss_sum is not None else 0.0
 
-        return total_loss / max(1, n_batches)
+        if loss_sum is None or n_batches == 0:
+            return 0.0
+        return float(loss_sum.item() / n_batches)
 
     # ------------------------------------------------------------------
     # Main FD training loop (Algorithm 1 / 2)
@@ -620,6 +784,15 @@ class FDSimulator:
 
         cfg = self.cfg
 
+        # --- Guardrail: warn if smoke_test_mode is left on for non-trivial runs ---
+        if cfg.smoke_test_mode and cfg.rounds > 20:
+            import warnings
+            warnings.warn(
+                "smoke_test_mode=True with rounds>20 — results will not reflect paper-faithful FD. "
+                "This flag is for debugging only.",
+                stacklevel=2,
+            )
+
         # --- Reset state for fair multi-method comparison ---
         if hasattr(self, '_initial_client_states'):
             for cid, sd in self._initial_client_states.items():
@@ -632,7 +805,8 @@ class FDSimulator:
             c.grad_norm = 0.0
             c.participation_count = 0
             c.last_selected_round = -1
-        set_seed(cfg.seed, deterministic=True)
+        perf = bool(getattr(cfg, "performance_mode", False))
+        set_seed(cfg.seed, deterministic=(not perf), performance_mode=perf)
         # Reset cached optimizers and AMP scaler
         self._client_train_opts.clear()
         self._client_distill_opts.clear()
@@ -824,7 +998,7 @@ class FDSimulator:
 
             # Server predicts on public dataset → logits for next round's downlink
             self.server_model.eval()
-            with torch.no_grad():
+            with torch.inference_mode():
                 if self._public_x_cache is not None:
                     server_logits = self.server_model(self._public_x_cache)
                 else:
@@ -873,14 +1047,20 @@ class FDSimulator:
 
             # Evaluate client models — skip most rounds for speed
             eval_every = max(1, cfg.eval_every)
-            do_eval = (rnd % eval_every == 0) or (rnd == cfg.rounds - 1) or (rnd == 0)
+            is_final = (rnd == cfg.rounds - 1)
+            do_eval = (rnd % eval_every == 0) or is_final or (rnd == 0)
             t_eval_start = time.perf_counter()
             if do_eval:
                 # Evaluate ALL clients on eval rounds (paper's per-user avg metric).
                 # Previously passed sample_ids=ids which only evaluated selected clients,
                 # biasing `client_accuracy_avg` toward the selection policy.
-                m = self._evaluate_clients(sample_ids=None)
-                server_m = self._evaluate_server()
+                # Force full test set on the final round, even when eval_subsample is set.
+                self._eval_full_override = is_final
+                try:
+                    m = self._evaluate_clients(sample_ids=None)
+                    server_m = self._evaluate_server()
+                finally:
+                    self._eval_full_override = False
                 m["server_accuracy"] = server_m.get("accuracy", 0.0)
                 m["server_loss"] = server_m.get("loss", 0.0)
                 m["server_f1"] = server_m.get("f1", 0.0)
@@ -1047,7 +1227,7 @@ class FDSimulator:
         total_loss = 0.0
         n_samples = 0
 
-        with torch.no_grad():
+        with torch.inference_mode():
             for cid_idx, cid in enumerate(ids_to_eval):
                 model = self.client_models[cid]
                 for x, y in self.test_loader:
@@ -1065,34 +1245,79 @@ class FDSimulator:
                                           all_ys, all_preds, total_loss, n_samples)
 
     def _evaluate_clients_cached(self, ids_to_eval: List[int]) -> Dict[str, float]:
-        """Fast evaluation using GPU-cached test data. Single data iteration, all models per chunk."""
+        """Fast evaluation using GPU-cached test data. Single data iteration, all models per chunk.
+
+        On CUDA with multiple models, client forward passes are dispatched across CUDA streams
+        (mirroring the pattern used in ``run()`` for the client-phase). All per-chunk metrics
+        are accumulated as GPU tensors and converted via a single ``.item()`` at the end to
+        eliminate per-chunk GPU->CPU sync. See FD_speed_optimization_notes.md tier 1.3.
+        """
         n_clients = len(ids_to_eval)
-        N_test = self._test_x_cache.size(0)
+        cfg = self.cfg
+
+        # Optional fixed subsample for non-final rounds (tier 3.3). Defaults to full test set.
+        if (self._eval_subsample_indices is not None
+                and not getattr(self, "_eval_full_override", False)):
+            x_src = self._test_x_cache.index_select(0, self._eval_subsample_indices)
+            y_src = self._test_y_cache.index_select(0, self._eval_subsample_indices)
+        else:
+            x_src = self._test_x_cache
+            y_src = self._test_y_cache
+        N_test = x_src.size(0)
         chunk_size = 512
 
-        per_client_correct = [0] * n_clients
+        # All metrics accumulated on-GPU; single sync per client at the end.
+        per_client_correct_t: List[Optional[torch.Tensor]] = [None] * n_clients
         per_client_total = [0] * n_clients
-        # Accumulate all predictions as GPU tensors (single .cpu() at end)
         all_ys_parts: List[torch.Tensor] = []
         all_preds_parts: List[torch.Tensor] = []
-        total_loss = 0.0
+        total_loss_t: Optional[torch.Tensor] = None
 
-        with torch.no_grad():
+        is_cuda = self.device.startswith("cuda")
+        use_streams = is_cuda and n_clients > 1 and self._max_parallel > 1
+        if use_streams:
+            n_streams = min(self._max_parallel, n_clients)
+            streams = [torch.cuda.Stream() for _ in range(n_streams)]
+        else:
+            n_streams = 1
+            streams = []
+
+        with torch.inference_mode():
             for start in range(0, N_test, chunk_size):
-                x_chunk = self._test_x_cache[start:start + chunk_size]
-                y_chunk = self._test_y_cache[start:start + chunk_size]
+                x_chunk = x_src[start:start + chunk_size]
+                y_chunk = y_src[start:start + chunk_size]
                 bs = x_chunk.size(0)
 
-                for i, cid in enumerate(ids_to_eval):
-                    out = self.client_models[cid](x_chunk)
-                    total_loss += F.cross_entropy(out, y_chunk, reduction='sum').item()
+                chunk_outs: List[Optional[torch.Tensor]] = [None] * n_clients
+
+                if use_streams:
+                    for i, cid in enumerate(ids_to_eval):
+                        stream = streams[i % n_streams]
+                        with torch.cuda.stream(stream):
+                            chunk_outs[i] = self.client_models[cid](x_chunk)
+                    torch.cuda.synchronize()
+                else:
+                    for i, cid in enumerate(ids_to_eval):
+                        chunk_outs[i] = self.client_models[cid](x_chunk)
+
+                for i in range(n_clients):
+                    out = chunk_outs[i]
+                    loss_i = F.cross_entropy(out, y_chunk, reduction='sum').detach()
+                    total_loss_t = loss_i if total_loss_t is None else total_loss_t + loss_i
                     preds = out.argmax(dim=1)
-                    per_client_correct[i] += (preds == y_chunk).sum().item()
+                    correct_i = (preds == y_chunk).sum()
+                    per_client_correct_t[i] = (
+                        correct_i if per_client_correct_t[i] is None
+                        else per_client_correct_t[i] + correct_i
+                    )
                     per_client_total[i] += bs
                     all_ys_parts.append(y_chunk)
                     all_preds_parts.append(preds)
 
-        # Single GPU->CPU transfer
+        total_loss = float(total_loss_t.item()) if total_loss_t is not None else 0.0
+        per_client_correct = [int(t.item()) if t is not None else 0 for t in per_client_correct_t]
+
+        # Single GPU->CPU transfer for labels and predictions
         all_ys = torch.cat(all_ys_parts).cpu().tolist()
         all_preds = torch.cat(all_preds_parts).cpu().tolist()
         n_samples = N_test * n_clients
@@ -1136,7 +1361,70 @@ class FDSimulator:
 
     def _evaluate_server(self) -> Dict[str, float]:
         """Evaluate the server model on the test set (selection-independent metric)."""
+        if self._test_x_cache is not None and self._test_y_cache is not None:
+            return self._evaluate_server_cached()
         return eval_model(self.server_model, self.test_loader, self.device)
+
+    def _evaluate_server_cached(self) -> Dict[str, float]:
+        """Fast server evaluation using the GPU-cached test tensors.
+
+        Mirrors _evaluate_clients_cached but for a single model: avoids the CPU->GPU
+        transfer cost of iterating self.test_loader every eval round. See tier 1.4 in
+        FD_speed_optimization_notes.md.
+        """
+        # Optional fixed subsample for non-final rounds (tier 3.3).
+        if (self._eval_subsample_indices is not None
+                and not getattr(self, "_eval_full_override", False)):
+            x_src = self._test_x_cache.index_select(0, self._eval_subsample_indices)
+            y_src = self._test_y_cache.index_select(0, self._eval_subsample_indices)
+        else:
+            x_src = self._test_x_cache
+            y_src = self._test_y_cache
+        N_test = x_src.size(0)
+        chunk_size = 512
+
+        self.server_model.eval()
+        all_ys_parts: List[torch.Tensor] = []
+        all_preds_parts: List[torch.Tensor] = []
+        total_loss_t: Optional[torch.Tensor] = None
+        correct_t: Optional[torch.Tensor] = None
+
+        with torch.inference_mode():
+            for start in range(0, N_test, chunk_size):
+                x_chunk = x_src[start:start + chunk_size]
+                y_chunk = y_src[start:start + chunk_size]
+                out = self.server_model(x_chunk)
+                loss_i = F.cross_entropy(out, y_chunk, reduction='sum').detach()
+                total_loss_t = loss_i if total_loss_t is None else total_loss_t + loss_i
+                preds = out.argmax(dim=1)
+                correct_i = (preds == y_chunk).sum()
+                correct_t = correct_i if correct_t is None else correct_t + correct_i
+                all_ys_parts.append(y_chunk)
+                all_preds_parts.append(preds)
+
+        total_loss = float(total_loss_t.item()) if total_loss_t is not None else 0.0
+        correct = int(correct_t.item()) if correct_t is not None else 0
+
+        all_ys = torch.cat(all_ys_parts).cpu().tolist()
+        all_preds = torch.cat(all_preds_parts).cpu().tolist()
+
+        try:
+            from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+            accuracy = accuracy_score(all_ys, all_preds)
+            f1 = f1_score(all_ys, all_preds, average='macro', zero_division=0)
+            precision = precision_score(all_ys, all_preds, average='macro', zero_division=0)
+            recall = recall_score(all_ys, all_preds, average='macro', zero_division=0)
+        except ImportError:
+            accuracy = (correct / max(N_test, 1)) if N_test > 0 else 0.0
+            f1 = precision = recall = 0.0
+
+        return {
+            "accuracy": accuracy,
+            "loss": total_loss / max(N_test, 1),
+            "f1": f1,
+            "precision": precision,
+            "recall": recall,
+        }
 
     def _convergence_summary(self, metrics: List[Dict]) -> Dict[str, Any]:
         """Compute convergence efficiency metrics from the round-by-round metrics."""
