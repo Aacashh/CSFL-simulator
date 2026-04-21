@@ -50,9 +50,18 @@ done
 CIFAR_MODELS="ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 
-PERF_FLAGS=""
+# Speedup stack (CUDA-only where noted):
+#   --parallel-clients -1  Auto CUDA-stream parallelism across clients in a round.
+#                          Default is already -1 but we set it explicitly so the intent is visible.
+#   --use-amp              Mixed precision. ~1.5-2x on Ampere+ for conv-heavy ResNet/MobileNet.
+#   --channels-last        Memory format for CNNs. ~10-20% on Ampere+, no-op on MNIST.
+#   --use-torch-compile    torch.compile wrap on client + server models. ~30-60s first-round
+#                          compile cost; 20-40% sustained speedup thereafter. Over 100 rounds
+#                          this pays back easily.
+#   --performance-mode     cuDNN autotune (default on — not passed, just noted here).
+PERF_FLAGS="--parallel-clients -1"
 if [[ "$DEVICE" == "cuda" ]]; then
-    PERF_FLAGS="--use-amp --channels-last"
+    PERF_FLAGS="${PERF_FLAGS} --use-amp --channels-last --use-torch-compile"
 fi
 
 # Base FD block — identical to v1 (paper-matched Mu et al. §VI), but with 100 rounds per caller.
@@ -93,10 +102,9 @@ exp_run_count() {
         1) echo 1 ;;   # Baseline headline
         2) echo 5 ;;   # Noise sweep: 5 SNR levels
         3) echo 3 ;;   # Alpha sweep: 3 values (low/mid/high-IID)
-        4) echo 5 ;;   # K sweep: 5 K values
-        5) echo 3 ;;   # N scaling: 3 N/K pairs
-        6) echo 1 ;;   # Cross-dataset MNIST
-        7) echo 1 ;;   # CALM-FD ablation
+        4) echo 2 ;;   # FL-random vs FD-CALM communication comparison
+        5) echo 1 ;;   # Cross-dataset MNIST
+        6) echo 1 ;;   # CALM-FD ablation
         *) echo 0 ;;
     esac
 }
@@ -115,7 +123,7 @@ should_run() {
 
 compute_total_planned() {
     local t=0
-    for e in 1 2 3 4 5 6 7; do
+    for e in 1 2 3 4 5 6; do
         if should_run "$e"; then
             t=$(( t + $(exp_run_count "$e") ))
         fi
@@ -194,8 +202,8 @@ echo "  Rounds:     ${ROUNDS}"
 # The paper-ready anchor comparing CALM against 4 SOTA FL baselines.
 # =============================================================================
 if should_run 1; then
-    CUR_EXP_NUM=1; CUR_EXP="E1/7-baseline"
-    log "EXP 1/7: Baseline headline — N=30, K=10, alpha=0.5, DL=-20 dB"
+    CUR_EXP_NUM=1; CUR_EXP="E1/6-baseline"
+    log "EXP 1/6: Baseline headline — N=30, K=10, alpha=0.5, DL=-20 dB"
     run_one "exp1_baseline_sota" \
         --methods "${FD_SOTA}" \
         ${BASE_FD} \
@@ -213,14 +221,14 @@ fi
 # =============================================================================
 if should_run 2; then
     CUR_EXP_NUM=2
-    log "EXP 2/7: Noise sweep — 5 DL SNR levels"
+    log "EXP 2/6: Noise sweep — 5 DL SNR levels"
     for lvl in "errfree:" "dl0:--channel-noise --ul-snr-db -8 --dl-snr-db 0" \
                "dl-10:--channel-noise --ul-snr-db -8 --dl-snr-db -10" \
                "dl-20:--channel-noise --ul-snr-db -8 --dl-snr-db -20" \
                "dl-30:--channel-noise --ul-snr-db -8 --dl-snr-db -30"; do
         label="${lvl%%:*}"
         flags="${lvl#*:}"
-        CUR_EXP="E2/7-noise-${label}"
+        CUR_EXP="E2/6-noise-${label}"
         log "  Noise sweep level: ${label}"
         run_one "exp2_noise_${label}" \
             --methods "${FD_SOTA}" \
@@ -240,10 +248,10 @@ fi
 # =============================================================================
 if should_run 3; then
     CUR_EXP_NUM=3
-    log "EXP 3/7: Alpha sweep — low / mid / high-IID"
+    log "EXP 3/6: Alpha sweep — low / mid / high-IID"
     for alpha in 0.1 0.5 5.0; do
         alabel=$(echo "$alpha" | tr '.' '_')
-        CUR_EXP="E3/7-alpha${alabel}"
+        CUR_EXP="E3/6-alpha${alabel}"
         log "  alpha = ${alpha}"
         run_one "exp3_alpha_${alabel}" \
             --methods "${FD_SOTA}" \
@@ -258,56 +266,52 @@ if should_run 3; then
 fi
 
 # =============================================================================
-# EXP 4 — K sweep (selection ratio, N=30 fixed)
+# EXP 4 — Paradigm comparison: FL+random vs FD+CALM (accuracy vs communication)
+# Matched private data / partition / N / K / rounds; only paradigm + selector differ.
+# Post-run, plot `accuracy` vs `cum_comm` (MB) across both to show FD's comm savings.
+#   FL side: ResNet18 (homogeneous — FL can't do model heterogeneity), full weights.
+#   FD side: ResNet18-FD pool (heterogeneous), logits only.
+# Channel noise DISABLED on both sides here — the story is paradigm-level comm savings,
+# so we want an apples-to-apples error-free channel. Channel-robustness is Exp 2's job.
 # =============================================================================
 if should_run 4; then
     CUR_EXP_NUM=4
-    log "EXP 4/7: K sweep — 5 participation levels (N=30)"
-    for K in 3 6 10 15 30; do
-        CUR_EXP="E4/7-K${K}"
-        log "  K = ${K} (K/N = $((K * 100 / 30))%)"
-        run_one "exp4_K${K}" \
-            --methods "${FD_SOTA}" \
-            ${BASE_FD} \
-            --dataset CIFAR-10 --public-dataset STL-10 \
-            --partition dirichlet --dirichlet-alpha 0.5 \
-            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
-            --total-clients 30 --clients-per-round ${K} --rounds ${ROUNDS} \
-            --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
-            --seed 42
-    done
+    log "EXP 4/6: Paradigm comparison — FL(random) vs FD(CALM), accuracy-vs-comm (error-free channel)"
+
+    CUR_EXP="E4/6-fl-random"
+    log "  FL side: ResNet18, random selection, weight exchange"
+    run_one "exp4_fl_random" \
+        --methods "heuristic.random" \
+        --paradigm fl \
+        --local-epochs 2 \
+        --batch-size 128 --lr 0.01 \
+        --eval-every 10 --profile \
+        ${PERF_FLAGS} --device ${DEVICE} ${FAST_FLAG} \
+        --dataset CIFAR-10 \
+        --partition dirichlet --dirichlet-alpha 0.5 \
+        --model ResNet18 \
+        --total-clients 30 --clients-per-round 10 --rounds ${ROUNDS} \
+        --seed 42
+
+    CUR_EXP="E4/6-fd-calm"
+    log "  FD side: heterogeneous pool, CALM selection, logit exchange"
+    run_one "exp4_fd_calm" \
+        --methods "fd_native.calm_fd" \
+        ${BASE_FD} \
+        --dataset CIFAR-10 --public-dataset STL-10 \
+        --partition dirichlet --dirichlet-alpha 0.5 \
+        --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
+        --total-clients 30 --clients-per-round 10 --rounds ${ROUNDS} \
+        --seed 42
 fi
 
 # =============================================================================
-# EXP 5 — N scaling (~33% participation held constant)
+# EXP 5 — Cross-dataset (MNIST + FMNIST)
 # =============================================================================
 if should_run 5; then
-    CUR_EXP_NUM=5
-    log "EXP 5/7: N scaling — 30, 50, 100 at ~33% participation"
-    for pair in "30:10" "50:16" "100:33"; do
-        N="${pair%%:*}"
-        K="${pair#*:}"
-        CUR_EXP="E5/7-N${N}K${K}"
-        log "  N=${N}, K=${K}"
-        run_one "exp5_N${N}_K${K}" \
-            --methods "${FD_SOTA}" \
-            ${BASE_FD} \
-            --dataset CIFAR-10 --public-dataset STL-10 \
-            --partition dirichlet --dirichlet-alpha 0.5 \
-            --model ResNet18-FD --model-heterogeneous --model-pool "${CIFAR_MODELS}" \
-            --total-clients ${N} --clients-per-round ${K} --rounds ${ROUNDS} \
-            --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
-            --seed 42
-    done
-fi
-
-# =============================================================================
-# EXP 6 — Cross-dataset (MNIST + FMNIST)
-# =============================================================================
-if should_run 6; then
-    CUR_EXP_NUM=6; CUR_EXP="E6/7-mnist"
-    log "EXP 6/7: Cross-dataset — MNIST (private) + FMNIST (public)"
-    run_one "exp6_mnist" \
+    CUR_EXP_NUM=5; CUR_EXP="E5/6-mnist"
+    log "EXP 5/6: Cross-dataset — MNIST (private) + FMNIST (public)"
+    run_one "exp5_mnist" \
         --methods "${FD_SOTA}" \
         ${BASE_FD} \
         --dataset MNIST --public-dataset FMNIST \
@@ -320,13 +324,13 @@ if should_run 6; then
 fi
 
 # =============================================================================
-# EXP 7 — CALM-FD ablation
+# EXP 6 — CALM-FD ablation
 # Internal study — keeps LQTS floor + 5 CALM knockouts. Not a SOTA comparison.
 # =============================================================================
-if should_run 7; then
-    CUR_EXP_NUM=7; CUR_EXP="E7/7-ablation"
-    log "EXP 7/7: CALM-FD ablation — LQTS floor + 5 single-feature knockouts"
-    run_one "exp7_calm_fd_ablation" \
+if should_run 6; then
+    CUR_EXP_NUM=6; CUR_EXP="E6/6-ablation"
+    log "EXP 6/6: CALM-FD ablation — LQTS floor + 5 single-feature knockouts"
+    run_one "exp6_calm_fd_ablation" \
         --methods "${FD_ABLATION}" \
         ${BASE_FD} \
         --dataset CIFAR-10 --public-dataset STL-10 \
@@ -358,6 +362,6 @@ if [[ -n "$FAILURES" ]]; then
 fi
 
 echo ""
-echo "  Results in: artifacts/runs/  (prefix: exp1_* ... exp7_*)"
+echo "  Results in: artifacts/runs/  (prefix: exp1_* ... exp6_*)"
 echo "  Next:  python scripts/analyze_fd_results.py     # extend to pick up new runs"
 echo "         python scripts/analyze_fd_mechanisms.py  # regenerate mechanism plots"
