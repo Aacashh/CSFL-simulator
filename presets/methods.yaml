@@ -505,6 +505,34 @@ methods:
     params: {uncertainty_gamma: 2.0}
     type: fd_native
     trainable: false
+  # SCOPE-FD: Server-aware Coverage with Over-round Participation Equalization.
+  # Primary signal = participation debt (guarantees Gini ~ 0, strictly better
+  # than random). Secondary = server-uncertainty bonus (weight 0.3, cannot
+  # override debt). Tertiary = per-round diversity penalty (weight 0.1).
+  # Designed AFTER PRISM failed — debt-first ranking prevents the static-
+  # histogram lock-in that destroyed PRISM's Gini.
+  - key: fd_native.scope_fd
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (debt-balanced + server-aware + diversity)"
+    origin: proposed
+    params: {alpha_uncertainty: 0.3, alpha_diversity: 0.1}
+    type: fd_native
+    trainable: false
+  # SCOPE-FD ablations
+  - key: fd_native.scope_fd_no_server
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (no server signal)"
+    origin: ablation
+    params: {disable_server_signal: true}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_no_diversity
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (no diversity penalty)"
+    origin: ablation
+    params: {disable_diversity_penalty: true}
+    type: fd_native
+    trainable: false
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"
