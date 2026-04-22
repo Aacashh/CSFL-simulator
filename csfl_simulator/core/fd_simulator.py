@@ -1183,6 +1183,20 @@ class FDSimulator:
             else:
                 aggregated_logits = server_logits
 
+            # Expose server's per-class confidence on the public dataset so that
+            # coverage-aware selectors (e.g. fd_native.prism_fd) can target the
+            # classes the server is currently weakest at. This is a cheap signal
+            # random selection cannot use.
+            # Shape: List[float] of length num_classes; each entry is the mean
+            # softmax probability the server assigns to that class across the
+            # public samples. Low value => server rarely predicts that class =>
+            # more gain from selecting clients that hold that class.
+            with torch.inference_mode():
+                base = (server_logits[:, :self.num_classes]
+                        if cfg.group_based else server_logits)
+                class_mass = F.softmax(base, dim=-1).mean(dim=0).detach().cpu().tolist()
+            self.history["state"]["server_class_confidence"] = class_mass
+
             t_server_total = time.perf_counter() - t_server_start
 
             # Phase 7: Evaluation

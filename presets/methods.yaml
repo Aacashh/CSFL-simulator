@@ -478,6 +478,33 @@ methods:
     params: {disable_collusion_penalty: true}
     type: fd_native
     trainable: true
+  # PRISM-FD: Principled Representation Informed Submodular Method.
+  # Uses server's per-class confidence on the public dataset (cheap signal
+  # random can't see) to greedily pick K clients that maximise uncertainty-
+  # weighted class coverage. Set-level submodular objective with (1 - 1/e)
+  # approximation under greedy selection.
+  - key: fd_native.prism_fd
+    module: csfl_simulator.selection.fd_native.prism_fd
+    display_name: "PRISM-FD (uncertainty-weighted submodular coverage)"
+    origin: proposed
+    params: {uncertainty_gamma: 1.0, w_channel: 0.02, w_recency: 0.01}
+    type: fd_native
+    trainable: false
+  # PRISM-FD ablations
+  - key: fd_native.prism_fd_no_server
+    module: csfl_simulator.selection.fd_native.prism_fd
+    display_name: "PRISM-FD (no server signal - uniform class weights)"
+    origin: ablation
+    params: {disable_server_uncertainty: true}
+    type: fd_native
+    trainable: false
+  - key: fd_native.prism_fd_sharp
+    module: csfl_simulator.selection.fd_native.prism_fd
+    display_name: "PRISM-FD (sharp uncertainty, gamma=2.0)"
+    origin: ablation
+    params: {uncertainty_gamma: 2.0}
+    type: fd_native
+    trainable: false
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"
