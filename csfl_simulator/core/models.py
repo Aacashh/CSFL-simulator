@@ -63,7 +63,7 @@ class CNNMnist(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
@@ -89,7 +89,7 @@ class CNNMnistFedAvg(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
@@ -115,7 +115,7 @@ class LightCIFAR(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
@@ -147,7 +147,7 @@ class FDCNN1(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = self.dropout(F.relu(self.fc1(x)))
         return self.fc2(x)
 
@@ -173,7 +173,7 @@ class FDCNN2(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = self.dropout(F.relu(self.fc1(x)))
         return self.fc2(x)
 
@@ -199,7 +199,7 @@ class FDCNN3(nn.Module):
         x = _match_channels(x, self.conv1.in_channels)
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = self.dropout(F.relu(self.fc1(x)))
         return self.fc2(x)
 
