@@ -105,6 +105,7 @@ exp_run_count() {
         4) echo 1 ;;   # MNIST headline (pair: random + SCOPE)
         5) echo 1 ;;   # FMNIST headline (pair: random + SCOPE)
         6) echo 1 ;;   # SCOPE ablation
+        7) echo 7 ;;   # K-sweep at N=50 on Fashion-MNIST (7 K values)
         *) echo 0 ;;
     esac
 }
@@ -123,7 +124,7 @@ should_run() {
 
 compute_total_planned() {
     local t=0
-    for e in 1 2 3 4 5 6; do
+    for e in 1 2 3 4 5 6 7; do
         if should_run "$e"; then
             t=$(( t + $(exp_run_count "$e") ))
         fi
@@ -214,8 +215,8 @@ echo "  Rounds:         ${ROUNDS}"
 # Random baseline already on disk (exp2_noise_dl-20, seed 42 deterministic).
 # =============================================================================
 if should_run 1; then
-    CUR_EXP_NUM=1; CUR_EXP="S1/6-cifar"
-    log "EXP 1/6: CIFAR headline — SCOPE alone (random from exp2_noise_dl-20)"
+    CUR_EXP_NUM=1; CUR_EXP="S1/7-cifar"
+    log "EXP 1/7: CIFAR headline — SCOPE alone (random from exp2_noise_dl-20)"
     run_one "scope_cifar" \
         --methods "${SCOPE_ONLY}" \
         ${BASE_FD} \
@@ -233,14 +234,14 @@ fi
 # =============================================================================
 if should_run 2; then
     CUR_EXP_NUM=2
-    log "EXP 2/6: Noise sweep — 5 DL SNR levels (SCOPE alone; pair with existing random)"
+    log "EXP 2/7: Noise sweep — 5 DL SNR levels (SCOPE alone; pair with existing random)"
     for lvl in "errfree:" "dl0:--channel-noise --ul-snr-db -8 --dl-snr-db 0" \
                "dl-10:--channel-noise --ul-snr-db -8 --dl-snr-db -10" \
                "dl-20:--channel-noise --ul-snr-db -8 --dl-snr-db -20" \
                "dl-30:--channel-noise --ul-snr-db -8 --dl-snr-db -30"; do
         label="${lvl%%:*}"
         flags="${lvl#*:}"
-        CUR_EXP="S2/6-noise-${label}"
+        CUR_EXP="S2/7-noise-${label}"
         log "  Noise sweep level: ${label}"
         run_one "scope_noise_${label}" \
             --methods "${SCOPE_ONLY}" \
@@ -260,10 +261,10 @@ fi
 # =============================================================================
 if should_run 3; then
     CUR_EXP_NUM=3
-    log "EXP 3/6: Alpha sweep — low / mid / high-IID (SCOPE alone; pair with existing random)"
+    log "EXP 3/7: Alpha sweep — low / mid / high-IID (SCOPE alone; pair with existing random)"
     for alpha in 0.1 0.5 5.0; do
         alabel=$(echo "$alpha" | tr '.' '_')
-        CUR_EXP="S3/6-alpha${alabel}"
+        CUR_EXP="S3/7-alpha${alabel}"
         log "  alpha = ${alpha}"
         run_one "scope_alpha_${alabel}" \
             --methods "${SCOPE_ONLY}" \
@@ -283,8 +284,8 @@ fi
 # both methods run together.
 # =============================================================================
 if should_run 4; then
-    CUR_EXP_NUM=4; CUR_EXP="S4/6-mnist"
-    log "EXP 4/6: MNIST(private) + FMNIST(public) — random vs SCOPE"
+    CUR_EXP_NUM=4; CUR_EXP="S4/7-mnist"
+    log "EXP 4/7: MNIST(private) + FMNIST(public) — random vs SCOPE"
     run_one "scope_mnist" \
         --methods "${PAIR_SET}" \
         ${BASE_FD} \
@@ -303,8 +304,8 @@ fi
 # to show SCOPE is not overfit to one dataset pairing.
 # =============================================================================
 if should_run 5; then
-    CUR_EXP_NUM=5; CUR_EXP="S5/6-fmnist"
-    log "EXP 5/6: Fashion-MNIST(private) + MNIST(public) — random vs SCOPE"
+    CUR_EXP_NUM=5; CUR_EXP="S5/7-fmnist"
+    log "EXP 5/7: Fashion-MNIST(private) + MNIST(public) — random vs SCOPE"
     run_one "scope_fmnist" \
         --methods "${PAIR_SET}" \
         ${BASE_FD} \
@@ -323,8 +324,8 @@ fi
 # something — debt alone is not sufficient.
 # =============================================================================
 if should_run 6; then
-    CUR_EXP_NUM=6; CUR_EXP="S6/6-ablation"
-    log "EXP 6/6: SCOPE ablation — full / no-server / no-diversity"
+    CUR_EXP_NUM=6; CUR_EXP="S6/7-ablation"
+    log "EXP 6/7: SCOPE ablation — full / no-server / no-diversity"
     run_one "scope_ablation" \
         --methods "${SCOPE_ABLATION}" \
         ${BASE_FD} \
@@ -334,6 +335,33 @@ if should_run 6; then
         --total-clients 30 --clients-per-round 10 --rounds ${ROUNDS} \
         --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
         --seed 42
+fi
+
+# =============================================================================
+# EXP 7 — K-sweep at N=50 on Fashion-MNIST (private) + MNIST (public).
+# Probes how SCOPE's edge behaves across participation ratios from 2% (K=1)
+# through 100% (K=N=50). Each run is a paired random + SCOPE compare — no
+# N=50 baselines exist on disk, so both methods run together here.
+# K=1 is the ultra-sparse stress test; K=50 is the degenerate full-participation
+# case (selection is trivially identical for both methods — sanity reference).
+# =============================================================================
+if should_run 7; then
+    CUR_EXP_NUM=7
+    log "EXP 7/7: K-sweep — N=50 on Fashion-MNIST (7 K values: 1,5,10,15,25,35,50)"
+    for K in 1 5 10 15 25 35 50; do
+        CUR_EXP="S7/7-N50-K${K}"
+        log "  K = ${K} ($((K*100/50))%)"
+        run_one "scope_fmnist_N50_K${K}" \
+            --methods "${PAIR_SET}" \
+            ${BASE_FD} \
+            --dataset Fashion-MNIST --public-dataset MNIST \
+            --partition dirichlet --dirichlet-alpha 0.5 \
+            --model FD-CNN1 --model-heterogeneous --model-pool "${MNIST_MODELS}" \
+            --total-clients 50 --clients-per-round ${K} --rounds ${ROUNDS} \
+            --batch-size 20 \
+            --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
+            --seed 42
+    done
 fi
 
 # =============================================================================
