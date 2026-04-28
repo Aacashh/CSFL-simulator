@@ -158,7 +158,7 @@ BASE_FD="--paradigm fd \
          --distillation-lr 0.001 --distillation-epochs 2 --temperature 1.0 \
          --fd-optimizer adam \
          --n-bs-antennas 64 --quantization-bits 8 \
-         --eval-every 10 \
+         --eval-every 1 \
          --profile \
          ${PERF_FLAGS} \
          --device ${DEVICE} ${FAST_FLAG}"
