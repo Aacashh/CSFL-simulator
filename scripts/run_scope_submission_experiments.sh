@@ -97,6 +97,21 @@
 # =============================================================================
 set -euo pipefail
 
+# Activate virtual environment — same path as scripts/hpc_job.sh.
+# Override by exporting CSFL_VENV before invoking the script, e.g.
+#   CSFL_VENV=~/myenv bash scripts/run_scope_submission_experiments.sh
+CSFL_VENV="${CSFL_VENV:-$HOME/csfl-env}"
+if [[ -f "${CSFL_VENV}/bin/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "${CSFL_VENV}/bin/activate"
+    echo "Activated venv: ${CSFL_VENV}"
+    echo "Python:         $(which python) ($(python --version 2>&1))"
+else
+    echo "ERROR: venv not found at ${CSFL_VENV}/bin/activate" >&2
+    echo "       Set CSFL_VENV to your virtual environment path, or create one at ${CSFL_VENV}." >&2
+    exit 1
+fi
+
 FAST_FLAG="--no-fast-mode"
 RUN_ONLY=""
 RESUME=false
