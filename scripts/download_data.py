@@ -2,7 +2,7 @@
 """
 Utility to pre-download supported datasets to the project's data directory.
 
-Supported: MNIST, Fashion-MNIST, KMNIST, CIFAR-10, CIFAR-100, STL-10
+Supported: MNIST, Fashion-MNIST, KMNIST, EMNIST, CIFAR-10, CIFAR-100, STL-10
 
 Examples:
   python scripts/download_data.py --all
@@ -27,6 +27,8 @@ def normalize_name(name: str) -> str:
         return "fashion-mnist"
     if lowered in {"kmnist", "kuzushiji", "kuzushiji-mnist", "kuzushiji_mnist"}:
         return "kmnist"
+    if lowered in {"emnist", "extended-mnist", "extended_mnist"}:
+        return "emnist"
     if lowered in {"cifar10", "cifar-10", "cifar_10"}:
         return "cifar10"
     if lowered in {"cifar100", "cifar-100", "cifar_100"}:
@@ -51,6 +53,13 @@ def get_supported() -> Dict[str, Callable[[Path], None]]:
         datasets.KMNIST(root, train=True, download=True)
         datasets.KMNIST(root, train=False, download=True)
 
+    def _emnist(root: Path) -> None:
+        # 'digits' split — 10 classes, drop-in for the FD-CNN1/2/3 head.
+        # The simulator subsamples it at load time (see EMNISTSubsampled);
+        # the underlying torchvision archive is the full 240k/40k blob.
+        datasets.EMNIST(root, split="digits", train=True, download=True)
+        datasets.EMNIST(root, split="digits", train=False, download=True)
+
     def _cifar10(root: Path) -> None:
         datasets.CIFAR10(root, train=True, download=True)
         datasets.CIFAR10(root, train=False, download=True)
@@ -68,6 +77,7 @@ def get_supported() -> Dict[str, Callable[[Path], None]]:
         "mnist": _mnist,
         "fashion-mnist": _fmnist,
         "kmnist": _kmnist,
+        "emnist": _emnist,
         "cifar10": _cifar10,
         "cifar100": _cifar100,
         "stl10": _stl10,

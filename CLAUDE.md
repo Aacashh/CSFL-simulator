@@ -106,7 +106,7 @@ csfl_simulator/
 ### SimConfig
 All simulation parameters live in `SimConfig` (dataclass in `core/simulator.py`). Every CLI flag maps 1:1 to a field. Key fields:
 - `name`: Optional run name (creates `artifacts/runs/<name>_<timestamp>/` folder)
-- `dataset`: MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100
+- `dataset`: MNIST, Fashion-MNIST, KMNIST, EMNIST (digits split, 60k/10k subsample), CIFAR-10, CIFAR-100
 - `partition`: iid, dirichlet, label-shard
 - `model`: CNN-MNIST, CNN-MNIST (FedAvg), LightCNN, ResNet18
 - `total_clients`, `clients_per_round`, `rounds`, `local_epochs`
