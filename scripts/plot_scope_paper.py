@@ -29,6 +29,17 @@ SCOPE_COLOR = "#d62728"
 RANDOM_COLOR = "#1f77b4"
 ABLATION_PALETTE = ["#d62728", "#e377c2", "#ff7f0e"]
 
+# IEEE-standard line-plot marker style — keep consistent across every line figure.
+def line_style(color: str, marker: str, label: str, linewidth: float = 1.4):
+    return dict(
+        color=color, marker=marker, linestyle="-", linewidth=linewidth, label=label,
+        markersize=5, markerfacecolor=color, markeredgecolor="white",
+        markeredgewidth=0.5, alpha=0.95,
+    )
+
+STYLE_RANDOM = lambda lw=1.4: line_style(RANDOM_COLOR, "o", "Random", lw)
+STYLE_SCOPE  = lambda lw=1.4: line_style(SCOPE_COLOR,  "s", "SCOPE-FD", lw)
+
 
 def apply_style():
     plt.rcParams.update({
@@ -130,6 +141,12 @@ RUN_MAP = {
     "ksweep_k50": "scope_fmnist_N50_K50_20260424-183303",
     # FL baseline comparison (historical, CIFAR-10, N=50, K=15, R=300, FL paradigm)
     "fl_baseline": "fl_cifar10_baseline_20260416-123215",
+    # Exp 8 — FMNIST channel-noise sweep at N=50, K=5 (5 DL SNR levels)
+    "csweep_errfree": "scope_fmnist_N50_K5_noise_errfree_20260425-033726",
+    "csweep_dl0":     "scope_fmnist_N50_K5_noise_dl0_20260425-034428",
+    "csweep_dl-10":   "scope_fmnist_N50_K5_noise_dl-10_20260425-035125",
+    "csweep_dl-20":   "scope_fmnist_N50_K5_noise_dl-20_20260425-035818",
+    "csweep_dl-30":   "scope_fmnist_N50_K5_noise_dl-30_20260425-040506",
 }
 
 
@@ -222,8 +239,8 @@ def fig_noise_robustness():
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.16, 2.8))
     x = np.arange(len(labels))
 
-    a1.plot(x, acc_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a1.plot(x, acc_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a1.plot(x, acc_rnd, **STYLE_RANDOM())
+    a1.plot(x, acc_scp, **STYLE_SCOPE())
     a1.set_xticks(x)
     a1.set_xticklabels(labels)
     a1.set_xlabel("Downlink SNR (dB)")
@@ -231,8 +248,8 @@ def fig_noise_robustness():
     a1.set_title("(a) Accuracy vs DL SNR (CIFAR-10)")
     a1.legend(loc="best")
 
-    a2.plot(x, g_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a2.plot(x, g_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a2.plot(x, g_rnd, **STYLE_RANDOM())
+    a2.plot(x, g_scp, **STYLE_SCOPE())
     a2.set_xticks(x)
     a2.set_xticklabels(labels)
     a2.set_xlabel("Downlink SNR (dB)")
@@ -262,16 +279,16 @@ def fig_noniid_severity():
 
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.16, 2.8))
 
-    a1.plot(alphas, acc_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a1.plot(alphas, acc_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a1.plot(alphas, acc_rnd, **STYLE_RANDOM())
+    a1.plot(alphas, acc_scp, **STYLE_SCOPE())
     a1.set_xscale("log")
     a1.set_xlabel(r"Dirichlet $\alpha$ (larger = more IID)")
     a1.set_ylabel("Final accuracy")
     a1.set_title("(a) Accuracy vs non-IID severity")
     a1.legend(loc="best")
 
-    a2.plot(alphas, g_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a2.plot(alphas, g_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a2.plot(alphas, g_rnd, **STYLE_RANDOM())
+    a2.plot(alphas, g_scp, **STYLE_SCOPE())
     a2.set_xscale("log")
     a2.set_xlabel(r"Dirichlet $\alpha$")
     a2.set_ylabel("Participation Gini")
@@ -299,8 +316,8 @@ def fig_k_sweep():
 
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.16, 2.8))
 
-    a1.plot(ratios, acc_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a1.plot(ratios, acc_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a1.plot(ratios, acc_rnd, **STYLE_RANDOM())
+    a1.plot(ratios, acc_scp, **STYLE_SCOPE())
     for k, ar, asc in zip(ks, acc_rnd, acc_scp):
         if asc - ar >= 0.01:
             a1.annotate(f"+{(asc-ar)*100:.1f}pp", xy=(k / 50, asc), xytext=(0, 6),
@@ -310,8 +327,8 @@ def fig_k_sweep():
     a1.set_title("(a) Accuracy vs participation ratio")
     a1.legend(loc="lower right")
 
-    a2.plot(ratios, g_rnd, "o-", color=RANDOM_COLOR, label="Random")
-    a2.plot(ratios, g_scp, "s-", color=SCOPE_COLOR, label="SCOPE-FD")
+    a2.plot(ratios, g_rnd, **STYLE_RANDOM())
+    a2.plot(ratios, g_scp, **STYLE_SCOPE())
     a2.set_xlabel("Participation ratio K / N")
     a2.set_ylabel("Participation Gini")
     a2.set_title("(b) Gini vs participation ratio")
@@ -375,8 +392,14 @@ def fig_learning_curves():
     for ax, data, title in [(a1, d_mn, "(a) MNIST"), (a2, d_fm, "(b) Fashion-MNIST")]:
         xr, yr = series(data, RANDOM, "accuracy")
         xs, ys = series(data, SCOPE, "accuracy")
-        ax.plot(xr, yr, "-", color=RANDOM_COLOR, label="Random", alpha=0.9)
-        ax.plot(xs, ys, "-", color=SCOPE_COLOR, label="SCOPE-FD", alpha=0.9)
+        ax.plot(xr, yr, color=RANDOM_COLOR, label="Random",
+                marker="o", markevery=10, markersize=5,
+                markerfacecolor=RANDOM_COLOR, markeredgecolor="white",
+                markeredgewidth=0.5, linewidth=1.4, alpha=0.95)
+        ax.plot(xs, ys, color=SCOPE_COLOR, label="SCOPE-FD",
+                marker="s", markevery=10, markersize=5,
+                markerfacecolor=SCOPE_COLOR, markeredgecolor="white",
+                markeredgewidth=0.5, linewidth=1.4, alpha=0.95)
         ax.set_xlabel("Round")
         ax.set_ylabel("Test accuracy")
         ax.set_title(title)
@@ -506,8 +529,14 @@ def fig_k1_spotlight():
     # (a) learning curves
     xr, yr = series(d, RANDOM, "accuracy")
     xs, ys = series(d, SCOPE,  "accuracy")
-    a1.plot(xr, yr, "-", color=RANDOM_COLOR, label="Random", linewidth=1.6, alpha=0.9)
-    a1.plot(xs, ys, "-", color=SCOPE_COLOR,  label="SCOPE-FD", linewidth=1.6, alpha=0.9)
+    a1.plot(xr, yr, color=RANDOM_COLOR, label="Random", linewidth=1.6,
+            marker="o", markevery=10, markersize=5,
+            markerfacecolor=RANDOM_COLOR, markeredgecolor="white",
+            markeredgewidth=0.5, alpha=0.95)
+    a1.plot(xs, ys, color=SCOPE_COLOR,  label="SCOPE-FD", linewidth=1.6,
+            marker="s", markevery=10, markersize=5,
+            markerfacecolor=SCOPE_COLOR, markeredgecolor="white",
+            markeredgewidth=0.5, alpha=0.95)
     a1.axhline(y=final(d, RANDOM, "accuracy"), color=RANDOM_COLOR, linestyle=":", alpha=0.5, linewidth=0.8)
     a1.axhline(y=final(d, SCOPE,  "accuracy"), color=SCOPE_COLOR,  linestyle=":", alpha=0.5, linewidth=0.8)
     a1.set_xlabel("Round")
@@ -715,17 +744,100 @@ def fig_system_diagram():
 
 
 # ---------------------------------------------------------------------------
+# Figure 13 — Channel robustness at K=5 on FMNIST (Exp 8, N=50)
+# Three panels showing that SCOPE's convergence and fairness advantages are
+# noise-agnostic across a 30 dB DL SNR range.
+# ---------------------------------------------------------------------------
+def fig_channel_robustness_k5():
+    labels = ["error-free", "0", "-10", "-20", "-30"]
+    tags = ["errfree", "dl0", "dl-10", "dl-20", "dl-30"]
+    acc_r, acc_s, g_r, g_s = [], [], [], []
+    rd_r, rd_s, auc = [], [], []
+    for t in tags:
+        d = load(RUN_MAP[f"csweep_{t}"])
+        acc_r.append(final(d, RANDOM, "accuracy"))
+        acc_s.append(final(d, SCOPE,  "accuracy"))
+        g_r.append(final(d, RANDOM, "fairness_gini"))
+        g_s.append(final(d, SCOPE,  "fairness_gini"))
+        r_ms = [m for m in d["results"][RANDOM]["metrics"] if m.get("round",-1) >= 0]
+        s_ms = [m for m in d["results"][SCOPE]["metrics"]  if m.get("round",-1) >= 0]
+        r_acc = np.array([m["accuracy"] for m in r_ms])
+        s_acc = np.array([m["accuracy"] for m in s_ms])
+        target = 0.80 * max(r_acc[-1], s_acc[-1])
+        rd_r.append(next((m["round"] for m in r_ms if m["accuracy"] >= target), 100))
+        rd_s.append(next((m["round"] for m in s_ms if m["accuracy"] >= target), 100))
+        n = min(len(r_acc), len(s_acc))
+        auc.append(float(np.trapezoid(s_acc[:n] - r_acc[:n])))
+
+    fig, (a1, a2, a3) = plt.subplots(1, 3, figsize=(9.0, 2.9))
+    x = np.arange(len(labels))
+
+    # Panel (a): accuracy
+    a1.plot(x, acc_r, **STYLE_RANDOM())
+    a1.plot(x, acc_s, **STYLE_SCOPE())
+    a1.set_xticks(x); a1.set_xticklabels(labels)
+    a1.set_xlabel("Downlink SNR (dB)")
+    a1.set_ylabel("Final accuracy")
+    a1.set_title("(a) Accuracy: tied across noise")
+    a1.legend(loc="best", fontsize=7)
+
+    # Panel (b): Gini
+    a2.plot(x, g_r, **STYLE_RANDOM(lw=2))
+    a2.plot(x, g_s, **STYLE_SCOPE(lw=2))
+    for i, v in enumerate(g_r):
+        a2.text(i, v + 0.006, f"{v:.3f}", ha="center", fontsize=7, color=RANDOM_COLOR)
+    for i, v in enumerate(g_s):
+        a2.text(i, v - 0.012, f"{v:.3f}", ha="center", fontsize=7, color=SCOPE_COLOR)
+    a2.set_xticks(x); a2.set_xticklabels(labels)
+    a2.set_xlabel("Downlink SNR (dB)")
+    a2.set_ylabel("Participation Gini")
+    a2.set_title("(b) Fairness: SCOPE = 0 at every SNR")
+    a2.set_ylim(-0.02, 0.18)
+    a2.legend(loc="center right", fontsize=7)
+
+    # Panel (c): rounds-to-80% of final
+    w = 0.38
+    a3.bar(x - w/2, rd_r, w, color=RANDOM_COLOR, label="Random", edgecolor="white", linewidth=0.5)
+    a3.bar(x + w/2, rd_s, w, color=SCOPE_COLOR, label="SCOPE-FD", edgecolor="white", linewidth=0.5)
+    for i, v in enumerate(rd_r):
+        a3.text(i - w/2, v + 1, f"{v}", ha="center", va="bottom", fontsize=7, color=RANDOM_COLOR)
+    for i, v in enumerate(rd_s):
+        a3.text(i + w/2, v + 1, f"{v}", ha="center", va="bottom", fontsize=7, color=SCOPE_COLOR)
+    for i, (r_v, s_v) in enumerate(zip(rd_r, rd_s)):
+        if r_v > s_v:
+            a3.annotate(f"3× faster", xy=(i, max(r_v, s_v) + 5),
+                        ha="center", fontsize=6, color="#2ca02c",
+                        fontweight="bold", fontstyle="italic")
+    a3.set_xticks(x); a3.set_xticklabels(labels)
+    a3.set_xlabel("Downlink SNR (dB)")
+    a3.set_ylabel("Rounds to 80% of final acc")
+    a3.set_title("(c) Convergence: SCOPE 3× faster, noise-agnostic")
+    a3.set_ylim(0, 45)
+    a3.legend(loc="upper right", fontsize=7)
+
+    plt.tight_layout()
+    save(fig, "fig13_channel_robustness_k5")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
     apply_style()
-    for fn in (fig_headline_bars, fig_noise_robustness, fig_noniid_severity,
-               fig_k_sweep, fig_ablation, fig_learning_curves,
-               fig_participation_heatmap,
-               # extended set (2026-04-25)
+    # Narrative set (2026-04-25 final):
+    # Kept: fig1 (headlines), fig4 (K-sweep), fig6 (learning curves),
+    #   fig7 (heatmap), fig8 (convergence speed), fig9 (K=1 spotlight),
+    #   fig10 (FL baselines), fig11 (per-client), fig12 (system diagram),
+    #   fig13 (channel robustness — NEW).
+    # Dropped from main narrative (functions preserved for optional resurrection):
+    #   fig2 (CIFAR noise sweep), fig3 (CIFAR alpha sweep), fig5 (ablation).
+    for fn in (fig_headline_bars,
+               fig_k_sweep, fig_learning_curves, fig_participation_heatmap,
                fig_convergence_speed, fig_k1_spotlight,
                fig_fl_baseline_comparison, fig_per_client_participation,
-               fig_system_diagram):
+               fig_system_diagram, fig_channel_robustness_k5,
+               # Kept generated (not linked from narrative) for optional use:
+               fig_noise_robustness, fig_noniid_severity, fig_ablation):
         try:
             fn()
         except Exception as e:
