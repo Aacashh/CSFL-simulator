@@ -400,16 +400,38 @@ fi
 if should_run 2; then
     CUR_EXP_NUM=2; CUR_EXP="S2/2-kmnist-N50-K5"
     log "EXP 2/2: KMNIST(private) + MNIST(public) — N=50, K=5, paired random+SCOPE"
-    run_one "scope_kmnist_N50_K5" \
-        --methods "${PAIR_SET}" \
-        ${BASE_FD} \
-        --dataset KMNIST --public-dataset MNIST \
-        --partition dirichlet --dirichlet-alpha 0.5 \
-        --model FD-CNN1 --model-heterogeneous --model-pool "${MNIST_MODELS}" \
-        --total-clients 50 --clients-per-round 5 --rounds ${ROUNDS} \
-        --batch-size 20 \
-        --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
-        --seed 42
+
+    # Pre-flight: ensure the 4 KMNIST raw IDX files are on disk before launching
+    # the 100-round paired run. The torchvision KMNIST mirror (codh.rois.ac.jp)
+    # frequently times out from cluster networks; fetch_kmnist.sh either
+    # populates data/KMNIST/raw/ or prints manual SCP recovery instructions.
+    # Skipped under --dry-run so dry-runs stay offline-safe.
+    if ! $DRY_RUN; then
+        if ! bash "${SCRIPT_DIR}/fetch_kmnist.sh"; then
+            echo ""
+            echo "  [SKIP] scope_kmnist_N50_K5 — KMNIST data unavailable (see message above)" >&2
+            echo "  Re-run after placing files:  bash scripts/run_scope_submission_experiments.sh --resume --exp 2" >&2
+            SKIPPED=$((SKIPPED+1))
+            TOTAL=$((TOTAL+1))
+            CUR_EXP_NUM=0
+            # Fall through to summary instead of aborting the whole suite.
+            should_run() { return 1; }  # neuter further checks (defensive)
+            CUR_EXP=""
+        fi
+    fi
+
+    if [[ "${CUR_EXP}" == "S2/2-kmnist-N50-K5" ]]; then
+        run_one "scope_kmnist_N50_K5" \
+            --methods "${PAIR_SET}" \
+            ${BASE_FD} \
+            --dataset KMNIST --public-dataset MNIST \
+            --partition dirichlet --dirichlet-alpha 0.5 \
+            --model FD-CNN1 --model-heterogeneous --model-pool "${MNIST_MODELS}" \
+            --total-clients 50 --clients-per-round 5 --rounds ${ROUNDS} \
+            --batch-size 20 \
+            --channel-noise --ul-snr-db -8 --dl-snr-db -20 \
+            --seed 42
+    fi
 fi
 
 # =============================================================================

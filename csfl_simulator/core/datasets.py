@@ -70,7 +70,21 @@ def get_dataset(name: str, train: bool = True, root: Path | None = None, downloa
     if name_l in ("fashion-mnist", "fashionmnist"):
         return datasets.FashionMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
     if name_l == "kmnist":
-        return datasets.KMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
+        try:
+            return datasets.KMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
+        except RuntimeError as e:
+            # torchvision wraps urllib network errors in RuntimeError("Error downloading ...")
+            # The official KMNIST mirror (codh.rois.ac.jp) is frequently unreachable from
+            # academic clusters. Re-raise with an actionable recovery hint instead of the
+            # bare network trace.
+            if "Error downloading" in str(e) or "downloading" in str(e).lower():
+                raise RuntimeError(
+                    f"KMNIST download failed — codh.rois.ac.jp may be unreachable from this host.\n"
+                    f"Recovery: run `bash scripts/fetch_kmnist.sh` (handles retries + manual SCP fallback).\n"
+                    f"Or place the 4 .gz IDX files manually in {root}/KMNIST/raw/.\n"
+                    f"Original error: {e}"
+                ) from e
+            raise
     if name_l == "cifar-10" or name_l == "cifar10":
         return datasets.CIFAR10(root, train=train, download=download, transform=get_transforms("cifar10", train))
     if name_l == "cifar-100" or name_l == "cifar100":
