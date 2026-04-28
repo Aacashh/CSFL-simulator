@@ -97,20 +97,27 @@
 # =============================================================================
 set -euo pipefail
 
-# Activate virtual environment — same path as scripts/hpc_job.sh.
+# Activate the project-local virtual environment at <repo>/venv.
+# Resolve relative to this script so it works regardless of CWD.
 # Override by exporting CSFL_VENV before invoking the script, e.g.
 #   CSFL_VENV=~/myenv bash scripts/run_scope_submission_experiments.sh
-CSFL_VENV="${CSFL_VENV:-$HOME/csfl-env}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CSFL_VENV="${CSFL_VENV:-${REPO_ROOT}/venv}"
+# Linux/macOS layout has bin/activate; Windows (Git Bash) layout has Scripts/activate.
 if [[ -f "${CSFL_VENV}/bin/activate" ]]; then
     # shellcheck disable=SC1091
     source "${CSFL_VENV}/bin/activate"
-    echo "Activated venv: ${CSFL_VENV}"
-    echo "Python:         $(which python) ($(python --version 2>&1))"
+elif [[ -f "${CSFL_VENV}/Scripts/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "${CSFL_VENV}/Scripts/activate"
 else
-    echo "ERROR: venv not found at ${CSFL_VENV}/bin/activate" >&2
+    echo "ERROR: venv not found at ${CSFL_VENV} (looked for bin/activate and Scripts/activate)" >&2
     echo "       Set CSFL_VENV to your virtual environment path, or create one at ${CSFL_VENV}." >&2
     exit 1
 fi
+echo "Activated venv: ${CSFL_VENV}"
+echo "Python:         $(which python) ($(python --version 2>&1))"
 
 FAST_FLAG="--no-fast-mode"
 RUN_ONLY=""
