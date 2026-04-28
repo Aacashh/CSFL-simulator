@@ -20,10 +20,23 @@
 #
 #     2. The empirical results in Tables II/III are FMNIST-only. Reviewers
 #        will rightly ask whether the result is FMNIST-specific. EXP 2 adds a
-#        single KMNIST run at the practical sparse regime (K=5, K/N=10%) to
-#        replicate the headline 3× convergence speedup on a second dataset
-#        of comparable difficulty but a completely different domain (cursive
-#        Japanese characters vs fashion items).
+#        single EMNIST/digits run at the practical sparse regime (K=5,
+#        K/N=10%) to replicate the headline 3× convergence speedup on a
+#        second dataset of comparable difficulty but a different domain
+#        (handwritten Latin digits drawn from NIST SD 19, vs fashion items).
+#
+#        EXP 2 was originally specified as KMNIST (cursive Japanese
+#        characters) for a maximally distant domain. Substituted to EMNIST
+#        because the codh.rois.ac.jp KMNIST mirror was unreachable from
+#        India during the submission window — confirmed globally down via
+#        independent egress tests, not a cluster-side firewall. EMNIST
+#        ships from biometrics.nist.gov, which is reliably reachable, and
+#        keeps the cross-domain replication argument (handwritten chars vs
+#        fashion items) at the cost of a less visually distant pairing.
+#        EMNIST/digits is subsampled to 60k/10k at load time (see
+#        EMNISTSubsampled in core/datasets.py) so EXP 2 is a fair
+#        scale-matched comparison with the FMNIST baseline; the native
+#        240k/40k size would conflate "more data" with "better selection".
 #
 #   The earlier EXP 12 in run_scope_experiments.sh covered 4 (αu, αd) pairs
 #   that were ALL safely inside the admissible region. EXP 1 in this script
@@ -39,7 +52,7 @@
 #     - Cumulative-participation visualisation data (numerical evidence in
 #       Section VI-C is sufficient — std 4.96 vs 0.47 already reported)
 #     - Dirichlet α sweep on the new dataset
-#     - K=1 and K=15 on KMNIST (K=5 alone refutes the "FMNIST artifact"
+#     - K=1 and K=15 on EMNIST (K=5 alone refutes the "FMNIST artifact"
 #       objection; broader K coverage on a second dataset is overkill for a
 #       single-table addition)
 #
@@ -58,10 +71,15 @@
 #           decorative. One sentence in IV-E converts the analytical claim
 #           to an empirical one.
 #
-#   EXP 2 → 2–3 sentence KMNIST replication paragraph in Section VI-B, OR
-#           a single-row addendum to Table II. No new figure required.
-#           Expected story: SCOPE-FD reaches 80% of final accuracy in ~10
-#           rounds vs ~30 for random, Gini 0.000 vs nonzero, accuracy tied.
+#   EXP 2 → 2–3 sentence EMNIST/digits replication paragraph in Section
+#           VI-B, OR a single-row addendum to Table II. No new figure
+#           required. Expected story: SCOPE-FD reaches 80% of final
+#           accuracy in ~10 rounds vs ~30 for random, Gini 0.000 vs
+#           nonzero, accuracy tied. Footnote required: "EMNIST/digits
+#           subsampled to 60k/10k via stratified random sampling (seed=42)
+#           to match FMNIST scale; the native 240k/40k split would
+#           confound the cross-dataset SCOPE claim with a data-volume
+#           effect."
 #
 #   To make room: trim the redundant "Classical FL client selectors..."
 #   paragraph at the end of Section VI-C (overlaps with Section II), and
@@ -81,43 +99,24 @@
 #         clamping would silently nullify the test. If clamping exists,
 #         disable it for this run only.
 #
-#   2. Simulator must accept "KMNIST" as a --dataset value. KMNIST
-#      (Kuzushiji-MNIST) is a drop-in replacement for MNIST: same
-#      torchvision API (torchvision.datasets.KMNIST), same 28x28 grayscale
-#      shape, same 10-class structure. If your loader registry doesn't
-#      have it yet, add 3 lines mirroring the MNIST registration. The
-#      FD-CNN1/2/3 model pool works without any modification.
+#   2. Simulator must accept "EMNIST" as a --dataset value, mapped to the
+#      EMNIST/digits split and subsampled to 60k/10k via the
+#      EMNISTSubsampled subclass in core/datasets.py. The FD-CNN1/2/3
+#      model pool works unchanged (28x28 grayscale, 10 classes). The
+#      EMNIST archive lives on biometrics.nist.gov, not on codh.rois.ac.jp,
+#      so this experiment does not depend on the KMNIST mirror availability.
 #
 # USAGE
 #   bash scripts/run_scope_submission_experiments.sh
 #   bash scripts/run_scope_submission_experiments.sh --resume
 #   bash scripts/run_scope_submission_experiments.sh --exp 1     # coef only
-#   bash scripts/run_scope_submission_experiments.sh --exp 2     # KMNIST only
+#   bash scripts/run_scope_submission_experiments.sh --exp 2     # EMNIST only
 #   bash scripts/run_scope_submission_experiments.sh --dry-run
 # =============================================================================
 set -euo pipefail
 
-# Activate the project-local virtual environment at <repo>/venv.
-# Resolve relative to this script so it works regardless of CWD.
-# Override by exporting CSFL_VENV before invoking the script, e.g.
-#   CSFL_VENV=~/myenv bash scripts/run_scope_submission_experiments.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CSFL_VENV="${CSFL_VENV:-${REPO_ROOT}/venv}"
-# Linux/macOS layout has bin/activate; Windows (Git Bash) layout has Scripts/activate.
-if [[ -f "${CSFL_VENV}/bin/activate" ]]; then
-    # shellcheck disable=SC1091
-    source "${CSFL_VENV}/bin/activate"
-elif [[ -f "${CSFL_VENV}/Scripts/activate" ]]; then
-    # shellcheck disable=SC1091
-    source "${CSFL_VENV}/Scripts/activate"
-else
-    echo "ERROR: venv not found at ${CSFL_VENV} (looked for bin/activate and Scripts/activate)" >&2
-    echo "       Set CSFL_VENV to your virtual environment path, or create one at ${CSFL_VENV}." >&2
-    exit 1
-fi
-echo "Activated venv: ${CSFL_VENV}"
-echo "Python:         $(which python) ($(python --version 2>&1))"
 
 FAST_FLAG="--no-fast-mode"
 RUN_ONLY=""
@@ -137,8 +136,30 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Same MNIST-grade architecture pool as the existing FMNIST runs. KMNIST is
-# 28x28x1 with 10 classes, identical to MNIST/FMNIST tensor-wise, so the
+# Activate the project-local virtual environment at <repo>/venv.
+# Skipped under --dry-run so dry-runs work on machines without the venv
+# (e.g. for paper-side review on the dev box). Override the location by
+# exporting CSFL_VENV, e.g. CSFL_VENV=~/myenv bash scripts/...
+if ! $DRY_RUN; then
+    CSFL_VENV="${CSFL_VENV:-${REPO_ROOT}/venv}"
+    # Linux/macOS layout has bin/activate; Windows (Git Bash) has Scripts/activate.
+    if [[ -f "${CSFL_VENV}/bin/activate" ]]; then
+        # shellcheck disable=SC1091
+        source "${CSFL_VENV}/bin/activate"
+    elif [[ -f "${CSFL_VENV}/Scripts/activate" ]]; then
+        # shellcheck disable=SC1091
+        source "${CSFL_VENV}/Scripts/activate"
+    else
+        echo "ERROR: venv not found at ${CSFL_VENV} (looked for bin/activate and Scripts/activate)" >&2
+        echo "       Set CSFL_VENV to your virtual environment path, or create one at ${CSFL_VENV}." >&2
+        exit 1
+    fi
+    echo "Activated venv: ${CSFL_VENV}"
+    echo "Python:         $(which python) ($(python --version 2>&1))"
+fi
+
+# Same MNIST-grade architecture pool as the existing FMNIST runs. EMNIST/digits
+# is 28x28x1 with 10 classes, identical to MNIST/FMNIST tensor-wise, so the
 # pool transfers without modification.
 MNIST_MODELS="FD-CNN1,FD-CNN2,FD-CNN3"
 
@@ -166,7 +187,7 @@ BASE_FD="--paradigm fd \
 ROUNDS=100
 
 # ---- Method sets ----
-# PAIR_SET    : random + SCOPE-FD in one invocation (KMNIST has no on-disk
+# PAIR_SET    : random + SCOPE-FD in one invocation (EMNIST has no on-disk
 #               baseline yet, so both run together for seed alignment).
 # SCOPE_ONLY  : SCOPE-FD alone (random row of Table IV comes from the
 #               existing scope_fmnist_N50_K5 run, which is identical config
@@ -182,7 +203,7 @@ CUR_EXP_NUM=0
 exp_run_count() {
     case "$1" in
         1) echo 5 ;;   # Coefficient ablation: 5 (αu, αd) pairs at FMNIST K=5
-        2) echo 1 ;;   # KMNIST K=5 paired (random + SCOPE in one invocation)
+        2) echo 1 ;;   # EMNIST K=5 paired (random + SCOPE in one invocation)
         *) echo 0 ;;
     esac
 }
@@ -358,31 +379,42 @@ if should_run 1; then
 fi
 
 # =============================================================================
-# EXP 2 — KMNIST AT K=5 (PRACTICAL SPARSE REGIME).
+# EXP 2 — EMNIST/digits AT K=5 (PRACTICAL SPARSE REGIME).
 # -----------------------------------------------------------------------------
-# Refutes the "FMNIST artifact" reviewer concern. KMNIST (Kuzushiji-MNIST)
-# is a 28x28 grayscale 10-class dataset of cursive Japanese characters
-# (torchvision.datasets.KMNIST). Selected over alternatives for three
+# Refutes the "FMNIST artifact" reviewer concern. EMNIST/digits is a 28x28
+# grayscale 10-class dataset of HANDWRITTEN LATIN DIGITS drawn from NIST SD
+# 19 (torchvision.datasets.EMNIST(split='digits')). Selected for three
 # concrete reasons:
 #
 #   1. DROP-IN COMPATIBLE with the existing FD-CNN1/2/3 model pool — same
 #      input shape, channel count, and class count as MNIST/FMNIST. Zero
 #      architecture or model-pool changes.
 #
-#   2. GENUINELY HARDER than MNIST (~95% ceiling vs ~99%) but easier than
-#      CIFAR — leaves headroom for the selection-axis signal to be
-#      observable. This is the same reason the paper itself cited in
-#      Section VI-A for preferring FMNIST over CIFAR-10 as the primary
-#      benchmark, so the choice is internally consistent.
+#   2. GENUINELY HARDER than MNIST (~99.5% ceiling on a deeper net but
+#      ~96-97% with the FD-CNN1/2/3 capacity here) but easier than CIFAR —
+#      leaves headroom for the selection-axis signal to be observable.
+#      Same internal-consistency argument the paper makes in Section VI-A
+#      for preferring FMNIST over CIFAR-10 as the primary benchmark.
 #
-#   3. DIFFERENT DOMAIN from FMNIST — cursive Japanese characters vs
-#      fashion items. Replication on KMNIST is much stronger evidence of
-#      dataset-independence than another fashion- or digit-style benchmark
-#      would be.
+#   3. DIFFERENT DOMAIN from FMNIST — handwritten characters vs fashion
+#      items. Replication on EMNIST is meaningful cross-domain evidence
+#      (handwriting feature statistics differ substantively from texture/
+#      silhouette statistics that drive FMNIST). Originally specified as
+#      KMNIST (cursive Japanese, maximally distant) but substituted on
+#      mirror-availability grounds: codh.rois.ac.jp was globally
+#      unreachable during the submission window. EMNIST is hosted on
+#      biometrics.nist.gov, which is reliably reachable.
+#
+# SUBSAMPLING: EMNIST/digits ships at 240k/40k, 4x the FMNIST scale. The
+# simulator wraps it in EMNISTSubsampled (core/datasets.py), which clips
+# to a deterministic stratified 60k/10k subset (seed=42). This makes EXP 2
+# a fair scale-matched comparison with EXP 1's FMNIST baseline; using the
+# native size would conflate "more data per round" with "better selection
+# under SCOPE-FD". A footnote in Section VI-B documents this.
 #
 # Only K=5 (the practical sparse regime, K/N = 10%) is run, because this
 # is where the paper's headline 3× convergence-speedup result lives. K=1
-# and K=15 on KMNIST are deliberately omitted: if the trend replicates at
+# and K=15 on EMNIST are deliberately omitted: if the trend replicates at
 # K=5 reviewers will accept the dataset-independence argument; if it does
 # not, adding K=1 and K=15 would not change that.
 #
@@ -390,26 +422,25 @@ fi
 # headline already in the paper, so any difference is attributable to the
 # private-dataset content rather than to a public-dataset mismatch.
 #
-# This is a paired (random + SCOPE) compare — no KMNIST baselines exist
+# This is a paired (random + SCOPE) compare — no EMNIST baselines exist
 # on disk yet, so both methods run in one invocation to keep them
 # seed-aligned for direct trajectory comparison.
 #
-# ⚠️  PREREQUISITE: simulator accepts "KMNIST" as a --dataset value.
-#     See script header for the 3-line registry addition if needed.
+# ⚠️  PREREQUISITE: simulator accepts "EMNIST" as a --dataset value and
+#     loads it via EMNISTSubsampled (60k/10k, digits split). The
+#     FD-CNN1/2/3 model pool works without modification.
 # =============================================================================
 if should_run 2; then
-    CUR_EXP_NUM=2; CUR_EXP="S2/2-kmnist-N50-K5"
-    log "EXP 2/2: KMNIST(private) + MNIST(public) — N=50, K=5, paired random+SCOPE"
+    CUR_EXP_NUM=2; CUR_EXP="S2/2-emnist-N50-K5"
+    log "EXP 2/2: EMNIST/digits(private) + MNIST(public) — N=50, K=5, paired random+SCOPE"
 
-    # Pre-flight: ensure the 4 KMNIST raw IDX files are on disk before launching
-    # the 100-round paired run. The torchvision KMNIST mirror (codh.rois.ac.jp)
-    # frequently times out from cluster networks; fetch_kmnist.sh either
-    # populates data/KMNIST/raw/ or prints manual SCP recovery instructions.
-    # Skipped under --dry-run so dry-runs stay offline-safe.
+    # Pre-flight: ensure the EMNIST archive is on disk before launching the
+    # 100-round paired run. fetch_emnist.sh either populates data/EMNIST/raw/
+    # or prints manual SCP recovery instructions. Skipped under --dry-run.
     if ! $DRY_RUN; then
-        if ! bash "${SCRIPT_DIR}/fetch_kmnist.sh"; then
+        if ! bash "${SCRIPT_DIR}/fetch_emnist.sh"; then
             echo ""
-            echo "  [SKIP] scope_kmnist_N50_K5 — KMNIST data unavailable (see message above)" >&2
+            echo "  [SKIP] scope_emnist_N50_K5 — EMNIST data unavailable (see message above)" >&2
             echo "  Re-run after placing files:  bash scripts/run_scope_submission_experiments.sh --resume --exp 2" >&2
             SKIPPED=$((SKIPPED+1))
             TOTAL=$((TOTAL+1))
@@ -420,11 +451,11 @@ if should_run 2; then
         fi
     fi
 
-    if [[ "${CUR_EXP}" == "S2/2-kmnist-N50-K5" ]]; then
-        run_one "scope_kmnist_N50_K5" \
+    if [[ "${CUR_EXP}" == "S2/2-emnist-N50-K5" ]]; then
+        run_one "scope_emnist_N50_K5" \
             --methods "${PAIR_SET}" \
             ${BASE_FD} \
-            --dataset KMNIST --public-dataset MNIST \
+            --dataset EMNIST --public-dataset MNIST \
             --partition dirichlet --dirichlet-alpha 0.5 \
             --model FD-CNN1 --model-heterogeneous --model-pool "${MNIST_MODELS}" \
             --total-clients 50 --clients-per-round 5 --rounds ${ROUNDS} \
@@ -460,8 +491,10 @@ echo ""
 echo "  Paper integration:"
 echo "    - scope_fmnist_N50_K5_coef_*  → new compact Table IV in Section IV-E"
 echo "        (random row reused from existing scope_fmnist_N50_K5 on disk)"
-echo "    - scope_kmnist_N50_K5         → 2-3 sentence replication paragraph"
-echo "        in Section VI-B, or single-row addendum to Table II"
+echo "    - scope_emnist_N50_K5         → 2-3 sentence replication paragraph"
+echo "        in Section VI-B, or single-row addendum to Table II."
+echo "        Footnote: EMNIST/digits subsampled to 60k/10k (seed=42) via"
+echo "        EMNISTSubsampled to match FMNIST scale."
 echo ""
 echo "  Reclaim ~½ column for these additions by trimming the redundant"
 echo "  'Classical FL client selectors...' paragraph at end of VI-C and"

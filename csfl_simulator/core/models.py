@@ -243,7 +243,7 @@ class ShuffleNetV2FD(nn.Module):
 
 def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
-    if d in ("mnist", "fashion-mnist", "fashionmnist", "kmnist"):
+    if d in ("mnist", "fashion-mnist", "fashionmnist", "kmnist", "emnist"):
         return 1, 28
     if d in ("cifar10", "cifar-10", "cifar100", "cifar-100"):
         return 3, 32

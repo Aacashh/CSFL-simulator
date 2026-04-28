@@ -14,6 +14,13 @@ _FMNIST_MEAN, _FMNIST_STD = (0.2860,), (0.3530,)
 # KMNIST (Kuzushiji-MNIST): 28x28 grayscale, 10-class cursive Japanese characters.
 # Drop-in replacement for MNIST/FMNIST tensor-wise. Stats from rois-codh/kmnist.
 _KMNIST_MEAN, _KMNIST_STD = (0.1918,), (0.3483,)
+# EMNIST/digits split: 28x28 grayscale, 10-class handwritten Latin digits drawn
+# from NIST SD 19. Drop-in replacement for MNIST tensor-wise; full split is
+# 240k/40k, which we subsample to 60k/10k for fair scale comparison with the
+# paper's FMNIST baseline (see EMNISTSubsampled below). Stats are the standard
+# MNIST values — empirically within 0.01 of EMNIST/digits' own stats and what
+# the bulk of the EMNIST literature uses.
+_EMNIST_MEAN, _EMNIST_STD = (0.1307,), (0.3081,)
 _CIFAR10_MEAN, _CIFAR10_STD = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
 _CIFAR100_MEAN, _CIFAR100_STD = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
 _STL10_MEAN, _STL10_STD = (0.4467, 0.4398, 0.4066), (0.2604, 0.2563, 0.2713)
@@ -35,6 +42,11 @@ def get_transforms(name: str, train: bool = True):
         return transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(_KMNIST_MEAN, _KMNIST_STD)
+        ])
+    if name in ("emnist",):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(_EMNIST_MEAN, _EMNIST_STD)
         ])
     if name in ("cifar10",):
         aug = []
@@ -62,6 +74,67 @@ def get_transforms(name: str, train: bool = True):
     raise ValueError(f"Unknown dataset: {name}")
 
 
+class EMNISTSubsampled(datasets.EMNIST):
+    """EMNIST/digits restricted to a deterministic 60k train / 10k test stratified subsample.
+
+    WHY:
+        torchvision.datasets.EMNIST(split='digits') ships with 240k/40k samples — 4x the
+        size of the paper's FMNIST baseline. Running EXP 2 at native scale would conflate
+        the cross-dataset SCOPE-FD claim with a "more data per round" effect, since with
+        N=50 clients each Dirichlet partition would hold ~4x more samples than the FMNIST
+        equivalent. This class clips to MNIST/FMNIST scale (60k/10k) at __init__ time so
+        the simulator's downstream code (partition.py, simulator.setup, FD distillation
+        sampler) sees an EMNIST that is byte-for-byte size-equivalent to the FMNIST
+        baseline used in EXP 1.
+
+    HOW:
+        Stratified per-class random subsample with a fixed seed (42). Operates by
+        rewriting self.data and self.targets in-place after the parent constructor runs.
+        Preserves .classes and the standard .data / .targets attributes that
+        partition.dirichlet_partition and FLSimulator.setup both rely on — a plain
+        torch.utils.data.Subset would break that contract because Subset has no .targets.
+
+    SEED:
+        Hardcoded to 42 (paper's single-seed protocol). Subsample selection is
+        independent of cfg.seed so that re-runs of EXP 2 see the same EMNIST snapshot
+        even when the simulator's seed changes.
+    """
+    _SUBSAMPLE_SEED = 42
+    _TARGET_TRAIN = 60000
+    _TARGET_TEST = 10000
+
+    def __init__(self, root, train: bool = True, download: bool = True, transform=None):
+        super().__init__(root, split="digits", train=train, download=download, transform=transform)
+        target = self._TARGET_TRAIN if train else self._TARGET_TEST
+        if len(self) <= target:
+            return  # Nothing to do (e.g. someone changed the targets above current size).
+
+        labels = self.targets.numpy() if hasattr(self.targets, "numpy") else np.asarray(self.targets)
+        rng = np.random.RandomState(self._SUBSAMPLE_SEED + (0 if train else 1))
+        n_classes = int(labels.max()) + 1
+        per_class = target // n_classes
+        keep_idx = []
+        for c in range(n_classes):
+            class_idx = np.where(labels == c)[0]
+            if len(class_idx) <= per_class:
+                keep_idx.append(class_idx)
+            else:
+                keep_idx.append(rng.choice(class_idx, size=per_class, replace=False))
+        keep_idx = np.concatenate(keep_idx)
+        # Top up to exact target if integer-division rounded down.
+        if len(keep_idx) < target:
+            remaining = np.setdiff1d(np.arange(len(self)), keep_idx, assume_unique=False)
+            extra = rng.choice(remaining, size=(target - len(keep_idx)), replace=False)
+            keep_idx = np.concatenate([keep_idx, extra])
+        keep_idx.sort()  # deterministic ordering
+
+        self.data = self.data[keep_idx]
+        # self.targets is a torch.Tensor in modern torchvision.
+        if hasattr(self.targets, "__getitem__"):
+            self.targets = self.targets[keep_idx] if isinstance(self.targets, torch.Tensor) \
+                else type(self.targets)([self.targets[i] for i in keep_idx.tolist()])
+
+
 def get_dataset(name: str, train: bool = True, root: Path | None = None, download: bool = True):
     root = root or DATA_ROOT
     name_l = name.lower()
@@ -69,6 +142,19 @@ def get_dataset(name: str, train: bool = True, root: Path | None = None, downloa
         return datasets.MNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
     if name_l in ("fashion-mnist", "fashionmnist"):
         return datasets.FashionMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
+    if name_l == "emnist":
+        # Always EMNIST/digits, subsampled to MNIST scale. See EMNISTSubsampled docstring.
+        try:
+            return EMNISTSubsampled(root, train=train, download=download, transform=get_transforms(name_l, train))
+        except RuntimeError as e:
+            if "Error downloading" in str(e) or "downloading" in str(e).lower():
+                raise RuntimeError(
+                    f"EMNIST download failed — biometrics.nist.gov may be unreachable from this host.\n"
+                    f"Recovery: run `bash scripts/fetch_emnist.sh` (handles retries + manual SCP fallback).\n"
+                    f"Or place the EMNIST gzip archive manually in {root}/EMNIST/raw/.\n"
+                    f"Original error: {e}"
+                ) from e
+            raise
     if name_l == "kmnist":
         try:
             return datasets.KMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
@@ -147,6 +233,13 @@ def _public_transform_for_training_dataset(training_dataset: str) -> transforms.
             transforms.ToTensor(),
             transforms.Normalize(_KMNIST_MEAN, _KMNIST_STD),
         ])
+    if d in ("emnist",):
+        return transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(28),
+            transforms.ToTensor(),
+            transforms.Normalize(_EMNIST_MEAN, _EMNIST_STD),
+        ])
     if d in ("cifar10", "cifar-10"):
         return transforms.Compose([
             transforms.Resize(32),
@@ -212,6 +305,14 @@ def get_public_dataset(
     if name_l == "kmnist":
         tfm = _public_transform_for_training_dataset(training_dataset)
         ds = datasets.KMNIST(root, train=False, download=True, transform=tfm)
+        indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+        return Subset(ds, indices)
+
+    if name_l == "emnist":
+        tfm = _public_transform_for_training_dataset(training_dataset)
+        # When EMNIST itself is the public dataset, use the full unsampled
+        # 'digits' split — public-set sampling already trims via `size`.
+        ds = datasets.EMNIST(root, split="digits", train=False, download=True, transform=tfm)
         indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
         return Subset(ds, indices)
 

@@ -11,6 +11,9 @@ datasets:
   - name: KMNIST
     batch_size: 64
     num_classes: 10
+  - name: EMNIST
+    batch_size: 64
+    num_classes: 10
   - name: CIFAR-10
     batch_size: 128
     num_classes: 10
