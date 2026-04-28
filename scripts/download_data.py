@@ -2,7 +2,7 @@
 """
 Utility to pre-download supported datasets to the project's data directory.
 
-Supported: MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100
+Supported: MNIST, Fashion-MNIST, KMNIST, CIFAR-10, CIFAR-100, STL-10
 
 Examples:
   python scripts/download_data.py --all
@@ -25,6 +25,8 @@ def normalize_name(name: str) -> str:
     lowered = name.strip().lower()
     if lowered in {"fashionmnist", "fmnist", "fashion-mnist", "fashion_mnist"}:
         return "fashion-mnist"
+    if lowered in {"kmnist", "kuzushiji", "kuzushiji-mnist", "kuzushiji_mnist"}:
+        return "kmnist"
     if lowered in {"cifar10", "cifar-10", "cifar_10"}:
         return "cifar10"
     if lowered in {"cifar100", "cifar-100", "cifar_100"}:
@@ -45,6 +47,10 @@ def get_supported() -> Dict[str, Callable[[Path], None]]:
         datasets.FashionMNIST(root, train=True, download=True)
         datasets.FashionMNIST(root, train=False, download=True)
 
+    def _kmnist(root: Path) -> None:
+        datasets.KMNIST(root, train=True, download=True)
+        datasets.KMNIST(root, train=False, download=True)
+
     def _cifar10(root: Path) -> None:
         datasets.CIFAR10(root, train=True, download=True)
         datasets.CIFAR10(root, train=False, download=True)
@@ -61,6 +67,7 @@ def get_supported() -> Dict[str, Callable[[Path], None]]:
     return {
         "mnist": _mnist,
         "fashion-mnist": _fmnist,
+        "kmnist": _kmnist,
         "cifar10": _cifar10,
         "cifar100": _cifar100,
         "stl10": _stl10,

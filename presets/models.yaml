@@ -1,6 +1,6 @@
 models:
   - name: CNN-MNIST
-    datasets: [MNIST, Fashion-MNIST]
+    datasets: [MNIST, Fashion-MNIST, KMNIST]
   - name: CNN-MNIST (FedAvg)
     datasets: [MNIST]
   - name: LightCNN
@@ -9,8 +9,8 @@ models:
     datasets: [CIFAR-10, CIFAR-100]
   # FD-specific heterogeneous CNN architectures (Mu et al. IEEE TCCN 2024, Table III)
   - name: FD-CNN1
-    datasets: [MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100, STL-10]
+    datasets: [MNIST, Fashion-MNIST, KMNIST, CIFAR-10, CIFAR-100, STL-10]
   - name: FD-CNN2
-    datasets: [MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100, STL-10]
+    datasets: [MNIST, Fashion-MNIST, KMNIST, CIFAR-10, CIFAR-100, STL-10]
   - name: FD-CNN3
-    datasets: [MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100, STL-10]
+    datasets: [MNIST, Fashion-MNIST, KMNIST, CIFAR-10, CIFAR-100, STL-10]
