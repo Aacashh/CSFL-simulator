@@ -1004,6 +1004,10 @@ class FDSimulator:
                 cfg.time_budget, self.device,
                 energy_budget=cfg.energy_budget,
                 bytes_budget=cfg.bytes_budget,
+                # SCOPE-FD coefficient overrides — None values are dropped by
+                # registry.invoke, so unset flags don't disturb other selectors.
+                alpha_uncertainty=cfg.scope_au,
+                alpha_diversity=cfg.scope_ad,
             )
             selection_time = time.perf_counter() - sel_start
 

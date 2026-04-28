@@ -11,6 +11,9 @@ from .utils import DATA_ROOT
 
 _MNIST_MEAN, _MNIST_STD = (0.1307,), (0.3081,)
 _FMNIST_MEAN, _FMNIST_STD = (0.2860,), (0.3530,)
+# KMNIST (Kuzushiji-MNIST): 28x28 grayscale, 10-class cursive Japanese characters.
+# Drop-in replacement for MNIST/FMNIST tensor-wise. Stats from rois-codh/kmnist.
+_KMNIST_MEAN, _KMNIST_STD = (0.1918,), (0.3483,)
 _CIFAR10_MEAN, _CIFAR10_STD = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
 _CIFAR100_MEAN, _CIFAR100_STD = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
 _STL10_MEAN, _STL10_STD = (0.4467, 0.4398, 0.4066), (0.2604, 0.2563, 0.2713)
@@ -27,6 +30,11 @@ def get_transforms(name: str, train: bool = True):
         return transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(_FMNIST_MEAN, _FMNIST_STD)
+        ])
+    if name in ("kmnist",):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(_KMNIST_MEAN, _KMNIST_STD)
         ])
     if name in ("cifar10",):
         aug = []
@@ -61,6 +69,8 @@ def get_dataset(name: str, train: bool = True, root: Path | None = None, downloa
         return datasets.MNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
     if name_l in ("fashion-mnist", "fashionmnist"):
         return datasets.FashionMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
+    if name_l == "kmnist":
+        return datasets.KMNIST(root, train=train, download=download, transform=get_transforms(name_l, train))
     if name_l == "cifar-10" or name_l == "cifar10":
         return datasets.CIFAR10(root, train=train, download=download, transform=get_transforms("cifar10", train))
     if name_l == "cifar-100" or name_l == "cifar100":
@@ -115,6 +125,13 @@ def _public_transform_for_training_dataset(training_dataset: str) -> transforms.
             transforms.Resize(28),
             transforms.ToTensor(),
             transforms.Normalize(_FMNIST_MEAN, _FMNIST_STD),
+        ])
+    if d in ("kmnist",):
+        return transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(28),
+            transforms.ToTensor(),
+            transforms.Normalize(_KMNIST_MEAN, _KMNIST_STD),
         ])
     if d in ("cifar10", "cifar-10"):
         return transforms.Compose([
@@ -175,6 +192,12 @@ def get_public_dataset(
     if name_l in ("fashion-mnist", "fashionmnist", "fmnist"):
         tfm = _public_transform_for_training_dataset(training_dataset)
         ds = datasets.FashionMNIST(root, train=False, download=True, transform=tfm)
+        indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
+        return Subset(ds, indices)
+
+    if name_l == "kmnist":
+        tfm = _public_transform_for_training_dataset(training_dataset)
+        ds = datasets.KMNIST(root, train=False, download=True, transform=tfm)
         indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
         return Subset(ds, indices)
 

@@ -146,6 +146,15 @@ class SimConfig:
     # Freeze BN running stats during distillation (no-op under GroupNorm).
     # Defense-in-depth for any model that still has BN (e.g., CSFL_KEEP_BN=1).
     freeze_bn_on_distill: bool = True
+    # SCOPE-FD coefficient overrides. When non-None, these are forwarded to the
+    # selector as alpha_uncertainty / alpha_diversity, overriding the YAML preset
+    # (and the function-level defaults in csfl_simulator.selection.fd_native.scope_fd).
+    # The selector intentionally does NOT clamp αu + αd < 1 — the dominance-margin
+    # constraint in the paper is empirical, not enforced — so values that violate
+    # the admissible region are accepted as-is for ablation studies. Default None
+    # means "use whatever the registry/preset specifies".
+    scope_au: Optional[float] = None
+    scope_ad: Optional[float] = None
 
 
 class FLSimulator:
@@ -487,6 +496,10 @@ class FLSimulator:
                     # Additional budgets (selectors may ignore if not supported)
                     energy_budget=self.cfg.energy_budget,
                     bytes_budget=self.cfg.bytes_budget,
+                    # SCOPE-FD coefficient overrides — None values are dropped by
+                    # registry.invoke, so unset flags don't disturb other selectors.
+                    alpha_uncertainty=self.cfg.scope_au,
+                    alpha_diversity=self.cfg.scope_ad,
                 )
             selection_time = float(time.perf_counter() - _t0)
             self.history["selected"].append(ids)

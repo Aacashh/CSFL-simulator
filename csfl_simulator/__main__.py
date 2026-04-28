@@ -128,6 +128,14 @@ def _add_sim_args(p: argparse.ArgumentParser):
                     help="Subsample size for intermediate eval rounds (tier 3.3). 0 = use full test set.")
     p.add_argument("--profile", action="store_true", default=False,
                     help="Print per-round per-phase timing breakdown to stdout (timings are always recorded in metrics.json)")
+    # --- SCOPE-FD coefficient overrides ---
+    # When unset (None), the registry/preset values apply (αu=0.3, αd=0.1).
+    # The selector does not enforce αu + αd < 1; values that violate the
+    # dominance-margin constraint are accepted as-is for ablation studies.
+    p.add_argument("--scope-au", type=float, default=None,
+                    help="Override SCOPE-FD αu (server-uncertainty bonus weight). Default: preset (0.3).")
+    p.add_argument("--scope-ad", type=float, default=None,
+                    help="Override SCOPE-FD αd (per-round diversity penalty weight). Default: preset (0.1).")
 
 
 def _args_to_config(args) -> SimConfig:
@@ -186,6 +194,8 @@ def _args_to_config(args) -> SimConfig:
         channels_last=getattr(args, "channels_last", False),
         eval_subsample=getattr(args, "eval_subsample", 0),
         profile=getattr(args, "profile", False),
+        scope_au=getattr(args, "scope_au", None),
+        scope_ad=getattr(args, "scope_ad", None),
     )
 
 
