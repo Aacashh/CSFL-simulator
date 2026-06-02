@@ -1,0 +1,56 @@
+Reviewer(s)' Comments to Author:
+
+Reviewer: 1
+
+Comments to the Author
+Simplify some long and complex sentences, especially in the Introduction and Related Work.
+Please provide more implementation details, including:
+Optimizer type, learning rates, and training schedules
+Exact architecture of the meta-policy network
+Initialization strategies and random seeds
+Consider releasing code or pseudocode with more detail to support reproducibility.
+While efficiency improvements are strong, the accuracy gains are relatively modest (~1–1.5%).
+Please better justify:
+Why these gains are meaningful in practice?
+Scenarios where efficiency is prioritized over accuracy.
+
+Reviewer: 2
+
+Comments to the Author
+1. The manuscript should more clearly articulate the exact novelty of MAML-Select compared with existing adaptive client selection methods such as RL-based approaches, contextual bandits, and meta-learning-based FL personalization frameworks. A dedicated comparison table highlighting differences in objective, adaptation mechanism, computational complexity, and optimization strategy would improve clarity.
+2.The manuscript provides empirical evaluation only. There is no convergence proof or theoretical justification of why the meta-learning formulation improves non-stationary adaptation.
+3.Equation (4) combines latency penalty and accuracy gain using a manually chosen trade-off parameter λ, but there is no explanation of how λ was selected or how sensitive the framework is to this parameter.
+4.The experimental validation is limited to small-scale datasets. Additional experiments on larger and more realistic FL benchmarks would strengthen the claims regarding scalability and practical applicability.
+5. The reported performance improvements are relatively modest. The manuscript should include standard deviation across multiple runs and statistical significance analysis to demonstrate robustness and reproducibility.
+6. Since the framework incorporates latency-aware optimization, the manuscript should evaluate fairness across heterogeneous clients. Metrics such as participation fairness, client coverage, or performance across client tiers would provide valuable insight.
+7. The claims regarding energy efficiency and Green AI are currently indirect. The manuscript estimates computational savings through TFLOPS but does not report actual energy consumption, power measurements, or carbon footprint analysis. The wording should be moderated or supported with stronger evidence.
+8. The manuscript should justify the choice of the six state features used in the meta-policy. An ablation study evaluating the contribution of each feature would improve interpretability.
+9.Fig. 2 has small font sizes and unclear axis scaling.
+10. The definition of “Time (Units)” in Table II is unclear and should be explicitly defined.
+11. The manuscript discusses several recent approaches such as CriticalFL and FedGCS but does not include them in the experimental comparison. Including these baselines would provide a more convincing evaluation.
+12. The manuscript requires careful proofreading for grammar, punctuation, and sentence structure.
+
+Reviewer: 3
+
+Comments to the Author
+This work presented an online adaptive client selection framework based on Model Agnostic Meta-Learning (MAML-Select), which dynamically selects clients based on their device and data heterogeneity and is augmented with existing FL. The reviewer has the following comments:
+(1) The motivation of this work is not clear to the reader.
+(2) The authors must focus on the novelty issues and highlight the main contribution so that it becomes easier for the readers to get the main points of this paper.
+(3) Did you consider any constraints for the problem formulation? If so, please update the formulated problem with appropriate constraints.  
+(4) Why is only one method considered as a baseline? The authors should consider at least two more baselines.
+(5) More simulation results need to be provided in the paper to ensure the effectiveness of the proposed method.
+(6) Remove the references from the conclusion and only add a single sentence as future work. The authors are advised to write the conclusion in a single paragraph.  
+
+Reviewer: 4
+
+Comments to the Author
+In this paper, the authors have proposed an online adaptive client selection framework based on Model-Agnostic Meta-Learning. The proposed framework dynamically selects the clients as per their device and data heterogeneity, and is augmented with the existing FL. Below are my comments to further improve and revise the paper:
+1- There are some English and Grammatical mistakes. Therefore, improve and proofread your article thoroughly and carefully.  
+I. In Impact statement: This work addresses the challenge of deploying FL in heterogeneous edge environments such as Internet of Vehicles (IoV) and mobile healthcare systems. Should be This work addresses the challenge of deploying FL in heterogeneous environments, such as Internet of Vehicles (IoV) and mobile healthcare systems.
+II. In Impact statement: The broader impact of this work lies in enabling scalable, adaptive, and energy-efficient distributed learning systems, which are critical for next-generation applications, including smart cities, autonomous systems, healthcare monitoring, and industrial IoT, should be The broader impact of this work lies in enabling scalable, adaptive, and energy-efficient distributed learning systems, which are critical for next-generation applications, including smart cities, autonomous systems, healthcare monitoring, and industrial Internet of Things.  
+
+2- The sentences throughout this paper are very long. Therefore, improve and proofread your article thoroughly and carefully by making them a reasonable length.
+3- Mostly papers cited in literature review section are outdated. Update and revise your Literature review by including more recent and related papers.
+4- I would suggest including a comparison table with previous state-of-the-art works to prove and show the novelty of your proposed framework.
+5- The future work mentioned in Conclusion and Future Work Section should be more accurate and concise and try to mention in some better style rather than mentioning and giving to many citations.
+6- Figure 2 required more clarifications and justifications as well as use clearer figure that highlight difference with the other schemes.

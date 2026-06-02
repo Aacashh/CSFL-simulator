@@ -1,0 +1,192 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\newcommand{\comment}[1]{\textbf{Comment:} \textit{#1}}
+\newcommand{\response}[1]{\textbf{Response:} #1}
+\newcommand{\change}[1]{\textbf{Changes in the manuscript:} \textcolor{blue}{#1}}
+
+\begin{document}
+
+\begin{center}
+    {\Large \textbf{Response to Reviewers}}\\[0.5em]
+    \textbf{Manuscript: MAML-Select: An Online Adaptive Client Selection Method for Federated Learning via Meta-Learning}
+\end{center}
+
+We thank the reviewers for their careful reading and constructive suggestions. All additions and modifications in the revised manuscript are marked in blue. This document distinguishes revisions already made from items that require the expanded experimental phase.
+
+\section*{Reviewer 1}
+
+\comment{Simplify some long and complex sentences, especially in the Introduction and Related Work.}
+
+\response{We agree. We proofread the complete manuscript and divided long sentences into shorter statements.}
+
+\change{The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion have been revised for clarity and concision.}
+
+\comment{Please provide more implementation details, including optimizer type, learning rates, training schedules, exact architecture of the meta-policy network, initialization strategies, random seeds, and code or detailed pseudocode.}
+
+\response{We have added the exact meta-policy architecture and aligned the equations with the pseudocode. The meta-policy is a $6$-$64$-$64$-$1$ multilayer perceptron with ReLU activations and 4,673 trainable parameters. The revised algorithm now states the support-set adaptation, candidate scoring, lowest-cost top-$K$ selection, sample-weighted aggregation, and first-order meta-update. Optimizer settings, schedules, initialization, seeds, and code-release details will be finalized with the reproducibility runs.}
+
+\change{The State Space, algorithm description, computational-complexity paragraph, and Algorithm~1 now provide the architecture and expanded pseudocode.}
+
+\comment{While efficiency improvements are strong, the accuracy gains are relatively modest ($\sim$1--1.5\%). Please justify why these gains are meaningful and identify scenarios where efficiency is prioritized over accuracy.}
+
+\response{We agree that the gain should be interpreted in context. MAML-Select targets heterogeneous deployments where model quality, convergence time, and computational demand must be considered together. A modest gain is useful when achieved with lower cumulative computation and faster convergence. Relevant settings include limited device compute, strict round deadlines, and intermittent connectivity.}
+
+\change{The Abstract and Introduction now describe the accuracy gain as modest and explain the intended deployment context.}
+
+\section*{Reviewer 2}
+
+\comment{Clarify the exact novelty of MAML-Select compared with RL-based approaches, contextual bandits, and meta-learning-based personalization frameworks. Add a dedicated comparison table.}
+
+\response{We agree. MAML-Select adapts the client-ranking policy itself through a gradient step on recent feedback. This differs from RL policies learned through interaction, contextual reward models, generative combination search, and personalization methods that adapt client-model parameters. Table~I now compares representative methods.}
+
+\change{The Introduction and Related Work now state the distinction directly. Table~I compares objective, adaptation mechanism, dominant operation, and optimization strategy.}
+
+\comment{The manuscript provides empirical evaluation only. There is no convergence proof or theoretical justification for the non-stationary adaptation.}
+
+\response{We added a limited theoretical justification for the inner-loop update. Under an $L$-smooth support loss and a standard step-size condition, the revised statement gives a descent bound for the adapted policy. We explicitly state that this is a local adaptation argument, not a global FL convergence guarantee.}
+
+\change{A descent statement and its interpretation have been added after the inner-loop equation.}
+
+\comment{Explain the manually chosen trade-off parameter $\lambda$ and evaluate sensitivity to this parameter.}
+
+\response{The formulation now states that $\lambda \geq 0$ controls the latency--loss trade-off. A larger value emphasizes latency, while $\lambda=0$ yields loss-only selection. A sensitivity analysis remains part of the expanded experiments.}
+
+\change{The System Model now explains $\lambda$ and identifies $T_{target}$ as a soft deadline.}
+
+\comment{The experimental validation is limited to small-scale datasets. Add larger and more realistic FL benchmarks.}
+
+\response{We agree. This requires expanded experiments. We will evaluate at least one larger benchmark and report scaling with the number of clients.}
+
+\change{The Conclusion now lists larger benchmarks as a specific direction for the expanded evaluation.}
+
+\comment{Include standard deviation across multiple runs and statistical significance analysis.}
+
+\response{We agree. The current table is identified as a single-run summary. Repeated runs, uncertainty reporting, and significance analysis will be added during the experimental phase.}
+
+\change{The Performance Summary now states that the current results are a single-run summary and identifies repeated-run evaluation as required.}
+
+\comment{Evaluate fairness across heterogeneous clients using participation fairness, client coverage, or performance across tiers.}
+
+\response{We agree. We added the rationale for using selection frequency and staleness as policy features. The expanded evaluation will report participation fairness, client coverage, and tier-level selection rates.}
+
+\change{The State Space paragraph now explains that selection frequency and staleness expose participation imbalance. The Evaluation and Conclusion identify fairness analysis as required.}
+
+\comment{The claims regarding energy efficiency and Green AI are indirect. Moderate the wording or provide stronger evidence.}
+
+\response{We agree. TFLOPs and simulated time are computational proxies. They are not direct measurements of electricity use or carbon emissions. We removed the unsupported direct claims.}
+
+\change{The Abstract, Impact Statement, System Model, Evaluation, and Conclusion now state this limitation explicitly.}
+
+\comment{Justify the six state features and provide an ablation study.}
+
+\response{The manuscript now groups the features by purpose. Loss and gradient norm represent statistical utility. Latency and battery level represent system constraints. Selection frequency and staleness expose participation imbalance. The feature ablation remains an experimental-phase item.}
+
+\change{The State Space paragraph now provides a feature-level rationale.}
+
+\comment{Fig. 2 has small font sizes and unclear axis scaling.}
+
+\response{We reformatted the figure to fit the column width and clarified the caption. The final experimental phase will regenerate the plots with larger text and checked axis scales.}
+
+\change{Fig.~2 now uses a column-width layout. Its caption defines simulation time and TFLOPs.}
+
+\comment{The definition of ``Time (Units)'' in Table II is unclear.}
+
+\response{We agree. The time metric is accumulated modeled round latency, not wall-clock time.}
+
+\change{The Evaluation text defines simulation time using the round-latency equation. The table row is renamed ``Sim. time (arb. units).''}
+
+\comment{Include recent baselines such as CriticalFL and FedGCS in the experimental comparison.}
+
+\response{We agree. These methods are now included in the literature comparison. Their direct experimental comparison remains part of the expanded experiment phase.}
+
+\change{CriticalFL and FedGCS are described in Related Work and included in Table~I.}
+
+\comment{Proofread the manuscript for grammar, punctuation, and sentence structure.}
+
+\response{We completed a full prose revision.}
+
+\change{Long sentences and grammatical errors have been corrected throughout the manuscript.}
+
+\section*{Reviewer 3}
+
+\comment{The motivation is not clear.}
+
+\response{We sharpened the motivation. Client utility changes during training, so a fixed rule can become stale. MAML-Select adapts the ranking policy from recent feedback before the next decision.}
+
+\change{The Abstract and Introduction now state the non-stationary client-utility problem directly.}
+
+\comment{Highlight the novelty and main contribution.}
+
+\response{We agree. The revised manuscript distinguishes selection-policy adaptation from model personalization and other client-selection paradigms.}
+
+\change{The Introduction, Related Work, and Table~I now highlight the exact contribution.}
+
+\comment{Add appropriate constraints to the problem formulation.}
+
+\response{We introduced the available-client set, selected cohort, and binary decision variables. The revised formulation enforces exactly $K$ selected clients and permits selection only from available clients.}
+
+\change{Equation~(3) now includes binary, cohort-size, and availability constraints.}
+
+\comment{Why is only one method considered as a baseline? Consider at least two more baselines.}
+
+\response{The current setup includes FedAvg, FedCS, Oort, TiFL, and FedCor. The expanded experiments will add direct comparisons with newer selectors, including CriticalFL and FedGCS.}
+
+\change{The Evaluation setup lists the current baselines. Related Work and Table~I identify the newer selectors.}
+
+\comment{Provide more simulation results to ensure effectiveness.}
+
+\response{We agree. Additional datasets, repeated runs, sensitivity analysis, fairness metrics, and feature ablations remain part of the experimental phase.}
+
+\change{The Evaluation and Conclusion now state the scope of the expanded validation.}
+
+\comment{Remove references from the conclusion and add only a single sentence as future work. Write the conclusion as a single paragraph.}
+
+\response{We have followed this suggestion.}
+
+\change{The Conclusion is now one paragraph, contains no citations, and ends with one concise future-work sentence.}
+
+\section*{Reviewer 4}
+
+\comment{Correct the Impact Statement wording for heterogeneous environments and industrial Internet of Things.}
+
+\response{We adopted both suggested corrections and streamlined the Impact Statement.}
+
+\change{The Impact Statement now uses ``heterogeneous environments'' and ``industrial Internet of Things.''}
+
+\comment{Improve long sentences, grammar, and proofreading throughout the manuscript.}
+
+\response{We completed a full prose revision and shortened long statements.}
+
+\change{The complete manuscript has been revised for grammar and sentence length.}
+
+\comment{Update the literature review with recent and related papers.}
+
+\response{We curated the bibliography to 25 relevant references. The revised literature review retains the original works for compared algorithms and adds six directly relevant 2026 papers from IEEE Transactions on Artificial Intelligence. These papers address robust selection, adaptive straggler handling, impurity-based convergence weighting, inclusive participation, asynchronous heterogeneity, and non-IID definitions.}
+
+\change{Related Work now includes recent IEEE TAI literature and a focused 25-reference bibliography.}
+
+\comment{Include a comparison table with previous state-of-the-art works.}
+
+\response{We added Table~I and introduced it in the surrounding text.}
+
+\change{Table~I compares representative prior methods and MAML-Select.}
+
+\comment{Make the Conclusion and Future Work section accurate and concise. Avoid too many citations.}
+
+\response{We agree. The section has been reduced to one paragraph with one future-work sentence and no citations.}
+
+\change{The Conclusion and Future Work section has been rewritten accordingly.}
+
+\comment{Fig. 2 requires clarification, justification, and a clearer comparison with other schemes.}
+
+\response{The revised text defines both axes and moderates the interpretation. The figure now fits the column width. The experiment phase will regenerate the plot after adding newer baselines.}
+
+\change{The Efficiency and Time-to-Accuracy subsection and Fig.~2 caption now define simulated time and cumulative TFLOPs clearly.}
+
+\end{document}
