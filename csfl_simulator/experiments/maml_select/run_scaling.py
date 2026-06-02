@@ -1,8 +1,8 @@
 """Selection overhead scaling benchmark.
 
-Benchmarks the wall-clock time of client selection for all 8 algorithms as the
-client pool scales: N = 100, 250, 500, 1000.  Specifically highlights
-MAML-Select's O(N·|φ|) linear scaling vs FedCor's O(N³) cubic scaling.
+Benchmarks the wall-clock time of client selection for all integrated methods
+as the client pool scales: N = 20, 40, 80, 100. This practical sweep avoids
+prohibitively long local runs while exposing the overhead trend.
 
 Usage:
     python -m csfl_simulator.experiments.maml_select.run_scaling
@@ -23,7 +23,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "configs.yaml"
-DEFAULT_OUTPUT = HERE.parents[2] / "artifacts" / "maml_select_letter" / "scaling"
+DEFAULT_OUTPUT = HERE.parents[2] / "runs" / "maml_select" / "scaling"
 
 MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 CRITICALFL_MODULE = "csfl_simulator.experiments.maml_select.criticalfl"
@@ -87,7 +87,10 @@ def run_scaling(args: argparse.Namespace) -> None:
             })
 
             try:
-                sim = InstrumentedFLSimulator(SimConfig(**sim_values))
+                sim = InstrumentedFLSimulator(
+                    SimConfig(**sim_values),
+                    scratch_root=output_dir / "_scratch",
+                )
                 # Register research methods
                 sim.registry.register(
                     "research.maml_select", MAML_MODULE,
@@ -102,7 +105,7 @@ def run_scaling(args: argparse.Namespace) -> None:
                 sim.registry.register(
                     "research.fedgcs", FEDGCS_MODULE,
                     params=dict(config.get("fedgcs", {})),
-                    display_name="FedGCS", origin="scaling benchmark",
+                    display_name="FedGCS-style (approx.)", origin="scaling benchmark approximation",
                 )
                 sim.setup()
 

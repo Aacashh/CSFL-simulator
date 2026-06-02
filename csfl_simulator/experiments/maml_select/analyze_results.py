@@ -1,4 +1,4 @@
-"""Aggregate MAML-Select experiment results and export manuscript-ready EPS plots."""
+"""Aggregate MAML-Select experiment results into manuscript-ready tables."""
 from __future__ import annotations
 
 import argparse
@@ -16,9 +16,6 @@ import pandas as pd
 from scipy.stats import t as student_t
 from scipy.stats import ttest_rel
 
-from csfl_simulator.core.utils import ART_ROOT
-
-
 plt.rcParams.update(
     {
         "font.size": 9,
@@ -34,8 +31,10 @@ plt.rcParams.update(
 )
 
 
-DEFAULT_RESULTS = ART_ROOT / "maml_select_letter"
 HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parents[2]
+DEFAULT_RESULTS = REPO_ROOT / "runs" / "maml_select"
+DEFAULT_ANALYSIS = REPO_ROOT / "artifacts" / "maml_select" / "analysis"
 METHOD_NAMES = {
     "baseline.fedavg": "FedAvg",
     "system_aware.fedcs": "FedCS",
@@ -43,7 +42,7 @@ METHOD_NAMES = {
     "system_aware.tifl": "TiFL",
     "ml.fedcor": "FedCor (approx.)",
     "research.criticalfl": "CriticalFL",
-    "research.fedgcs": "FedGCS",
+    "research.fedgcs": "FedGCS-style (approx.)",
     "research.maml_select": "MAML-Select",
 }
 COLORS = {
@@ -169,8 +168,6 @@ def _save(fig: plt.Figure, output_dir: Path, stem: str) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(output_dir / f"{stem}.eps", format="eps", bbox_inches="tight")
-    fig.savefig(output_dir / f"{stem}.pdf", format="pdf", bbox_inches="tight")
-    fig.savefig(output_dir / f"{stem}.png", format="png", dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -486,45 +483,47 @@ def significance_tests(frame: pd.DataFrame) -> pd.DataFrame:
         "measured_energy_kwh",
     ]
     for scenario_name, scenario in subset.groupby("scenario_name"):
-        maml = scenario[scenario["method_key"] == "research.maml_select"].set_index("seed")
-        for method_key, baseline in scenario.groupby("method_key"):
-            if method_key == "research.maml_select":
-                continue
-            baseline = baseline.set_index("seed")
-            shared = sorted(set(maml.index).intersection(baseline.index))
-            for metric in metrics:
-                left = pd.to_numeric(maml.loc[shared, metric], errors="coerce")
-                right = pd.to_numeric(baseline.loc[shared, metric], errors="coerce")
-                valid = np.isfinite(left) & np.isfinite(right)
-                left, right = left[valid], right[valid]
-                test = ttest_rel(left, right) if len(left) >= 2 else None
-                difference = left - right
-                difference_std = float(difference.std(ddof=1)) if len(difference) >= 2 else float("nan")
-                difference_mean = float(difference.mean()) if len(difference) else float("nan")
-                margin = (
-                    float(student_t.ppf(0.975, len(difference) - 1) * difference_std / math.sqrt(len(difference)))
-                    if len(difference) >= 2 and math.isfinite(difference_std)
-                    else float("nan")
-                )
-                rows.append(
-                    {
-                        "scenario_name": scenario_name,
-                        "baseline": method_key,
-                        "metric": metric,
-                        "paired_seeds": int(len(left)),
-                        "maml_minus_baseline": difference_mean,
-                        "difference_95pct_ci_low": difference_mean - margin,
-                        "difference_95pct_ci_high": difference_mean + margin,
-                        "paired_cohens_dz": difference_mean / difference_std if difference_std > 0.0 else float("nan"),
-                        "paired_t_statistic": float(test.statistic) if test else float("nan"),
-                        "paired_p_value": float(test.pvalue) if test else float("nan"),
-                    }
-                )
+        for reference_key in ("research.maml_select", "baseline.fedavg"):
+            reference = scenario[scenario["method_key"] == reference_key].set_index("seed")
+            for method_key, baseline in scenario.groupby("method_key"):
+                if method_key == reference_key:
+                    continue
+                baseline = baseline.set_index("seed")
+                shared = sorted(set(reference.index).intersection(baseline.index))
+                for metric in metrics:
+                    left = pd.to_numeric(reference.loc[shared, metric], errors="coerce")
+                    right = pd.to_numeric(baseline.loc[shared, metric], errors="coerce")
+                    valid = np.isfinite(left) & np.isfinite(right)
+                    left, right = left[valid], right[valid]
+                    test = ttest_rel(left, right) if len(left) >= 2 else None
+                    difference = left - right
+                    difference_std = float(difference.std(ddof=1)) if len(difference) >= 2 else float("nan")
+                    difference_mean = float(difference.mean()) if len(difference) else float("nan")
+                    margin = (
+                        float(student_t.ppf(0.975, len(difference) - 1) * difference_std / math.sqrt(len(difference)))
+                        if len(difference) >= 2 and math.isfinite(difference_std)
+                        else float("nan")
+                    )
+                    rows.append(
+                        {
+                            "scenario_name": scenario_name,
+                            "reference": reference_key,
+                            "baseline": method_key,
+                            "metric": metric,
+                            "paired_seeds": int(len(left)),
+                            "reference_minus_baseline": difference_mean,
+                            "difference_95pct_ci_low": difference_mean - margin,
+                            "difference_95pct_ci_high": difference_mean + margin,
+                            "paired_cohens_dz": difference_mean / difference_std if difference_std > 0.0 else float("nan"),
+                            "paired_t_statistic": float(test.statistic) if test else float("nan"),
+                            "paired_p_value": float(test.pvalue) if test else float("nan"),
+                        }
+                    )
     tests = pd.DataFrame(rows)
     if tests.empty:
         return tests
     tests["holm_adjusted_p_value"] = float("nan")
-    for _, indices in tests.groupby(["scenario_name", "metric"]).groups.items():
+    for _, indices in tests.groupby(["scenario_name", "reference", "metric"]).groups.items():
         valid = tests.loc[indices, "paired_p_value"].dropna().sort_values()
         adjusted_so_far = 0.0
         count = len(valid)
@@ -564,20 +563,21 @@ def summary_table(frame: pd.DataFrame) -> pd.DataFrame:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS)
-    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_ANALYSIS)
     parser.add_argument("--external-csv", type=Path, default=None)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    output_dir = args.output_dir or args.results_dir / "analysis"
+    output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     payloads = load_payloads(args.results_dir)
     if not payloads:
         raise SystemExit(f"No result.json files found under {args.results_dir}")
     frame = aggregate(payloads, args.external_csv)
     frame.to_csv(output_dir / "runs.csv", index=False)
+    frame[frame["dataset"] == "CIFAR-10"].to_csv(output_dir / "cifar10_reconciled_results.csv", index=False)
     round_metrics = round_metrics_table(payloads)
     round_metrics.to_csv(output_dir / "round_metrics.csv", index=False)
     round_summary = roundwise_main_summary(round_metrics)
@@ -602,23 +602,7 @@ def main() -> None:
     tests = significance_tests(frame)
     tests.to_csv(output_dir / "paired_significance_tests.csv", index=False)
 
-    plot_convergence(payloads, output_dir, "fashion_main")
-    plot_convergence(payloads, output_dir, "cifar10_main")
-    plot_figure2_efficiency(payloads, output_dir)
-    plot_hardware_energy(frame, output_dir, "fashion_main")
-    plot_hardware_energy(frame, output_dir, "cifar10_main")
-    plot_tracked_energy_estimate(frame, output_dir, "fashion_main")
-    plot_tracked_energy_estimate(frame, output_dir, "cifar10_main")
-    plot_energy_to_target(frame, output_dir, "fashion_energy_target")
-    plot_energy_to_target(frame, output_dir, "cifar10_energy_target")
-    plot_fairness(frame, output_dir, "fashion_main")
-    plot_fairness(frame, output_dir, "cifar10_main")
-    plot_variant_bars(frame, output_dir, "local_fashion_pilot", "local_fashion_pilot")
-    plot_variant_bars(frame, output_dir, "local_lambda_pilot", "local_lambda_pilot")
-    plot_variant_bars(frame, output_dir, "lambda_sensitivity", "lambda_sensitivity")
-    plot_variant_bars(frame, output_dir, "feature_ablation", "feature_ablation")
-    plot_scaling(frame, output_dir)
-    print(f"Wrote aggregate tables and EPS/PDF/PNG figures to {output_dir}")
+    print(f"Wrote aggregate CSV and LaTeX tables to {output_dir}")
 
 
 if __name__ == "__main__":

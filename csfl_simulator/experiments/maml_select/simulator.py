@@ -129,9 +129,17 @@ class InstrumentedFLSimulator(FLSimulator):
         cifar10_augment: bool = False,
         lr_scheduler: str | None = None,
         lr_warmup_rounds: int = 0,
+        local_optimizer: str = "SGD",
+        local_momentum: float = 0.9,
+        local_weight_decay: float = 1e-4,
+        model_initialization: str = "pytorch_default",
+        scratch_root: Path | str | None = None,
     ):
         if config.parallel_clients != 0:
             raise ValueError("MAML-Select experiments require parallel_clients=0 for local credit capture.")
+        if scratch_root is not None:
+            from csfl_simulator.core import utils as core_utils
+            core_utils.ART_ROOT = Path(scratch_root)
         super().__init__(config)
         self.grid_carbon_g_per_kwh = float(grid_carbon_g_per_kwh)
         self.credit_batches = max(1, int(credit_batches))
@@ -142,6 +150,12 @@ class InstrumentedFLSimulator(FLSimulator):
         self.cifar10_augment = bool(cifar10_augment)
         self.lr_scheduler = lr_scheduler
         self.lr_warmup_rounds = max(0, int(lr_warmup_rounds))
+        self.local_optimizer = str(local_optimizer).upper()
+        if self.local_optimizer != "SGD":
+            raise ValueError(f"Unsupported local optimizer: {local_optimizer}. Expected SGD.")
+        self.local_momentum = float(local_momentum)
+        self.local_weight_decay = float(local_weight_decay)
+        self.model_initialization = str(model_initialization)
 
     def _get_lr_for_round(self, round_idx: int) -> float:
         """Compute learning rate for the given round with optional scheduling."""
@@ -217,7 +231,12 @@ class InstrumentedFLSimulator(FLSimulator):
         model.load_state_dict(self.model.state_dict())
         model.train()
         current_lr = self._get_lr_for_round(getattr(self, '_current_round_idx', 0))
-        optimizer = optim.SGD(model.parameters(), lr=current_lr, momentum=0.9, weight_decay=1e-4)
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=current_lr,
+            momentum=self.local_momentum,
+            weight_decay=self.local_weight_decay,
+        )
         first_losses: List[float] = []
         tail_losses = deque(maxlen=self.credit_batches)
         last_loss = 0.0
@@ -524,5 +543,14 @@ class InstrumentedFLSimulator(FLSimulator):
                 "tier_power_watts": {"0": 4.0, "1": 7.0, "2": 12.0},
                 "carbon_note": "Per-round carbon is estimated from modeled Wh and the declared grid intensity.",
                 "grid_intensity_g_per_kwh": self.grid_carbon_g_per_kwh,
+            },
+            "training_protocol": {
+                "optimizer": self.local_optimizer,
+                "base_lr": float(self.cfg.lr),
+                "momentum": self.local_momentum,
+                "weight_decay": self.local_weight_decay,
+                "scheduler": self.lr_scheduler or "constant",
+                "warmup_rounds": self.lr_warmup_rounds,
+                "model_initialization": self.model_initialization,
             },
         }

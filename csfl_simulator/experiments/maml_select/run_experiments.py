@@ -1,8 +1,10 @@
 """Run the additive MAML-Select resubmission experiment matrix.
 
-Extended for the revision to include all 8 baselines (FedAvg, FedCS, Oort,
-TiFL, FedCor, CriticalFL, FedGCS, MAML-Select), statistical significance
-tests, and CIFAR-10 reconciliation CSV output.
+Extended for the revision to include seven integrated baselines/selectors
+(FedAvg, FedCS, Oort, TiFL, FedCor approximation, CriticalFL reproduction,
+FedGCS-style approximation) and MAML-Select, statistical significance tests,
+and CIFAR-10 reconciliation CSV output. Exact external reproductions remain
+separately identified.
 """
 from __future__ import annotations
 
@@ -23,7 +25,9 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "configs.yaml"
-DEFAULT_OUTPUT = HERE.parents[2] / "artifacts" / "maml_select_letter"
+REPO_ROOT = HERE.parents[2]
+DEFAULT_OUTPUT = REPO_ROOT / "runs" / "maml_select"
+DEFAULT_ANALYSIS = REPO_ROOT / "artifacts" / "maml_select" / "analysis"
 MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 CRITICALFL_MODULE = "csfl_simulator.experiments.maml_select.criticalfl"
 FEDGCS_MODULE = "csfl_simulator.experiments.maml_select.fedgcs"
@@ -124,8 +128,8 @@ def _register_research_methods(simulator: Any, config: Dict[str, Any], item: Dic
         "research.fedgcs",
         FEDGCS_MODULE,
         params=dict(config.get("fedgcs", {})),
-        display_name="FedGCS (generative)",
-        origin="FedGCS IJCAI 2024 approximation",
+        display_name="FedGCS-style (approx.)",
+        origin="disclosed in-simulator FedGCS-style approximation; not the official IJCAI code",
     )
     if item["method_key"].startswith("research.maml_select."):
         params = dict(config["maml_select"])
@@ -205,6 +209,11 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
         cifar10_augment=bool(item["scenario"].get("cifar10_augment", False)),
         lr_scheduler=item["scenario"].get("lr_scheduler"),
         lr_warmup_rounds=int(item["scenario"].get("lr_warmup_rounds", 0)),
+        local_optimizer=config["local_training"]["optimizer"],
+        local_momentum=float(config["local_training"]["momentum"]),
+        local_weight_decay=float(config["local_training"]["weight_decay"]),
+        model_initialization=config["local_training"]["model_initialization"],
+        scratch_root=output_dir / "_scratch",
     )
     _register_research_methods(simulator, config, item)
     simulator.setup()
@@ -239,6 +248,8 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
         "method_label": item["method_label"],
         "method_params": item["method_params"],
         "seed": item["seed"],
+        "training_protocol": config["local_training"],
+        "maml_select_protocol": config["maml_select"],
         "hardware_energy": hardware_energy,
         "simulation": simulation,
         "seed_record": seed_record.to_dict(),
@@ -291,7 +302,8 @@ def _compute_aggregate_stats(statuses: List[Dict], config: Dict, args: argparse.
         return
 
     df = pd.DataFrame(rows)
-    output_dir = args.output_dir
+    output_dir = args.analysis_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Summary table: mean ± std ---
     summary = df.groupby(["experiment_id", "scenario_name", "method_key"]).agg(
@@ -365,6 +377,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", action="append", type=int, dest="seeds")
     parser.add_argument("--device", default="auto", help="Simulator device, for example cuda or cpu.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--analysis-dir", type=Path, default=DEFAULT_ANALYSIS)
     parser.add_argument("--country-iso-code", default="IND", help="Three-letter ISO code for CodeCarbon offline mode.")
     parser.add_argument("--grid-intensity", type=float, default=475.0, help="Declared grid intensity in gCO2eq/kWh.")
     parser.add_argument("--credit-batches", type=int, default=1)
@@ -386,6 +399,7 @@ def main() -> None:
     config = _load(args.config)
     matrix = build_matrix(config, args.profile, args.only, args.seeds)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    args.analysis_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": 2,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -395,6 +409,8 @@ def main() -> None:
         "declared_grid_intensity_g_per_kwh": args.grid_intensity,
         "hardware_meter_enabled": not args.no_hardware_meter,
         "verified_hardware_telemetry": args.verified_hardware_telemetry,
+        "training_protocol": config["local_training"],
+        "maml_select_protocol": config["maml_select"],
         "matrix": matrix,
     }
     _dump(manifest, args.output_dir / f"manifest_{args.profile}.json")

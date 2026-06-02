@@ -26,10 +26,16 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 DEVICE="${DEVICE:-cuda}"
 COUNTRY_ISO="${COUNTRY_ISO:-IND}"
 GRID_INTENSITY="${GRID_INTENSITY:-475}"
+VERIFIED_HARDWARE_TELEMETRY="${VERIFIED_HARDWARE_TELEMETRY:-0}"
+TELEMETRY_ARGS=()
+if [[ "${VERIFIED_HARDWARE_TELEMETRY}" == "1" ]]; then
+    TELEMETRY_ARGS+=(--verified-hardware-telemetry)
+fi
+FAILED_STEP_COUNT=0
 
 # Output directories
-RUNS_DIR="${REPO_ROOT}/runs/maml_select"
-ARTIFACTS_DIR="${REPO_ROOT}/artifacts/maml_select"
+RUNS_DIR="${RUNS_DIR:-${REPO_ROOT}/runs/maml_select}"
+ARTIFACTS_DIR="${ARTIFACTS_DIR:-${REPO_ROOT}/artifacts/maml_select}"
 LOG_DIR="${RUNS_DIR}/logs"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_FILE="${LOG_DIR}/campaign_${TIMESTAMP}.log"
@@ -65,6 +71,7 @@ run_step() {
         log "  ✓ ${name} [$(elapsed $t0)]"
     else
         log "  ✗ FAILED: ${name} (exit $?) [$(elapsed $t0)] — continuing"
+        FAILED_STEP_COUNT=$((FAILED_STEP_COUNT + 1))
     fi
 }
 
@@ -78,6 +85,7 @@ log "  Runs →      ${RUNS_DIR}/"
 log "  Artifacts → ${ARTIFACTS_DIR}/"
 log "  Device:     ${DEVICE}"
 log "  Grid:       ${GRID_INTENSITY} gCO2eq/kWh (${COUNTRY_ISO})"
+log "  Verified hardware telemetry: ${VERIFIED_HARDWARE_TELEMETRY}"
 
 cd "${REPO_ROOT}"
 
@@ -107,7 +115,7 @@ run_step "Quick validation (12 rounds, 1 seed)" \
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Core Benchmarks: Fashion-MNIST + CIFAR-10
-#   200 rounds × 3 seeds × 8 methods → paired t-tests, CIs, effect sizes
+#   200 rounds × 3 seeds × 8 integrated loops → paired t-tests, CIs, effect sizes
 #   Reviewer 1.6, 2.5, 2.6, 2.11, 3.4, 3.5
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -117,7 +125,7 @@ run_step "Core benchmarks (main_benchmarks + cifar10_reconciled)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
     --profile core --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
     --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry --resume
+    ${TELEMETRY_ARGS[@]+"${TELEMETRY_ARGS[@]}"} --resume
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — Energy-to-Target
@@ -131,7 +139,7 @@ run_step "Energy-to-target experiments" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
     --profile energy --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
     --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry --resume
+    ${TELEMETRY_ARGS[@]+"${TELEMETRY_ARGS[@]}"} --resume
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 3 — Lambda (λ) Sensitivity Sweep
@@ -147,10 +155,7 @@ run_step "Lambda sensitivity (experiment matrix)" \
     --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
     --only lambda_sensitivity --resume
 
-run_step "Lambda sensitivity (standalone CSV)" \
-    "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_sensitivity \
-    --device "${DEVICE}" --seeds 42 123 2026 \
-    --output-dir "${RUNS_DIR}/sensitivity"
+log "  Sensitivity CSV will be derived from the matrix results during plot generation."
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — Feature Ablation (6 state features)
@@ -166,10 +171,7 @@ run_step "Feature ablation (experiment matrix)" \
     --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
     --only feature_ablation --resume
 
-run_step "Feature ablation (standalone CSV)" \
-    "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_ablation \
-    --device "${DEVICE}" --seeds 42 123 2026 \
-    --output-dir "${RUNS_DIR}/ablation"
+log "  Ablation CSV will be derived from the matrix results during plot generation."
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — Extended Matrix: Heterogeneity + Scaling (N=20,40,80,100)
@@ -184,7 +186,7 @@ run_step "Full extended matrix (heterogeneity + scaling)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
     --profile full --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
     --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry --resume
+    ${TELEMETRY_ARGS[@]+"${TELEMETRY_ARGS[@]}"} --resume
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 6 — Selection Overhead / Time Complexity (N=20,40,80,100)
@@ -225,6 +227,12 @@ run_step "Publication plots (EPS)" \
     --ablation-dir "${RUNS_DIR}/ablation" \
     --scaling-dir "${RUNS_DIR}/scaling"
 
+if (( FAILED_STEP_COUNT > 0 )); then
+    section "CAMPAIGN FINISHED WITH ${FAILED_STEP_COUNT} FAILED STEP(S)"
+    log "Inspect ${LOG_FILE}, then rerun this script. Completed experiment results will be resumed."
+    exit 1
+fi
+
 # ═════════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═════════════════════════════════════════════════════════════════════════════
@@ -237,12 +245,11 @@ log "  ├── main_benchmarks_fashion_main_maml_select_s42/"
 log "  │   ├── result.json           ← full run output"
 log "  │   ├── round_metrics.jsonl   ← per-round metrics log"
 log "  │   ├── progress.json         ← latest checkpoint"
-log "  │   └── seed_record.json      ← RNG audit trail"
+log "  │   ├── seed_record.json      ← RNG audit trail"
+log "  │   └── _scratch/             ← nested base-simulator audit logs"
 log "  ├── sensitivity/"
-log "  │   ├── sensitivity_results.json"
 log "  │   └── sensitivity_summary.csv"
 log "  ├── ablation/"
-log "  │   ├── ablation_results.json"
 log "  │   └── ablation_summary.csv"
 log "  ├── scaling/"
 log "  │   ├── scaling_results.json"
@@ -256,12 +263,9 @@ log "  │   ├── main_summary.tex"
 log "  │   ├── paired_significance_tests.csv (t-tests + Holm + Cohen's d)"
 log "  │   ├── energy_to_target_summary.csv"
 log "  │   ├── runs.csv"
-log "  │   ├── convergence_fashion_main.eps"
-log "  │   ├── convergence_cifar10_main.eps"
-log "  │   ├── fig2_efficiency_comparison.eps"
-log "  │   ├── hardware_energy_carbon_*.eps"
-log "  │   ├── fairness_*.eps"
-log "  │   └── energy_to_target_*.eps"
+log "  │   ├── cifar10_reconciled_results.csv"
+log "  │   ├── round_metrics.csv"
+log "  │   └── roundwise_main_summary.csv"
 log "  └── plots/"
 log "      ├── fig2_efficiency_fashion_main.eps"
 log "      ├── fig2_efficiency_cifar10_main.eps"
@@ -279,7 +283,7 @@ log "  ✓ R2.6:  Fairness — Jain index, entropy, tier coverage"
 log "  ✓ R2.7:  Energy — CodeCarbon kWh + gCO₂ + modeled client energy"
 log "  ✓ R2.8:  Feature ablation — 6 features × 3 seeds"
 log "  ✓ R2.9:  Fig 2 — high-res EPS, proper fonts, 4-panel layout"
-log "  ✓ R2.11: CriticalFL + FedGCS baselines included (8 total methods)"
+log "  ✓ R2.11: CriticalFL reproduction + disclosed FedGCS-style approximation included"
 log "  ✓ R3.4:  7 baselines (was 1)"
 log "  ✓ R3.5:  Comprehensive simulation results"
 log "  ✓ R4.6:  Clearer Fig 2 with markers + uncertainty bands"

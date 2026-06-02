@@ -11,7 +11,7 @@
 # This script will:
 #   1. Create a Python virtual environment (if not exists)
 #   2. Install the repo + all experiment dependencies
-#   3. Download datasets (Fashion-MNIST, CIFAR-10, CIFAR-100)
+#   3. Download datasets (Fashion-MNIST and CIFAR-10)
 #   4. Verify GPU availability
 #   5. Launch the full experiment campaign inside tmux (or nohup)
 #
@@ -24,6 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 VENV_DIR="${REPO_ROOT}/.venv"
 CAMPAIGN_SCRIPT="${SCRIPT_DIR}/run_full_gpu_campaign.sh"
+VERIFIED_HARDWARE_TELEMETRY="${VERIFIED_HARDWARE_TELEMETRY:-0}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -129,8 +130,8 @@ print_step "PyTorch verified"
 print_header "Step 3/5: Downloading Datasets"
 
 if [[ -f "scripts/download_data.py" ]]; then
-    echo "  Downloading Fashion-MNIST, CIFAR-10, CIFAR-100..."
-    python scripts/download_data.py --datasets fashion-mnist cifar10 cifar100 || {
+    echo "  Downloading Fashion-MNIST and CIFAR-10..."
+    python scripts/download_data.py --datasets fashion-mnist cifar10 || {
         print_warn "download_data.py failed. Datasets will be downloaded on first run by torchvision."
     }
 else
@@ -144,9 +145,6 @@ torchvision.datasets.FashionMNIST(root='./data', train=False, download=True)
 print('  Downloading CIFAR-10...')
 torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
 torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
-print('  Downloading CIFAR-100...')
-torchvision.datasets.CIFAR100(root='./data', train=True, download=True)
-torchvision.datasets.CIFAR100(root='./data', train=False, download=True)
 "
 fi
 print_step "Datasets ready"
@@ -184,13 +182,16 @@ print_step "Dry-run passed"
 
 print_header "Ready to Launch Full Campaign"
 echo ""
-echo -e "  ${BOLD}Estimated total: ~230 simulation runs across 7 phases${NC}"
-echo "  All runs are 200 rounds with 3 seeds (42, 123, 2026)"
+echo -e "  ${BOLD}Campaign: 236 unique 200-round matrix runs, 32 short overhead runs, and 3 quick checks${NC}"
+echo "  Repeated evidence uses seeds 42, 123, and 2026"
 echo "  The campaign is RESUMABLE — re-run if interrupted"
+echo "  Hardware energy is marked measured only when you launch with:"
+echo "    VERIFIED_HARDWARE_TELEMETRY=1 bash csfl_simulator/experiments/maml_select/setup_and_run.sh"
 echo ""
 echo "  Results will be saved to:"
 echo "    ${REPO_ROOT}/runs/maml_select/"
 echo ""
+mkdir -p "${REPO_ROOT}/runs/maml_select/logs"
 
 # Check if tmux is available
 if command -v tmux &>/dev/null; then
@@ -209,7 +210,7 @@ if command -v tmux &>/dev/null; then
 
     # Launch in tmux
     tmux new-session -d -s maml \
-        "source ${VENV_DIR}/bin/activate && bash ${CAMPAIGN_SCRIPT} 2>&1 | tee ${REPO_ROOT}/runs/maml_select/logs/campaign_stdout.log; echo 'Campaign finished. Press Enter to close.'; read"
+        "source ${VENV_DIR}/bin/activate && VERIFIED_HARDWARE_TELEMETRY=${VERIFIED_HARDWARE_TELEMETRY} bash ${CAMPAIGN_SCRIPT} 2>&1 | tee ${REPO_ROOT}/runs/maml_select/logs/campaign_stdout.log; echo 'Campaign finished. Press Enter to close.'; read"
     
     echo ""
     print_step "Campaign launched in tmux session 'maml'"
@@ -236,7 +237,7 @@ else
     fi
 
     NOHUP_LOG="${REPO_ROOT}/runs/maml_select/logs/campaign_nohup.log"
-    nohup bash -c "source ${VENV_DIR}/bin/activate && bash ${CAMPAIGN_SCRIPT}" > "${NOHUP_LOG}" 2>&1 &
+    nohup bash -c "source ${VENV_DIR}/bin/activate && VERIFIED_HARDWARE_TELEMETRY=${VERIFIED_HARDWARE_TELEMETRY} bash ${CAMPAIGN_SCRIPT}" > "${NOHUP_LOG}" 2>&1 &
     CAMPAIGN_PID=$!
     echo "${CAMPAIGN_PID}" > "${REPO_ROOT}/runs/maml_select/logs/campaign.pid"
 

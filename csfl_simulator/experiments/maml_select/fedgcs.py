@@ -19,8 +19,9 @@ space.  At each round the server performs gradient-based optimization in
 latent space to find a selection probability vector that maximises a predicted
 utility objective.  Top-K clients by optimised probability are selected.
 
-Complexity: O(N · d) per round where d is the latent dimension, matching
-the paper's linear scaling claim.
+Complexity: O(N · d) per round where d is the latent dimension. This is the
+complexity of this disclosed approximation, not a claim about the official
+implementation.
 """
 from __future__ import annotations
 
@@ -127,14 +128,14 @@ def _build_features(
     return _zscore(np.asarray(rows, dtype=np.float32))
 
 
-def _seeded_model(seed: int, device: str) -> FedGCSModel:
+def _seeded_model(seed: int, device: str, latent_dim: int) -> FedGCSModel:
     """Initialise model reproducibly without perturbing FL RNG."""
     devices = []
     if str(device).startswith("cuda") and torch.cuda.is_available():
         devices = list(range(torch.cuda.device_count()))
     with torch.random.fork_rng(devices=devices):
         torch.manual_seed(int(seed))
-        return FedGCSModel().to(device)
+        return FedGCSModel(latent_dim=int(latent_dim)).to(device)
 
 
 def select_clients(
@@ -159,7 +160,7 @@ def select_clients(
     dev = str(device or "cpu")
     state = history.get("state", {}).get(STATE_KEY)
     if state is None:
-        model = _seeded_model(selector_seed, dev)
+        model = _seeded_model(selector_seed, dev, latent_dim)
         state = {
             "model": model,
             "optimizer": torch.optim.Adam(model.parameters(), lr=float(lr)),

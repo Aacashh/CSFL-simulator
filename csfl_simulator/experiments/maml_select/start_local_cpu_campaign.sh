@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
-ARTIFACT_DIR="${REPO_ROOT}/artifacts/maml_select_letter"
-LOG_DIR="${ARTIFACT_DIR}/logs"
+RUNS_DIR="${REPO_ROOT}/runs/maml_select"
+ANALYSIS_DIR="${REPO_ROOT}/artifacts/maml_select/analysis"
+LOG_DIR="${RUNS_DIR}/logs"
 LOG_FILE="${LOG_DIR}/full_cpu_200.log"
 PID_FILE="${LOG_DIR}/full_cpu_200.pid"
 LABEL="org.mamlselect.full-cpu-200"
@@ -29,6 +30,8 @@ COMMAND=(
   "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
   --profile full \
   --device cpu \
+  --output-dir "${RUNS_DIR}" \
+  --analysis-dir "${ANALYSIS_DIR}" \
   --country-iso-code IND \
   --grid-intensity 475 \
   --resume \

@@ -14,6 +14,13 @@ defaults:
   track_grad_norm: true
   performance_mode: true
 
+local_training:
+  optimizer: SGD
+  momentum: 0.9
+  weight_decay: 0.0001
+  scheduler: constant
+  model_initialization: pytorch_default
+
 maml_select:
   inner_lr: 0.01
   outer_lr: 0.001
@@ -83,12 +90,6 @@ scenarios:
     eval_every: 5
     report_accuracy_target: 0.88
     stop_on_accuracy_target: true
-  cifar100_large:
-    dataset: CIFAR-100
-    model: ResNet18
-    total_clients: 200
-    clients_per_round: 20
-    rounds: 200
   fashion_alpha_0p1:
     dataset: Fashion-MNIST
     model: LightCNN
@@ -216,5 +217,3 @@ experiments:
     scenarios: [fashion_n20, fashion_n40, fashion_n80, fashion_main]
     methods_from: integrated_methods
     seeds: [42]
-
-

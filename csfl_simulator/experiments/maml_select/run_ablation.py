@@ -21,7 +21,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "configs.yaml"
-DEFAULT_OUTPUT = HERE.parents[2] / "artifacts" / "maml_select_letter" / "ablation"
+DEFAULT_OUTPUT = HERE.parents[2] / "runs" / "maml_select" / "ablation"
 MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 
 ABLATION_VARIANTS = [
@@ -82,6 +82,7 @@ def run_ablation(args: argparse.Namespace) -> None:
                 sim = InstrumentedFLSimulator(
                     SimConfig(**sim_values),
                     report_accuracy_target=scenario.get("report_accuracy_target"),
+                    scratch_root=output_dir / "_scratch",
                 )
                 maml_params = dict(config["maml_select"])
                 maml_params["disabled_features"] = disabled

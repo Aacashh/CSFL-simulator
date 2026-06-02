@@ -34,7 +34,9 @@ except ImportError:
 
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_RESULTS = HERE.parents[2] / "artifacts" / "maml_select_letter"
+REPO_ROOT = HERE.parents[2]
+DEFAULT_RESULTS = REPO_ROOT / "runs" / "maml_select"
+DEFAULT_PLOTS = REPO_ROOT / "artifacts" / "maml_select" / "plots"
 
 # ── Style ────────────────────────────────────────────────────────────────────
 plt.rcParams.update({
@@ -58,9 +60,9 @@ METHOD_META = {
     "system_aware.fedcs":    {"name": "FedCS",      "color": "#F58518", "marker": "s"},
     "system_aware.oort":     {"name": "Oort",       "color": "#54A24B", "marker": "^"},
     "system_aware.tifl":     {"name": "TiFL",       "color": "#E45756", "marker": "D"},
-    "ml.fedcor":             {"name": "FedCor",     "color": "#B279A2", "marker": "v"},
+    "ml.fedcor":             {"name": "FedCor (approx.)", "color": "#B279A2", "marker": "v"},
     "research.criticalfl":   {"name": "CriticalFL", "color": "#9D755D", "marker": "P"},
-    "research.fedgcs":       {"name": "FedGCS",     "color": "#FF9DA7", "marker": "X"},
+    "research.fedgcs":       {"name": "FedGCS-style (approx.)", "color": "#FF9DA7", "marker": "X"},
     "research.maml_select":  {"name": "MAML-Select","color": "#1B9E77", "marker": "*"},
 }
 
@@ -251,19 +253,44 @@ def plot_figure2(payloads: List[Dict], output_dir: Path) -> None:
 
 # ── Plot 2: Lambda Sensitivity (Dual-Axis) ───────────────────────────────────
 
-def plot_lambda_sensitivity(output_dir: Path, sensitivity_dir: Optional[Path] = None) -> None:
+def plot_lambda_sensitivity(
+    payloads: List[Dict],
+    output_dir: Path,
+    sensitivity_dir: Optional[Path] = None,
+) -> None:
     """Dual-axis plot: lambda vs accuracy (left) and lambda vs TFLOPS (right)."""
     data_dir = sensitivity_dir or (output_dir.parent / "sensitivity")
     csv_path = data_dir / "sensitivity_summary.csv"
-    if not csv_path.exists():
-        print(f"  [skip] No sensitivity data at {csv_path}")
-        return
-
     if not HAS_PANDAS:
         print("  [skip] pandas required for sensitivity plot")
         return
 
-    df = pd.read_csv(csv_path)
+    if csv_path.exists():
+        df = pd.read_csv(csv_path)
+    else:
+        rows = []
+        for payload in payloads:
+            if payload.get("experiment_id") != "lambda_sensitivity":
+                continue
+            final = payload["simulation"]["metrics"][-1]
+            rows.append(
+                {
+                    "lambda": float(payload["method_params"]["lambda_latency"]),
+                    "final_accuracy": _float(final.get("accuracy")),
+                    "cum_training_tflops": _float(final.get("cum_training_tflops")),
+                }
+            )
+        if not rows:
+            print(f"  [skip] No sensitivity data at {csv_path}")
+            return
+        df = pd.DataFrame(rows).groupby("lambda").agg(
+            accuracy_mean=("final_accuracy", "mean"),
+            accuracy_std=("final_accuracy", "std"),
+            tflops_mean=("cum_training_tflops", "mean"),
+            tflops_std=("cum_training_tflops", "std"),
+        ).reset_index()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(csv_path, index=False)
 
     fig, ax1 = plt.subplots(figsize=(7, 5))
     ax2 = ax1.twinx()
@@ -302,19 +329,43 @@ def plot_lambda_sensitivity(output_dir: Path, sensitivity_dir: Optional[Path] = 
 
 # ── Plot 3: Feature Ablation Bar Chart ────────────────────────────────────────
 
-def plot_feature_ablation(output_dir: Path, ablation_dir: Optional[Path] = None) -> None:
+def plot_feature_ablation(
+    payloads: List[Dict],
+    output_dir: Path,
+    ablation_dir: Optional[Path] = None,
+) -> None:
     """Bar chart comparing accuracy when specific features are removed."""
     data_dir = ablation_dir or (output_dir.parent / "ablation")
     csv_path = data_dir / "ablation_summary.csv"
-    if not csv_path.exists():
-        print(f"  [skip] No ablation data at {csv_path}")
-        return
-
     if not HAS_PANDAS:
         print("  [skip] pandas required for ablation plot")
         return
 
-    df = pd.read_csv(csv_path)
+    if csv_path.exists():
+        df = pd.read_csv(csv_path)
+    else:
+        rows = []
+        for payload in payloads:
+            if payload.get("experiment_id") != "feature_ablation":
+                continue
+            final = payload["simulation"]["metrics"][-1]
+            rows.append(
+                {
+                    "variant": payload.get("method_label", payload["method_key"]),
+                    "final_accuracy": _float(final.get("accuracy")),
+                    "cum_training_tflops": _float(final.get("cum_training_tflops")),
+                }
+            )
+        if not rows:
+            print(f"  [skip] No ablation data at {csv_path}")
+            return
+        df = pd.DataFrame(rows).groupby("variant").agg(
+            accuracy_mean=("final_accuracy", "mean"),
+            accuracy_std=("final_accuracy", "std"),
+            tflops_mean=("cum_training_tflops", "mean"),
+        ).reset_index()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(csv_path, index=False)
 
     fig, ax = plt.subplots(figsize=(9, 5))
 
@@ -453,8 +504,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS,
                         help="Root directory containing experiment results")
-    parser.add_argument("--output-dir", type=Path, default=None,
-                        help="Output directory for plots (default: results-dir/plots)")
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_PLOTS,
+                        help="Output directory for EPS publication plots")
     parser.add_argument("--sensitivity-dir", type=Path, default=None,
                         help="Directory containing sensitivity_summary.csv")
     parser.add_argument("--ablation-dir", type=Path, default=None,
@@ -466,7 +517,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    output_dir = args.output_dir or args.results_dir / "plots"
+    output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Loading experiment results...")
@@ -479,10 +530,10 @@ def main() -> None:
     plot_figure2(payloads, output_dir)
 
     print("\n[2/5] Lambda Sensitivity")
-    plot_lambda_sensitivity(output_dir, args.sensitivity_dir)
+    plot_lambda_sensitivity(payloads, output_dir, args.sensitivity_dir)
 
     print("\n[3/5] Feature Ablation")
-    plot_feature_ablation(output_dir, args.ablation_dir)
+    plot_feature_ablation(payloads, output_dir, args.ablation_dir)
 
     print("\n[4/5] Fairness & Coverage")
     plot_fairness_coverage(payloads, output_dir)

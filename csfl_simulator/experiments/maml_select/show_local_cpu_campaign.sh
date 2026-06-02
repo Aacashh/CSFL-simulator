@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-ARTIFACT_DIR="${REPO_ROOT}/artifacts/maml_select_letter"
-LOG_DIR="${ARTIFACT_DIR}/logs"
+RUNS_DIR="${REPO_ROOT}/runs/maml_select"
+LOG_DIR="${RUNS_DIR}/logs"
 LOG_FILE="${LOG_DIR}/full_cpu_200.log"
 PID_FILE="${LOG_DIR}/full_cpu_200.pid"
 LABEL="org.mamlselect.full-cpu-200"
@@ -24,18 +24,18 @@ else
   printf 'macOS sleep guard: inactive\n'
 fi
 
-COMPLETED="$(find "${ARTIFACT_DIR}" -mindepth 2 -maxdepth 2 -name result.json -print \
-  | grep -Ec '/(main_benchmarks|lambda_sensitivity|feature_ablation|hardware_energy_to_target|heterogeneity|scaling|larger_benchmark)__' || true)"
-printf 'Completed full-profile results: %s / 174\n' "${COMPLETED}"
+COMPLETED="$(find "${RUNS_DIR}" -mindepth 2 -maxdepth 2 -name result.json -print \
+  | grep -Ec '/(main_benchmarks|lambda_sensitivity|feature_ablation|hardware_energy_to_target|heterogeneity|scaling)__' || true)"
+printf 'Completed full-profile results: %s / 204\n' "${COMPLETED}"
 
-LATEST_ROUND_LOG="$(find "${ARTIFACT_DIR}" -mindepth 2 -maxdepth 2 -name round_metrics.jsonl -print0 2>/dev/null \
+LATEST_ROUND_LOG="$(find "${RUNS_DIR}" -mindepth 2 -maxdepth 2 -name round_metrics.jsonl -print0 2>/dev/null \
   | xargs -0 ls -t 2>/dev/null | head -n 1 || true)"
 if [[ -n "${LATEST_ROUND_LOG}" ]]; then
   ROUND_RECORDS="$(wc -l <"${LATEST_ROUND_LOG}" | tr -d ' ')"
   printf 'Active run round records: %s / 200 (%s)\n' "${ROUND_RECORDS}" "${LATEST_ROUND_LOG}"
 fi
 
-LATEST_PROGRESS="$(find "${ARTIFACT_DIR}" -mindepth 2 -maxdepth 2 -name progress.json -print0 2>/dev/null \
+LATEST_PROGRESS="$(find "${RUNS_DIR}" -mindepth 2 -maxdepth 2 -name progress.json -print0 2>/dev/null \
   | xargs -0 ls -t 2>/dev/null | head -n 1 || true)"
 if [[ -n "${LATEST_PROGRESS}" ]]; then
   printf '\nLatest round checkpoint:\n'

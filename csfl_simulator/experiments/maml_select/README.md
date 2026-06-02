@@ -6,12 +6,12 @@ for the IEEE TAI letter revision:
 
 - repeated runs with paired significance tests;
 - Fashion-MNIST and CIFAR-10 main benchmarks;
-- CIFAR-100 larger-benchmark evaluation;
 - client-count and non-IID scaling analysis;
 - lambda sensitivity and six state-feature ablations;
 - participation fairness, tier selection, computation, communication, modeled
   client energy, hardware compute energy, and estimated carbon emissions;
 - an integrated CriticalFL cohort-augmentation reproduction;
+- a disclosed in-simulator FedGCS-style approximation for controlled loops;
 - a separate bootstrap path for the official FedGCS codebase.
 
 ## Install
@@ -21,7 +21,7 @@ From the repository root:
 ```bash
 pip install -e .
 pip install -r csfl_simulator/experiments/maml_select/requirements.txt
-python scripts/download_data.py --datasets fashion-mnist cifar10 cifar100
+python scripts/download_data.py --datasets fashion-mnist cifar10
 ```
 
 Use a dedicated experiment host with no competing workloads. Keep its GPU power
@@ -52,6 +52,17 @@ support set contains the immediately preceding round's observed client costs,
 as defined in the manuscript.
 
 ## Run
+
+For a fresh workstation clone, the supported one-command workflow is:
+
+```bash
+bash csfl_simulator/experiments/maml_select/setup_and_run.sh
+```
+
+It writes JSON logs under `runs/maml_select/`, CSV and LaTeX analysis tables
+under `artifacts/maml_select/analysis/`, and EPS-only publication figures under
+`artifacts/maml_select/plots/`. Each run may also contain a nested `_scratch/`
+directory for the base simulator's audit logs.
 
 Validate the environment first. This prints the matrix and does not train:
 
@@ -120,12 +131,16 @@ bash csfl_simulator/experiments/maml_select/run_suite.sh \
 python -m csfl_simulator.experiments.maml_select.analyze_results
 ```
 
-The command writes CSV and LaTeX tables, standard deviations, paired tests,
-paired effect sizes, 95% confidence intervals, Holm-adjusted p-values, and
-high-resolution vector EPS figures under `artifacts/maml_select_letter/analysis/`.
-It also exports `round_metrics.csv`, `roundwise_main_summary.csv`, and the
-larger `fig2_efficiency_comparison.eps` replacement figure with uncertainty
-bands. PDF and 600-DPI PNG companions are exported for inspection. Open
+The analysis command writes CSV and LaTeX tables, standard deviations, paired
+tests, paired effect sizes, 95% confidence intervals, and Holm-adjusted
+p-values under `artifacts/maml_select/analysis/`. The plot command writes the
+larger Figure 2 replacement and reviewer-requested plots as EPS files only:
+
+```bash
+python -m csfl_simulator.experiments.maml_select.generate_plots
+```
+
+Open
 `plot_results.ipynb` in JupyterLab for an interactive summary:
 
 ```bash
@@ -158,9 +173,15 @@ energy-to-accuracy comparisons while preserving did-not-reach outcomes.
 
 `research.criticalfl` reproduces CriticalFL's random-base cohort augmentation
 mechanism using relative federated-gradient-norm changes and geometric cohort
-growth. FedGCS uses its official external implementation. Follow
-`official_fedgcs_protocol.md` before adding a direct FedGCS row to the paper.
+growth. `research.fedgcs` is a disclosed FedGCS-style approximation for
+controlled in-simulator comparisons. It is not the official IJCAI
+implementation. Follow `official_fedgcs_protocol.md` before adding a direct
+FedGCS row to the paper.
 
 The integrated FedCor implementation is the repository's existing
 `FedCor (approx.)` selector. Label it as an approximation in plots and use an
 official implementation before making an exact FedCor head-to-head claim.
+
+The practical local overhead sweep uses `N = 20, 40, 80, 100`. It is intended
+to show the observed scaling trend without making the campaign prohibitively
+long.

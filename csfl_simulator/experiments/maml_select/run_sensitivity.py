@@ -20,7 +20,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "configs.yaml"
-DEFAULT_OUTPUT = HERE.parents[2] / "artifacts" / "maml_select_letter" / "sensitivity"
+DEFAULT_OUTPUT = HERE.parents[2] / "runs" / "maml_select" / "sensitivity"
 MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 
 LAMBDA_VALUES = [0.1, 0.5, 1.0, 5.0]
@@ -72,6 +72,7 @@ def run_sensitivity(args: argparse.Namespace) -> None:
                 sim = InstrumentedFLSimulator(
                     SimConfig(**sim_values),
                     report_accuracy_target=scenario.get("report_accuracy_target"),
+                    scratch_root=output_dir / "_scratch",
                 )
                 # Register MAML-Select with this lambda
                 maml_params = dict(config["maml_select"])
