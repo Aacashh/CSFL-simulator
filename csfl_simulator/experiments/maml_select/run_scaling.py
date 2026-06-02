@@ -29,7 +29,7 @@ MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 CRITICALFL_MODULE = "csfl_simulator.experiments.maml_select.criticalfl"
 FEDGCS_MODULE = "csfl_simulator.experiments.maml_select.fedgcs"
 
-CLIENT_POOL_SIZES = [100, 250, 500, 1000]
+CLIENT_POOL_SIZES = [20, 40, 80, 100]
 
 ALL_METHODS = [
     "baseline.fedavg",

@@ -189,7 +189,7 @@ echo "  All runs are 200 rounds with 3 seeds (42, 123, 2026)"
 echo "  The campaign is RESUMABLE — re-run if interrupted"
 echo ""
 echo "  Results will be saved to:"
-echo "    ${REPO_ROOT}/artifacts/maml_select_letter/"
+echo "    ${REPO_ROOT}/runs/maml_select/"
 echo ""
 
 # Check if tmux is available
@@ -209,7 +209,7 @@ if command -v tmux &>/dev/null; then
 
     # Launch in tmux
     tmux new-session -d -s maml \
-        "source ${VENV_DIR}/bin/activate && bash ${CAMPAIGN_SCRIPT} 2>&1 | tee ${REPO_ROOT}/artifacts/maml_select_letter/logs/campaign_stdout.log; echo 'Campaign finished. Press Enter to close.'; read"
+        "source ${VENV_DIR}/bin/activate && bash ${CAMPAIGN_SCRIPT} 2>&1 | tee ${REPO_ROOT}/runs/maml_select/logs/campaign_stdout.log; echo 'Campaign finished. Press Enter to close.'; read"
     
     echo ""
     print_step "Campaign launched in tmux session 'maml'"
@@ -220,7 +220,7 @@ if command -v tmux &>/dev/null; then
     echo "  To detach (leave running): Ctrl+B then D"
     echo ""
     echo "  To check progress without attaching:"
-    echo "    find ${REPO_ROOT}/artifacts/maml_select_letter -name 'progress.json' -newer /tmp/.campaign_start 2>/dev/null | wc -l"
+    echo "    find ${REPO_ROOT}/runs/maml_select -name 'progress.json' -newer /tmp/.campaign_start 2>/dev/null | wc -l"
     echo ""
 else
     echo -e "  ${YELLOW}tmux not found — using nohup instead${NC}"
@@ -235,10 +235,10 @@ else
         exit 0
     fi
 
-    NOHUP_LOG="${REPO_ROOT}/artifacts/maml_select_letter/logs/campaign_nohup.log"
+    NOHUP_LOG="${REPO_ROOT}/runs/maml_select/logs/campaign_nohup.log"
     nohup bash -c "source ${VENV_DIR}/bin/activate && bash ${CAMPAIGN_SCRIPT}" > "${NOHUP_LOG}" 2>&1 &
     CAMPAIGN_PID=$!
-    echo "${CAMPAIGN_PID}" > "${REPO_ROOT}/artifacts/maml_select_letter/logs/campaign.pid"
+    echo "${CAMPAIGN_PID}" > "${REPO_ROOT}/runs/maml_select/logs/campaign.pid"
 
     echo ""
     print_step "Campaign launched in background (PID: ${CAMPAIGN_PID})"
@@ -253,14 +253,14 @@ fi
 
 echo "  ═══════════════════════════════════════════════════════════════"
 echo "  After the campaign completes, find all results at:"
-echo "    ${REPO_ROOT}/artifacts/maml_select_letter/"
+echo "    ${REPO_ROOT}/runs/maml_select/"
 echo ""
 echo "  Key files to collect:"
-echo "    analysis/paired_significance_tests.csv"
-echo "    analysis/main_summary.csv"
-echo "    analysis/energy_to_target_summary.csv"
-echo "    plots/*.eps"
-echo "    ablation/ablation_summary.csv"
-echo "    sensitivity/sensitivity_summary.csv"
-echo "    scaling/scaling_pivot.csv"
+echo "    analysis/paired_significance_tests.csv   (artifacts/)"
+echo "    analysis/main_summary.csv                  (artifacts/)"
+echo "    analysis/energy_to_target_summary.csv       (artifacts/)"
+echo "    plots/*.eps                                 (artifacts/)"
+echo "    sensitivity/sensitivity_summary.csv          (runs/)"
+echo "    ablation/ablation_summary.csv                (runs/)"
+echo "    scaling/scaling_pivot.csv                    (runs/)"
 echo "  ═══════════════════════════════════════════════════════════════"

@@ -31,6 +31,16 @@ EXPERIMENT_ONLY_SCENARIO_FIELDS = {
     "report_accuracy_target", "stop_on_accuracy_target",
     "cifar10_augment", "lr_scheduler", "lr_warmup_rounds",
 }
+_METHOD_SHORT = {
+    "baseline.fedavg": "fedavg",
+    "system_aware.fedcs": "fedcs",
+    "system_aware.oort": "oort",
+    "system_aware.tifl": "tifl",
+    "ml.fedcor": "fedcor",
+    "research.criticalfl": "criticalfl",
+    "research.fedgcs": "fedgcs",
+    "research.maml_select": "maml_select",
+}
 
 
 def _slug(value: str) -> str:
@@ -146,7 +156,8 @@ def _sim_config(item: Dict[str, Any], device: str) -> Any:
 
 
 def _run_label(item: Dict[str, Any]) -> str:
-    return _slug(f"{item['experiment_id']}__{item['scenario_name']}__{item['method_key']}__seed_{item['seed']}")
+    method_short = _METHOD_SHORT.get(item["method_key"], _slug(item["method_key"]))
+    return f"{item['experiment_id']}_{item['scenario_name']}_{method_short}_s{item['seed']}"
 
 
 def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:

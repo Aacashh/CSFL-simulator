@@ -3,44 +3,40 @@
 # MAML-Select Full GPU Experiment Campaign
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Master script to run ALL experiments needed for the IEEE TAI letter revision.
-# Designed for an NVIDIA GPU workstation. Produces evidence for every reviewer
-# concern: energy, statistical significance, ablation, sensitivity, scaling,
-# heterogeneity, and fairness.
+# Master script for IEEE TAI letter revision experiments.
+# Designed for an NVIDIA GPU workstation with no remote access.
+#
+# Directory layout:
+#   runs/maml_select/          ← All JSON result logs (per-run directories)
+#   artifacts/maml_select/     ← Publication plots, analysis tables, CSVs
 #
 # Usage:
-#   chmod +x run_full_gpu_campaign.sh
 #   nohup bash run_full_gpu_campaign.sh 2>&1 | tee campaign.log &
+#   OR: tmux new -s maml → bash run_full_gpu_campaign.sh
 #
-# Or with tmux/screen:
-#   tmux new -s maml
-#   bash run_full_gpu_campaign.sh
-#
-# To resume after interruption (all sub-commands use --resume):
-#   bash run_full_gpu_campaign.sh
-#
+# Fully resumable: re-run after any interruption.
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-# ── Configuration ────────────────────────────────────────────────────────────
+# ── Paths ────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 DEVICE="${DEVICE:-cuda}"
 COUNTRY_ISO="${COUNTRY_ISO:-IND}"
-GRID_INTENSITY="${GRID_INTENSITY:-475}"  # gCO2eq/kWh for Indian grid
-SEEDS="42 123 2026"                      # Three seeds for statistical tests
+GRID_INTENSITY="${GRID_INTENSITY:-475}"
 
 # Output directories
-ARTIFACT_DIR="${REPO_ROOT}/artifacts/maml_select_letter"
-LOG_DIR="${ARTIFACT_DIR}/logs"
+RUNS_DIR="${REPO_ROOT}/runs/maml_select"
+ARTIFACTS_DIR="${REPO_ROOT}/artifacts/maml_select"
+LOG_DIR="${RUNS_DIR}/logs"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-LOG_FILE="${LOG_DIR}/full_gpu_campaign_${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/campaign_${TIMESTAMP}.log"
 
-mkdir -p "${LOG_DIR}"
+mkdir -p "${LOG_DIR}" "${ARTIFACTS_DIR}"
 
-# ── Helper Functions ─────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -49,286 +45,243 @@ log() {
 }
 
 section() {
-    local border="═══════════════════════════════════════════════════════════════"
     log ""
-    log "${border}"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log "  $*"
-    log "${border}"
+    log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
-check_gpu() {
-    if ! command -v nvidia-smi &>/dev/null; then
-        log "[WARN] nvidia-smi not found. Make sure NVIDIA drivers are installed."
-        log "[WARN] Falling back to DEVICE=cpu"
-        DEVICE="cpu"
-    else
-        log "GPU Info:"
-        nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>&1 | while read -r line; do
-            log "  $line"
-        done
-    fi
-}
-
-check_deps() {
-    log "Checking Python and dependencies..."
-    "${PYTHON_BIN}" -c "import torch; print(f'PyTorch {torch.__version__}, CUDA available: {torch.cuda.is_available()}')" 2>&1 | while read -r line; do
-        log "  $line"
-    done
-    "${PYTHON_BIN}" -c "import codecarbon; print(f'CodeCarbon {codecarbon.__version__}')" 2>&1 | while read -r line; do
-        log "  $line"
-    done || log "  [WARN] CodeCarbon not installed. Energy tracking will be unavailable."
-    "${PYTHON_BIN}" -c "import scipy; print(f'SciPy {scipy.__version__}')" 2>&1 | while read -r line; do
-        log "  $line"
-    done
-    "${PYTHON_BIN}" -c "import pandas; print(f'Pandas {pandas.__version__}')" 2>&1 | while read -r line; do
-        log "  $line"
-    done
-}
-
-elapsed_time() {
-    local start=$1
-    local end=$(date +%s)
-    local duration=$((end - start))
-    local hours=$((duration / 3600))
-    local minutes=$(( (duration % 3600) / 60 ))
-    local seconds=$((duration % 60))
-    printf '%02d:%02d:%02d' $hours $minutes $seconds
+elapsed() {
+    local dur=$(( $(date +%s) - $1 ))
+    printf '%02d:%02d:%02d' $((dur/3600)) $(((dur%3600)/60)) $((dur%60))
 }
 
 run_step() {
-    # Run a step and track timing. On failure, log but continue.
-    local step_name="$1"
-    shift
-    local step_start=$(date +%s)
-    log "  Starting: ${step_name}"
-    log "  Command:  $*"
-
+    local name="$1"; shift
+    local t0=$(date +%s)
+    log "  ▶ ${name}"
+    log "    cmd: $*"
     if "$@" >> "${LOG_FILE}" 2>&1; then
-        log "  ✓ Completed: ${step_name} [$(elapsed_time $step_start)]"
+        log "  ✓ ${name} [$(elapsed $t0)]"
     else
-        local exit_code=$?
-        log "  ✗ FAILED: ${step_name} (exit code ${exit_code}) [$(elapsed_time $step_start)]"
-        log "  Continuing to next step..."
+        log "  ✗ FAILED: ${name} (exit $?) [$(elapsed $t0)] — continuing"
     fi
 }
 
-# ── Pre-Flight Checks ───────────────────────────────────────────────────────
+# ── Pre-flight ───────────────────────────────────────────────────────────────
 
 CAMPAIGN_START=$(date +%s)
 
-section "MAML-Select Full GPU Campaign"
-log "Timestamp: ${TIMESTAMP}"
-log "Repo root: ${REPO_ROOT}"
-log "Device:    ${DEVICE}"
-log "Country:   ${COUNTRY_ISO}"
-log "Grid:      ${GRID_INTENSITY} gCO2eq/kWh"
-log "Seeds:     ${SEEDS}"
-log "Log file:  ${LOG_FILE}"
-log ""
+section "MAML-Select GPU Campaign — ${TIMESTAMP}"
+log "  Repo:       ${REPO_ROOT}"
+log "  Runs →      ${RUNS_DIR}/"
+log "  Artifacts → ${ARTIFACTS_DIR}/"
+log "  Device:     ${DEVICE}"
+log "  Grid:       ${GRID_INTENSITY} gCO2eq/kWh (${COUNTRY_ISO})"
 
 cd "${REPO_ROOT}"
-check_gpu
-check_deps
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 0: Quick Validation (sanity check the environment)
-# ═══════════════════════════════════════════════════════════════════════════════
+if command -v nvidia-smi &>/dev/null; then
+    nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader 2>&1 | while read -r line; do log "  GPU: $line"; done
+else
+    log "  [WARN] No nvidia-smi found. Using DEVICE=cpu"
+    DEVICE="cpu"
+fi
 
-section "PHASE 0: Quick Validation (dry-run + short training)"
+"${PYTHON_BIN}" -c "import torch; print(f'  PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}')" 2>&1 | while read -r line; do log "$line"; done
 
-run_step "Dry-run matrix check" \
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 0 — Quick Sanity Check
+# ═════════════════════════════════════════════════════════════════════════════
+
+section "PHASE 0: Quick Sanity Check"
+
+run_step "Dry-run (print experiment matrix)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile quick --device "${DEVICE}" --dry-run
+    --profile quick --device "${DEVICE}" --output-dir "${RUNS_DIR}" --dry-run
 
-run_step "Quick validation run (12 rounds)" \
+run_step "Quick validation (12 rounds, 1 seed)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile quick --device "${DEVICE}" \
+    --profile quick --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
     --no-hardware-meter --resume
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 1: Core Benchmarks (200 rounds × 3 seeds × 8 methods × 2 datasets)
-#           Addresses: Reviewer accuracy claims, statistical significance
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 1 — Core Benchmarks: Fashion-MNIST + CIFAR-10
+#   200 rounds × 3 seeds × 8 methods → paired t-tests, CIs, effect sizes
+#   Reviewer 1.6, 2.5, 2.6, 2.11, 3.4, 3.5
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 1: Core Benchmarks (Fashion-MNIST + CIFAR-10, 200 rounds)"
-log "  This is the primary evidence for the paper."
-log "  Runs all 8 methods with 3 seeds for paired t-tests."
+section "PHASE 1: Core Benchmarks (Fashion-MNIST + CIFAR-10, 200 rounds, 3 seeds)"
 
 run_step "Core benchmarks (main_benchmarks + cifar10_reconciled)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile core --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry \
-    --resume
+    --profile core --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
+    --verified-hardware-telemetry --resume
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 2: Energy Experiments
-#           Addresses: Reviewer concerns on energy consumption & carbon
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 2 — Energy-to-Target
+#   Runs until accuracy target or round cap; measures hardware energy + carbon
+#   Reviewer 2.7 (energy claims)
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 2: Energy-to-Target Experiments"
-log "  Runs until accuracy target is reached or round cap."
-log "  Produces modeled client energy AND measured hardware energy."
-log "  Covers both Fashion-MNIST (70% target) and CIFAR-10 (88% target)."
+section "PHASE 2: Energy-to-Target (Fashion 70%, CIFAR-10 88%)"
 
-run_step "Energy-to-target (fashion + cifar10)" \
+run_step "Energy-to-target experiments" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile energy --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry \
-    --resume
+    --profile energy --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
+    --verified-hardware-telemetry --resume
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 3: Lambda Sensitivity Analysis
-#           Addresses: Reviewer concern on hyperparameter sensitivity
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 3 — Lambda (λ) Sensitivity Sweep
+#   λ ∈ {0.1, 0.5, 1.0, 5.0} × 3 seeds
+#   Reviewer 2.3 (lambda selection justification)
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 3: Lambda Sensitivity Sweep"
-log "  Tests lambda ∈ {0.1, 0.5, 1.0, 5.0} with 3 seeds each."
-log "  Shows accuracy–efficiency trade-off is robust."
+section "PHASE 3: Lambda Sensitivity (λ=0.1, 0.5, 1.0, 5.0)"
 
-# Run via the integrated experiment matrix (includes lambda_sensitivity)
-run_step "Lambda sensitivity (via experiment matrix)" \
+run_step "Lambda sensitivity (experiment matrix)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile core --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
-    --only lambda_sensitivity \
-    --resume
+    --profile core --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
+    --only lambda_sensitivity --resume
 
-# Also run the standalone sensitivity script for dedicated output
-run_step "Lambda sensitivity (standalone)" \
+run_step "Lambda sensitivity (standalone CSV)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_sensitivity \
-    --device "${DEVICE}" --seeds ${SEEDS}
+    --device "${DEVICE}" --seeds 42 123 2026 \
+    --output-dir "${RUNS_DIR}/sensitivity"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 4: Feature Ablation Study
-#           Addresses: Reviewer concern on feature importance
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 4 — Feature Ablation (6 state features)
+#   Each feature removed × 3 seeds
+#   Reviewer 2.8 (feature justification)
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 4: Feature Ablation Study"
-log "  Removes each of the 6 state features individually."
-log "  Demonstrates that all features contribute to the meta-policy."
+section "PHASE 4: Feature Ablation (loss, grad_norm, latency, battery, frequency, staleness)"
 
-# Run via the integrated experiment matrix
-run_step "Feature ablation (via experiment matrix)" \
+run_step "Feature ablation (experiment matrix)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile core --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
-    --only feature_ablation \
-    --resume
+    --profile core --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
+    --only feature_ablation --resume
 
-# Also run the standalone ablation script for dedicated CSV output
-run_step "Feature ablation (standalone)" \
+run_step "Feature ablation (standalone CSV)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_ablation \
-    --device "${DEVICE}" --seeds ${SEEDS}
+    --device "${DEVICE}" --seeds 42 123 2026 \
+    --output-dir "${RUNS_DIR}/ablation"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 5: Full Extended Reviewer Matrix
-#           Addresses: heterogeneity sweep, larger benchmark, and full scaling
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 5 — Extended Matrix: Heterogeneity + Scaling (N=20,40,80,100)
+#   Non-IID sweep: α ∈ {0.1, 0.5, 1.0}
+#   Client scaling: N ∈ {20, 40, 80, 100}
+#   Reviewer 2.4 (scalability), 2.6 (fairness)
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 5: Extended Reviewer Matrix (full profile)"
-log "  Includes:"
-log "    - Heterogeneity sweep (alpha = 0.1, 0.5, 1.0)"
-log "    - Client-count scaling (N = 50, 100, 200, 500)"
-log "    - CIFAR-100 larger benchmark (N=200, K=20)"
-log "    - All main benchmarks (if not already completed)"
+section "PHASE 5: Extended Matrix (heterogeneity + scaling)"
 
-run_step "Full extended matrix" \
+run_step "Full extended matrix (heterogeneity + scaling)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile full --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
-    --verified-hardware-telemetry \
-    --resume
+    --profile full --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
+    --verified-hardware-telemetry --resume
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 6: Selection Overhead Scaling
-#           Addresses: Reviewer concern on O(N) vs O(N³) complexity
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 6 — Selection Overhead / Time Complexity (N=20,40,80,100)
+#   Proves MAML-Select O(N·|φ|) vs FedCor O(N³)
+#   Reviewer 2.1 (computational complexity)
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 6: Selection Overhead Scaling Benchmark"
-log "  Measures wall-clock selection time at N = 100, 250, 500, 1000."
-log "  Demonstrates MAML-Select's O(N·|φ|) linear scaling."
+section "PHASE 6: Time Complexity (N=20, 40, 80, 100)"
 
-run_step "Scaling overhead (short runs)" \
+run_step "Scaling overhead benchmark (10 rounds per N)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_scaling \
-    --device "${DEVICE}" --rounds 10
+    --device "${DEVICE}" --rounds 10 \
+    --output-dir "${RUNS_DIR}/scaling"
 
-# Also run via experiment matrix for full scaling experiments (200 rounds)
-run_step "Scaling overhead (full 200 rounds via matrix)" \
+run_step "Scaling overhead (200 rounds via matrix)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.run_experiments \
-    --profile scaling --device "${DEVICE}" \
-    --country-iso-code "${COUNTRY_ISO}" \
-    --grid-intensity "${GRID_INTENSITY}" \
+    --profile scaling --device "${DEVICE}" --output-dir "${RUNS_DIR}" \
+    --country-iso-code "${COUNTRY_ISO}" --grid-intensity "${GRID_INTENSITY}" \
     --resume
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 7: Analysis & Visualization
-#           Generates all tables, statistical tests, and publication plots
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 7 — Analysis & Plot Generation
+#   All output goes to artifacts/maml_select/
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "PHASE 7: Analysis & Visualization"
-log "  Aggregating results, computing statistics, generating plots..."
+section "PHASE 7: Analysis & Plots → artifacts/"
 
-run_step "Analyze results (CSV, LaTeX, paired t-tests, Holm correction, CIs)" \
+run_step "Statistical analysis (CSV, LaTeX, paired t-tests, Holm, CIs)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.analyze_results \
-    --results-dir "${ARTIFACT_DIR}"
+    --results-dir "${RUNS_DIR}" \
+    --output-dir "${ARTIFACTS_DIR}/analysis"
 
-run_step "Generate publication EPS plots" \
+run_step "Publication plots (EPS)" \
     "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.generate_plots \
-    --results-dir "${ARTIFACT_DIR}"
+    --results-dir "${RUNS_DIR}" \
+    --output-dir "${ARTIFACTS_DIR}/plots" \
+    --sensitivity-dir "${RUNS_DIR}/sensitivity" \
+    --ablation-dir "${RUNS_DIR}/ablation" \
+    --scaling-dir "${RUNS_DIR}/scaling"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CAMPAIGN SUMMARY
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
+# SUMMARY
+# ═════════════════════════════════════════════════════════════════════════════
 
-section "CAMPAIGN COMPLETE"
-log "Total campaign time: $(elapsed_time $CAMPAIGN_START)"
+section "CAMPAIGN COMPLETE — $(elapsed $CAMPAIGN_START)"
 log ""
-log "Output directories:"
-log "  Results:    ${ARTIFACT_DIR}/"
-log "  Analysis:   ${ARTIFACT_DIR}/analysis/"
-log "  Plots:      ${ARTIFACT_DIR}/plots/"
-log "  Ablation:   ${ARTIFACT_DIR}/ablation/"
-log "  Sensitivity:${ARTIFACT_DIR}/sensitivity/"
-log "  Scaling:    ${ARTIFACT_DIR}/scaling/"
-log "  Logs:       ${LOG_DIR}/"
+log "Directory layout:"
+log "  runs/maml_select/"
+log "  ├── main_benchmarks_fashion_main_maml_select_s42/"
+log "  │   ├── result.json           ← full run output"
+log "  │   ├── round_metrics.jsonl   ← per-round metrics log"
+log "  │   ├── progress.json         ← latest checkpoint"
+log "  │   └── seed_record.json      ← RNG audit trail"
+log "  ├── sensitivity/"
+log "  │   ├── sensitivity_results.json"
+log "  │   └── sensitivity_summary.csv"
+log "  ├── ablation/"
+log "  │   ├── ablation_results.json"
+log "  │   └── ablation_summary.csv"
+log "  ├── scaling/"
+log "  │   ├── scaling_results.json"
+log "  │   └── scaling_pivot.csv"
+log "  └── logs/"
 log ""
-log "Key outputs for the manuscript:"
-log "  ├── analysis/main_summary.csv              (Table 1: mean±std, all methods)"
-log "  ├── analysis/main_summary.tex              (LaTeX version)"
-log "  ├── analysis/paired_significance_tests.csv  (paired t-tests + Holm + Cohen's d)"
-log "  ├── analysis/energy_to_target_summary.csv   (energy-to-accuracy evidence)"
-log "  ├── analysis/convergence_fashion_main.eps   (convergence curves)"
-log "  ├── analysis/convergence_cifar10_main.eps   (convergence curves)"
-log "  ├── analysis/fig2_efficiency_comparison.eps  (4-panel efficiency figure)"
-log "  ├── analysis/hardware_energy_carbon_*.eps    (measured energy + emissions)"
-log "  ├── analysis/fairness_*.eps                  (Jain index + entropy)"
-log "  ├── plots/fig2_efficiency_*.eps              (standalone efficiency plots)"
-log "  ├── plots/lambda_sensitivity.eps             (λ sweep dual-axis)"
-log "  ├── plots/feature_ablation.eps               (ablation bar chart)"
-log "  ├── plots/fairness_coverage_tiers.eps        (tier selection stacked bars)"
-log "  ├── plots/scaling_overhead.eps               (O(N) vs O(N³) line plot)"
-log "  ├── sensitivity/sensitivity_summary.csv      (λ sensitivity data)"
-log "  ├── ablation/ablation_summary.csv            (feature ablation data)"
-log "  └── scaling/scaling_pivot.csv                (overhead scaling data)"
+log "  artifacts/maml_select/"
+log "  ├── analysis/"
+log "  │   ├── main_summary.csv             (Table 1)"
+log "  │   ├── main_summary.tex"
+log "  │   ├── paired_significance_tests.csv (t-tests + Holm + Cohen's d)"
+log "  │   ├── energy_to_target_summary.csv"
+log "  │   ├── runs.csv"
+log "  │   ├── convergence_fashion_main.eps"
+log "  │   ├── convergence_cifar10_main.eps"
+log "  │   ├── fig2_efficiency_comparison.eps"
+log "  │   ├── hardware_energy_carbon_*.eps"
+log "  │   ├── fairness_*.eps"
+log "  │   └── energy_to_target_*.eps"
+log "  └── plots/"
+log "      ├── fig2_efficiency_fashion_main.eps"
+log "      ├── fig2_efficiency_cifar10_main.eps"
+log "      ├── lambda_sensitivity.eps"
+log "      ├── feature_ablation.eps"
+log "      ├── fairness_coverage_tiers.eps"
+log "      └── scaling_overhead.eps"
 log ""
-log "Reviewer Evidence Checklist:"
-log "  ✓ Statistical significance: paired t-tests, 95% CIs, Holm correction"
-log "  ✓ Energy analysis: modeled client energy + CodeCarbon hardware energy"
-log "  ✓ Carbon emissions: declared grid intensity × measured kWh"
-log "  ✓ Hyperparameter sensitivity: λ ∈ {0.1, 0.5, 1.0, 5.0}"
-log "  ✓ Feature ablation: 6 features × 3 seeds"
-log "  ✓ Non-IID robustness: α ∈ {0.1, 0.5, 1.0}"
-log "  ✓ Client scaling: N ∈ {50, 100, 200, 500}"
-log "  ✓ Selection overhead: O(N·|φ|) vs O(N³)"
-log "  ✓ Fairness: Jain index, utilization entropy, tier coverage"
-log "  ✓ Larger benchmark: CIFAR-100 with N=200, K=20"
-log "  ✓ Convergence: round-level accuracy with ±σ bands"
+log "Reviewer evidence produced:"
+log "  ✓ R1: Implementation details (seed_record.json, configs logged)"
+log "  ✓ R2.3:  λ sensitivity — 4 values × 3 seeds"
+log "  ✓ R2.4:  Scaling — N ∈ {20, 40, 80, 100}"
+log "  ✓ R2.5:  Statistical significance — paired t-tests, 95% CIs, Holm"
+log "  ✓ R2.6:  Fairness — Jain index, entropy, tier coverage"
+log "  ✓ R2.7:  Energy — CodeCarbon kWh + gCO₂ + modeled client energy"
+log "  ✓ R2.8:  Feature ablation — 6 features × 3 seeds"
+log "  ✓ R2.9:  Fig 2 — high-res EPS, proper fonts, 4-panel layout"
+log "  ✓ R2.11: CriticalFL + FedGCS baselines included (8 total methods)"
+log "  ✓ R3.4:  7 baselines (was 1)"
+log "  ✓ R3.5:  Comprehensive simulation results"
+log "  ✓ R4.6:  Clearer Fig 2 with markers + uncertainty bands"
 log ""
-log "Done! Review the log at: ${LOG_FILE}"
+log "Log: ${LOG_FILE}"
