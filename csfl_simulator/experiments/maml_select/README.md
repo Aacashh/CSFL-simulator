@@ -26,6 +26,10 @@ python scripts/download_data.py --datasets fashion-mnist cifar10 cifar100
 
 Use a dedicated experiment host with no competing workloads. Keep its GPU power
 cap, software environment, and declared grid intensity fixed across methods.
+Run `codecarbon detect` before collecting hardware evidence. Add
+`--verified-hardware-telemetry` only after confirming that the host exposes real
+telemetry. On Apple Silicon, CodeCarbon uses `powermetrics`, which requires
+`sudo`; otherwise it falls back to an estimate.
 
 ## Reproducibility Defaults
 
@@ -37,6 +41,16 @@ Client compute rates follow the declared `20% / 50% / 30%` tier split at
 initialization, one inner gradient-descent step at `0.01`, and an Adam outer
 optimizer at `0.001`. `T_target` is the mean Tier-2 latency.
 
+MAML-Select uses a disclosed cold-start strategy: one initial coverage pass
+over the client pool before policy-only exploitation begins. This is `10`
+rounds in the primary `N=100`, `K=10` protocol. Later rounds reserve one cohort
+slot for the stalest client. This supplies representative online feedback and
+avoids permanently excluding unobserved clients. The latency excess in the
+policy target is divided by `T_target`, making the loss-latency trade-off
+dimensionless while preserving the soft-deadline interpretation. The inner
+support set contains the immediately preceding round's observed client costs,
+as defined in the manuscript.
+
 ## Run
 
 Validate the environment first. This prints the matrix and does not train:
@@ -46,12 +60,26 @@ bash csfl_simulator/experiments/maml_select/run_suite.sh \
   --profile quick --device cuda --dry-run
 ```
 
+Run the optional local CPU pilot before committing a remote host:
+
+```bash
+bash csfl_simulator/experiments/maml_select/run_suite.sh \
+  --profile pilot --device cpu --no-hardware-meter --resume
+```
+
+Run the optional local lambda diagnostic:
+
+```bash
+bash csfl_simulator/experiments/maml_select/run_suite.sh \
+  --profile pilot_lambda --device cpu --no-hardware-meter --resume
+```
+
 Run the manuscript-critical matrix:
 
 ```bash
 bash csfl_simulator/experiments/maml_select/run_suite.sh \
   --profile core --device cuda --country-iso-code IND \
-  --grid-intensity 475 --resume
+  --grid-intensity 475 --verified-hardware-telemetry --resume
 ```
 
 Run the extended reviewer matrix:
@@ -59,7 +87,28 @@ Run the extended reviewer matrix:
 ```bash
 bash csfl_simulator/experiments/maml_select/run_suite.sh \
   --profile full --device cuda --country-iso-code IND \
-  --grid-intensity 475 --resume
+  --grid-intensity 475 --verified-hardware-telemetry --resume
+```
+
+On a CPU-only host, start the same full 200-round reviewer matrix as a resumable
+background campaign:
+
+```bash
+PYTHON_BIN=/path/to/python \
+  bash csfl_simulator/experiments/maml_select/start_local_cpu_campaign.sh
+bash csfl_simulator/experiments/maml_select/show_local_cpu_campaign.sh
+```
+
+The CPU campaign writes an append-only `round_metrics.jsonl` file and a
+periodically refreshed `progress.json` checkpoint inside each active run
+directory. Completed runs remain resumable through `--resume`.
+
+Measure energy-to-accuracy on a dedicated host:
+
+```bash
+bash csfl_simulator/experiments/maml_select/run_suite.sh \
+  --profile energy --device cuda --country-iso-code IND \
+  --grid-intensity 475 --verified-hardware-telemetry --resume
 ```
 
 `--resume` skips completed result files after an interruption. Use
@@ -74,7 +123,9 @@ python -m csfl_simulator.experiments.maml_select.analyze_results
 The command writes CSV and LaTeX tables, standard deviations, paired tests,
 paired effect sizes, 95% confidence intervals, Holm-adjusted p-values, and
 high-resolution vector EPS figures under `artifacts/maml_select_letter/analysis/`.
-PDF and 600-DPI PNG companions are exported for inspection. Open
+It also exports `round_metrics.csv`, `roundwise_main_summary.csv`, and the
+larger `fig2_efficiency_comparison.eps` replacement figure with uncertainty
+bands. PDF and 600-DPI PNG companions are exported for inspection. Open
 `plot_results.ipynb` in JupyterLab for an interactive summary:
 
 ```bash
@@ -92,7 +143,16 @@ The suite reports two different quantities:
 
 Carbon emissions remain estimates derived from electricity use and a declared
 grid-intensity value. Check each run's `hardware_energy.status`; do not present
-hardware-energy bars when the tracker reports `unavailable`.
+hardware-energy bars unless the tracker reports `measured`.
+
+On macOS, CodeCarbon may fall back to a CPU-TDP estimate when `powermetrics`
+telemetry is not configured. Such runs are marked `tracked_unverified`. The
+analysis exports them separately as tracked estimates and never labels them as
+direct measurements.
+
+The `energy` profile stops each run after reaching the shared dataset accuracy
+target, or at the shared round cap when the target is not reached. This allows
+energy-to-accuracy comparisons while preserving did-not-reach outcomes.
 
 ## Recent Baselines
 
@@ -100,3 +160,7 @@ hardware-energy bars when the tracker reports `unavailable`.
 mechanism using relative federated-gradient-norm changes and geometric cohort
 growth. FedGCS uses its official external implementation. Follow
 `official_fedgcs_protocol.md` before adding a direct FedGCS row to the paper.
+
+The integrated FedCor implementation is the repository's existing
+`FedCor (approx.)` selector. Label it as an approximation in plots and use an
+official implementation before making an exact FedCor head-to-head claim.

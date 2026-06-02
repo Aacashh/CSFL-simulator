@@ -18,16 +18,23 @@ maml_select:
   inner_lr: 0.01
   outer_lr: 0.001
   inner_steps: 1
-  replay_size: 256
-  support_size: 64
   lambda_latency: 0.5
   target_latency_quantile: 0.5
+  normalize_latency_penalty: true
+  exploration_clients: 1
   selector_seed: 2026
 
 criticalfl:
   delta: 0.01
   growth_factor: 2.0
   sparse_fraction: 0.20
+
+fedgcs:
+  latent_dim: 16
+  optimisation_steps: 5
+  lr: 0.001
+  beta_kl: 0.01
+  selector_seed: 2026
 
 scenarios:
   fashion_quick:
@@ -41,43 +48,87 @@ scenarios:
   fashion_main:
     dataset: Fashion-MNIST
     model: LightCNN
+    report_accuracy_target: 0.70
+  fashion_pilot:
+    dataset: Fashion-MNIST
+    model: LightCNN
+    total_clients: 30
+    clients_per_round: 5
+    rounds: 36
+    local_epochs: 1
+    eval_every: 3
   cifar10_main:
     dataset: CIFAR-10
     model: ResNet18
+    report_accuracy_target: 0.88
+  cifar10_reconciled:
+    dataset: CIFAR-10
+    model: ResNet18
+    report_accuracy_target: 0.88
+    cifar10_augment: true
+    lr: 0.01
+    lr_scheduler: cosine
+    lr_warmup_rounds: 10
+  fashion_energy_target:
+    dataset: Fashion-MNIST
+    model: LightCNN
+    rounds: 200
+    eval_every: 5
+    report_accuracy_target: 0.70
+    stop_on_accuracy_target: true
+  cifar10_energy_target:
+    dataset: CIFAR-10
+    model: ResNet18
+    rounds: 200
+    eval_every: 5
+    report_accuracy_target: 0.88
+    stop_on_accuracy_target: true
   cifar100_large:
     dataset: CIFAR-100
     model: ResNet18
     total_clients: 200
     clients_per_round: 20
-    rounds: 120
+    rounds: 200
   fashion_alpha_0p1:
     dataset: Fashion-MNIST
     model: LightCNN
     dirichlet_alpha: 0.1
-    rounds: 120
+    rounds: 200
   fashion_alpha_1p0:
     dataset: Fashion-MNIST
     model: LightCNN
     dirichlet_alpha: 1.0
-    rounds: 120
+    rounds: 200
   fashion_n50:
     dataset: Fashion-MNIST
     model: LightCNN
     total_clients: 50
     clients_per_round: 5
-    rounds: 120
+    rounds: 200
   fashion_n200:
     dataset: Fashion-MNIST
     model: LightCNN
     total_clients: 200
     clients_per_round: 20
-    rounds: 120
+    rounds: 200
+  fashion_n250:
+    dataset: Fashion-MNIST
+    model: LightCNN
+    total_clients: 250
+    clients_per_round: 25
+    rounds: 200
   fashion_n500:
     dataset: Fashion-MNIST
     model: LightCNN
     total_clients: 500
     clients_per_round: 50
-    rounds: 120
+    rounds: 200
+  fashion_n1000:
+    dataset: Fashion-MNIST
+    model: LightCNN
+    total_clients: 1000
+    clients_per_round: 100
+    rounds: 200
 
 integrated_methods:
   - baseline.fedavg
@@ -86,13 +137,14 @@ integrated_methods:
   - system_aware.tifl
   - ml.fedcor
   - research.criticalfl
+  - research.fedgcs
   - research.maml_select
 
 experiments:
   - id: quick_validation
     profiles: [quick]
     scenarios: [fashion_quick]
-    methods: [baseline.fedavg, research.maml_select]
+    methods: [baseline.fedavg, research.maml_select, research.fedgcs]
     seeds: [42]
 
   - id: main_benchmarks
@@ -101,16 +153,38 @@ experiments:
     methods_from: integrated_methods
     seeds: [42, 123, 2026]
 
+  - id: cifar10_reconciled
+    profiles: [core, full]
+    scenarios: [cifar10_reconciled]
+    methods_from: integrated_methods
+    seeds: [42, 123, 2026]
+
+  - id: local_fashion_pilot
+    profiles: [pilot]
+    scenarios: [fashion_pilot]
+    methods: [baseline.fedavg, system_aware.oort, research.maml_select, research.fedgcs]
+    seeds: [42]
+
+  - id: local_lambda_pilot
+    profiles: [pilot_lambda]
+    scenarios: [fashion_pilot]
+    seeds: [42]
+    method_variants:
+      - {key: research.maml_select.pilot_lambda_0p0, label: "lambda=0.0", params: {lambda_latency: 0.0}}
+      - {key: research.maml_select.pilot_lambda_0p1, label: "lambda=0.1", params: {lambda_latency: 0.1}}
+      - {key: research.maml_select.pilot_lambda_0p25, label: "lambda=0.25", params: {lambda_latency: 0.25}}
+      - {key: research.maml_select.pilot_lambda_0p5, label: "lambda=0.5", params: {lambda_latency: 0.5}}
+      - {key: research.maml_select.pilot_lambda_1p0, label: "lambda=1.0", params: {lambda_latency: 1.0}}
+
   - id: lambda_sensitivity
     profiles: [core, full]
     scenarios: [fashion_main]
     seeds: [42, 123, 2026]
     method_variants:
-      - {key: research.maml_select.lambda_0p0, label: "lambda=0.0", params: {lambda_latency: 0.0}}
-      - {key: research.maml_select.lambda_0p25, label: "lambda=0.25", params: {lambda_latency: 0.25}}
+      - {key: research.maml_select.lambda_0p1, label: "lambda=0.1", params: {lambda_latency: 0.1}}
       - {key: research.maml_select.lambda_0p5, label: "lambda=0.5", params: {lambda_latency: 0.5}}
       - {key: research.maml_select.lambda_1p0, label: "lambda=1.0", params: {lambda_latency: 1.0}}
-      - {key: research.maml_select.lambda_2p0, label: "lambda=2.0", params: {lambda_latency: 2.0}}
+      - {key: research.maml_select.lambda_5p0, label: "lambda=5.0", params: {lambda_latency: 5.0}}
 
   - id: feature_ablation
     profiles: [core, full]
@@ -125,10 +199,16 @@ experiments:
       - {key: research.maml_select.no_frequency, label: "without frequency", params: {disabled_features: [frequency]}}
       - {key: research.maml_select.no_staleness, label: "without staleness", params: {disabled_features: [staleness]}}
 
+  - id: hardware_energy_to_target
+    profiles: [energy, full]
+    scenarios: [fashion_energy_target, cifar10_energy_target]
+    methods: [baseline.fedavg, system_aware.oort, research.criticalfl, research.fedgcs, research.maml_select]
+    seeds: [42, 123, 2026]
+
   - id: heterogeneity
     profiles: [full]
     scenarios: [fashion_alpha_0p1, fashion_main, fashion_alpha_1p0]
-    methods: [baseline.fedavg, system_aware.oort, research.criticalfl, research.maml_select]
+    methods: [baseline.fedavg, system_aware.oort, research.criticalfl, research.fedgcs, research.maml_select]
     seeds: [42, 123, 2026]
 
   - id: scaling
@@ -137,8 +217,14 @@ experiments:
     methods: [baseline.fedavg, research.maml_select]
     seeds: [42, 123, 2026]
 
+  - id: scaling_overhead
+    profiles: [scaling]
+    scenarios: [fashion_main, fashion_n250, fashion_n500, fashion_n1000]
+    methods_from: integrated_methods
+    seeds: [42]
+
   - id: larger_benchmark
     profiles: [full]
     scenarios: [cifar100_large]
-    methods: [baseline.fedavg, system_aware.oort, research.criticalfl, research.maml_select]
+    methods: [baseline.fedavg, system_aware.oort, research.criticalfl, research.fedgcs, research.maml_select]
     seeds: [42, 123, 2026]

@@ -7,6 +7,7 @@ suite registers this implementation dynamically as ``research.maml_select``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -53,6 +54,16 @@ class ReplayRecord:
 
 def parameter_count() -> int:
     return sum(p.numel() for p in MetaPolicy().parameters())
+
+
+def _seeded_policy(selector_seed: int, device: str) -> MetaPolicy:
+    """Initialize policy reproducibly without perturbing the FL training RNG."""
+    devices = []
+    if str(device).startswith("cuda") and torch.cuda.is_available():
+        devices = list(range(torch.cuda.device_count()))
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(int(selector_seed))
+        return MetaPolicy().to(device)
 
 
 def _zscore(matrix: np.ndarray) -> np.ndarray:
@@ -166,10 +177,11 @@ def _ingest_previous_feedback(
     state: Dict,
     clients_by_id: Mapping[int, ClientInfo],
     lambda_latency: float,
-) -> List[ReplayRecord]:
+    normalize_latency_penalty: bool,
+) -> Tuple[List[ReplayRecord], List[ReplayRecord]]:
     pending = state.get("pending")
     if not pending:
-        return []
+        return [], []
 
     target = max(1e-8, float(pending["target_latency"]))
     query: List[ReplayRecord] = []
@@ -184,19 +196,59 @@ def _ingest_previous_feedback(
             continue
         local_reduction = float(client.meta.get("last_local_loss_reduction", 0.0) or 0.0)
         latency_penalty = max(0.0, float(duration) - target)
+        if normalize_latency_penalty:
+            latency_penalty /= target
         cost = float(lambda_latency) * latency_penalty - local_reduction
         query.append(ReplayRecord(np.asarray(features, dtype=np.float32), cost))
         state["battery_wh"][int(cid)] = max(
             0.0,
             float(state["battery_wh"].get(int(cid), client.battery_capacity)) - float(energy_wh),
         )
-    return query
+    return query, list(pending.get("adaptation_support", []))
 
 
-def _tail(records: Sequence[ReplayRecord], length: int) -> List[ReplayRecord]:
-    if length <= 0:
+def _coverage_order(clients: Sequence[ClientInfo], selector_seed: int) -> List[int]:
+    ids = [client.id for client in clients]
+    np.random.default_rng(int(selector_seed)).shuffle(ids)
+    return ids
+
+
+def _cold_start_selection(round_idx: int, K: int, coverage_order: Sequence[int]) -> List[int]:
+    if not coverage_order:
         return []
-    return list(records[-length:])
+    offset = (int(round_idx) * int(K)) % len(coverage_order)
+    return [
+        int(coverage_order[(offset + index) % len(coverage_order)])
+        for index in range(min(int(K), len(coverage_order)))
+    ]
+
+
+def _policy_selection(
+    round_idx: int,
+    K: int,
+    clients: Sequence[ClientInfo],
+    costs: np.ndarray,
+    coverage_order: Sequence[int],
+    exploration_clients: int,
+) -> List[int]:
+    """Combine learned ranking with a disclosed staleness-based exploration slot."""
+    ranked_ids = [clients[int(index)].id for index in np.argsort(costs)]
+    if exploration_clients <= 0:
+        return ranked_ids[: min(int(K), len(ranked_ids))]
+
+    coverage_rank = {int(cid): index for index, cid in enumerate(coverage_order)}
+    explorers = sorted(
+        clients,
+        key=lambda client: (
+            -int(recency(round_idx, client)),
+            int(client.participation_count or 0),
+            coverage_rank.get(client.id, client.id),
+        ),
+    )[: min(int(exploration_clients), int(K), len(clients))]
+    explorer_ids = [client.id for client in explorers]
+    explorer_set = set(explorer_ids)
+    exploit_ids = [cid for cid in ranked_ids if cid not in explorer_set]
+    return exploit_ids[: max(0, min(int(K), len(clients)) - len(explorer_ids))] + explorer_ids
 
 
 def select_clients(
@@ -211,10 +263,11 @@ def select_clients(
     inner_lr: float = 0.01,
     outer_lr: float = 0.001,
     inner_steps: int = 1,
-    replay_size: int = 256,
-    support_size: int = 64,
     lambda_latency: float = 0.5,
     target_latency_quantile: float = 0.5,
+    normalize_latency_penalty: bool = True,
+    cold_start_rounds: Optional[int] = None,
+    exploration_clients: int = 1,
     disabled_features: Sequence[str] = (),
     selector_seed: int = 2026,
 ) -> Tuple[List[int], Optional[List[float]], Optional[Dict]]:
@@ -228,34 +281,33 @@ def select_clients(
     clients_by_id = {client.id: client for client in clients}
     state = history.get("state", {}).get(STATE_KEY)
     if state is None:
-        torch.manual_seed(int(selector_seed))
-        model = MetaPolicy().to(dev)
+        model = _seeded_policy(selector_seed, dev)
         state = {
             "model": model,
             "optimizer": torch.optim.Adam(model.parameters(), lr=float(outer_lr)),
-            "replay": [],
             "pending": None,
             "battery_wh": {client.id: float(client.battery_capacity) for client in clients},
+            "coverage_order": _coverage_order(clients, selector_seed),
             "outer_updates": 0,
         }
 
     model: MetaPolicy = state["model"]
     optimizer: torch.optim.Optimizer = state["optimizer"]
-    query = _ingest_previous_feedback(state, clients_by_id, lambda_latency)
-    replay: List[ReplayRecord] = state["replay"]
+    query, previous_adaptation_support = _ingest_previous_feedback(
+        state,
+        clients_by_id,
+        lambda_latency,
+        normalize_latency_penalty,
+    )
 
     if query:
-        support = _tail(replay, int(support_size))
-        _outer_step(model, optimizer, support, query, dev, inner_lr, inner_steps)
-        replay.extend(query)
-        state["replay"] = _tail(replay, int(replay_size))
+        _outer_step(model, optimizer, previous_adaptation_support, query, dev, inner_lr, inner_steps)
         state["outer_updates"] = int(state.get("outer_updates", 0)) + 1
 
     current_features = _features(round_idx, clients, state["battery_wh"], disabled_features)
-    recent_support = _tail(state["replay"], int(support_size))
-    if recent_support:
-        sx = _as_tensor(np.stack([record.features for record in recent_support]), dev)
-        sy = _as_tensor(np.asarray([record.cost for record in recent_support], dtype=np.float32), dev)
+    if query:
+        sx = _as_tensor(np.stack([record.features for record in query]), dev)
+        sy = _as_tensor(np.asarray([record.cost for record in query], dtype=np.float32), dev)
         adapted = _adapt(model, sx, sy, inner_lr, inner_steps)
     else:
         adapted = dict(model.named_parameters())
@@ -263,8 +315,26 @@ def select_clients(
     with torch.no_grad():
         predicted_cost = functional_call(model, adapted, (_as_tensor(current_features, dev),))
     costs = predicted_cost.detach().cpu().numpy()
-    selected_indices = np.argsort(costs)[: min(int(K), len(clients))]
-    selected_ids = [clients[int(index)].id for index in selected_indices]
+    warmup_rounds = (
+        max(0, int(cold_start_rounds))
+        if cold_start_rounds is not None
+        else int(math.ceil(len(clients) / max(1, int(K))))
+    )
+    if round_idx < warmup_rounds:
+        selected_ids = _cold_start_selection(round_idx, K, state["coverage_order"])
+        state["last_selection_mode"] = "coverage_cold_start"
+    else:
+        selected_ids = _policy_selection(
+            round_idx,
+            K,
+            clients,
+            costs,
+            state["coverage_order"],
+            max(0, int(exploration_clients)),
+        )
+        state["last_selection_mode"] = "policy_with_staleness_exploration"
+    indices_by_id = {client.id: index for index, client in enumerate(clients)}
+    selected_indices = [indices_by_id[cid] for cid in selected_ids]
 
     durations = [float(expected_duration(clients[int(index)])) for index in selected_indices]
     energies = [
@@ -287,6 +357,8 @@ def select_clients(
         "durations": durations,
         "energy_wh": energies,
         "target_latency": target_latency,
+        "adaptation_support": query,
     }
     state["last_predicted_cost_mean"] = float(np.mean(costs))
+    state["last_normalized_latency_penalty"] = bool(normalize_latency_penalty)
     return selected_ids, costs.astype(float).tolist(), {STATE_KEY: state}

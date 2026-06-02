@@ -33,3 +33,15 @@ local method as FedGCS unless it came from the official repository.
 
 Official repository: <https://github.com/zhiyuan-ning/GenerativeFL>
 
+## Upstream Reproducibility Note
+
+The official repository snapshot cloned on June 2, 2026 was commit
+`785773b2a6675048aa3ab2ac7aaf0324b802f368`. Its generator currently exits when
+CUDA is unavailable (`autos/train.py`). The published `main.py` also contains
+placeholder candidate selectors and a `choose_clients_favor` /
+`choose_clients_fovar` naming mismatch. Therefore, the unmodified upstream
+snapshot cannot produce a comparable CPU-only FedGCS run on this host.
+
+Do not silently patch these issues and describe the output as an exact official
+reproduction. Any compatibility patch must be versioned, disclosed in the
+paper, and validated independently before importing a FedGCS row.

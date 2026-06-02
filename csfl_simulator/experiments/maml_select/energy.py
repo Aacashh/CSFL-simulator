@@ -53,6 +53,7 @@ class CodeCarbonMeter:
         grid_intensity_g_per_kwh: float,
         enabled: bool = True,
         measure_power_secs: int = 1,
+        verified_hardware_telemetry: bool = False,
     ):
         self.output_dir = Path(output_dir)
         self.run_label = run_label
@@ -60,6 +61,7 @@ class CodeCarbonMeter:
         self.grid_intensity = float(grid_intensity_g_per_kwh)
         self.enabled = bool(enabled)
         self.measure_power_secs = max(1, int(measure_power_secs))
+        self.verified_hardware_telemetry = bool(verified_hardware_telemetry)
         self.output_file = f"codecarbon_{run_label}.csv"
         self.csv_path = self.output_dir / self.output_file
         self.tracker: Optional[Any] = None
@@ -96,7 +98,7 @@ class CodeCarbonMeter:
             "output_file": self.output_file,
             "save_to_file": True,
             "log_level": "warning",
-            "tracking_mode": "process",
+            "tracking_mode": "machine",
             "allow_multiple_runs": True,
         }
         try:
@@ -144,12 +146,18 @@ class CodeCarbonMeter:
                 "that RAPL or NVIDIA power telemetry is exposed on the experiment host."
             )
             status = "unavailable"
-        else:
+        elif self.verified_hardware_telemetry:
             note = (
-                "Electricity is hardware-measured where CodeCarbon exposes telemetry; "
-                "emissions are estimates derived from electricity consumption."
+                "The operator confirmed hardware telemetry on this host. Electricity is "
+                "hardware-measured where CodeCarbon exposes telemetry; emissions remain estimates."
             )
             status = "measured"
+        else:
+            note = (
+                "CodeCarbon reported electricity consumption, but hardware telemetry was not "
+                "operator-verified. Treat this as an estimate until telemetry is confirmed."
+            )
+            status = "tracked_unverified"
 
         measurement = EnergyMeasurement(
             status=status,

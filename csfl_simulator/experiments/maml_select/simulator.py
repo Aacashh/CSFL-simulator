@@ -4,12 +4,15 @@ from __future__ import annotations
 import math
 import random
 import time
+from collections import deque
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 import torch
+import torch.optim as optim
 
 from csfl_simulator.core.aggregation import fedavg
 from csfl_simulator.core.metrics import eval_model
@@ -57,6 +60,13 @@ def _first_time_to(metrics: Sequence[Dict[str, Any]], target: float) -> float:
     for row in metrics:
         if int(row.get("round", -1)) >= 0 and float(row.get("accuracy", 0.0)) >= target:
             return float(row.get("cum_time", 0.0))
+    return float("nan")
+
+
+def _first_metric_to(metrics: Sequence[Dict[str, Any]], target: float, metric_name: str) -> float:
+    for row in metrics:
+        if int(row.get("round", -1)) >= 0 and float(row.get("accuracy", 0.0)) >= target:
+            return float(row.get(metric_name, 0.0))
     return float("nan")
 
 
@@ -114,15 +124,67 @@ class InstrumentedFLSimulator(FLSimulator):
         *,
         grid_carbon_g_per_kwh: float = 475.0,
         credit_batches: int = 1,
+        report_accuracy_target: float | None = None,
+        stop_on_accuracy_target: bool = False,
+        cifar10_augment: bool = False,
+        lr_scheduler: str | None = None,
+        lr_warmup_rounds: int = 0,
     ):
         if config.parallel_clients != 0:
             raise ValueError("MAML-Select experiments require parallel_clients=0 for local credit capture.")
         super().__init__(config)
         self.grid_carbon_g_per_kwh = float(grid_carbon_g_per_kwh)
         self.credit_batches = max(1, int(credit_batches))
+        self.report_accuracy_target = (
+            float(report_accuracy_target) if report_accuracy_target is not None else None
+        )
+        self.stop_on_accuracy_target = bool(stop_on_accuracy_target)
+        self.cifar10_augment = bool(cifar10_augment)
+        self.lr_scheduler = lr_scheduler
+        self.lr_warmup_rounds = max(0, int(lr_warmup_rounds))
+
+    def _get_lr_for_round(self, round_idx: int) -> float:
+        """Compute learning rate for the given round with optional scheduling."""
+        base_lr = float(self.cfg.lr)
+        if not self.lr_scheduler:
+            return base_lr
+        # Warmup phase: linear warmup from lr/10 to lr
+        if round_idx < self.lr_warmup_rounds and self.lr_warmup_rounds > 0:
+            return base_lr * (0.1 + 0.9 * round_idx / self.lr_warmup_rounds)
+        # Cosine annealing after warmup
+        if self.lr_scheduler == "cosine":
+            effective_round = round_idx - self.lr_warmup_rounds
+            effective_total = max(1, int(self.cfg.rounds) - self.lr_warmup_rounds)
+            return base_lr * 0.5 * (1.0 + math.cos(math.pi * effective_round / effective_total))
+        return base_lr
 
     def setup(self) -> None:
         super().setup()
+        # Apply CIFAR-10 data augmentation if enabled
+        if self.cifar10_augment and self.train_ds is not None:
+            try:
+                import torchvision.transforms as T
+                augment_transform = T.Compose([
+                    T.RandomCrop(32, padding=4),
+                    T.RandomHorizontalFlip(),
+                    T.ToTensor(),
+                    T.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+                ])
+                # Wrap the existing dataset with augmentation
+                # Only if dataset has raw images (not already tensor-ized)
+                if hasattr(self.train_ds, 'transform'):
+                    self.train_ds.transform = augment_transform
+                    # Rebuild client loaders to use augmented data
+                    from csfl_simulator.core import datasets as dset
+                    for cid in range(self.cfg.total_clients):
+                        idxs = self._partition_mapping[cid]
+                        self.client_loaders[cid] = dset.make_loaders_from_indices(
+                            self.train_ds, idxs, batch_size=self.cfg.batch_size
+                        )
+                    print("[info] CIFAR-10 data augmentation enabled (RandomCrop+RandomHorizontalFlip)")
+            except Exception as e:
+                print(f"[warn] Failed to apply CIFAR-10 augmentation: {e}")
+
         # Device-level energy is an explicit modeled proxy used for per-round
         # attribution. Hardware energy is collected independently by CodeCarbon.
         tier_power_watts = {0: 4.0, 1: 7.0, 2: 12.0}
@@ -146,36 +208,79 @@ class InstrumentedFLSimulator(FLSimulator):
             client.battery_capacity = tier_capacity_wh.get(tier, 30.0)
             client.region_carbon_g_per_kwh = self.grid_carbon_g_per_kwh
 
-    def _capture_credit_batches(self, loader):
-        batches = []
-        for x, y in loader:
-            batches.append((x, y))
-            if len(batches) >= self.credit_batches:
-                break
-        return batches
-
-    def _estimate_batch_loss(self, model, batches) -> float:
-        was_training = bool(model.training)
-        model.eval()
-        loss_sum = 0.0
-        with torch.no_grad():
-            for x, y in batches:
-                x, y = x.to(self.device), y.to(self.device)
-                loss_sum += float(self.criterion(model(x), y).item())
-        model.train(was_training)
-        return loss_sum / max(1, len(batches))
-
     def _local_train(self, cid: int) -> Tuple[Dict[str, torch.Tensor], int, float, float]:
+        """Train one client and derive local credit without extra inference passes."""
         loader = self.client_loaders[cid]
-        credit_batches = self._capture_credit_batches(loader)
-        before = self._estimate_batch_loss(self.model, credit_batches)
-        state, sample_count, last_loss, grad_norm = super()._local_train(cid)
-        after = self._estimate_batch_loss(self._scratch_model, credit_batches)
+        if self._scratch_model is None:
+            self._scratch_model = deepcopy(self.model).to(self.device)
+        model = self._scratch_model
+        model.load_state_dict(self.model.state_dict())
+        model.train()
+        current_lr = self._get_lr_for_round(getattr(self, '_current_round_idx', 0))
+        optimizer = optim.SGD(model.parameters(), lr=current_lr, momentum=0.9, weight_decay=1e-4)
+        first_losses: List[float] = []
+        tail_losses = deque(maxlen=self.credit_batches)
+        last_loss = 0.0
+        last_grad_norm = 0.0
+        for _ in range(self.cfg.local_epochs):
+            for batch_index, (x, y) in enumerate(loader):
+                x, y = x.to(self.device), y.to(self.device)
+                optimizer.zero_grad()
+                loss = self.criterion(model(x), y)
+                loss.backward()
+                current_loss = float(loss.item())
+                if len(first_losses) < self.credit_batches:
+                    first_losses.append(current_loss)
+                tail_losses.append(current_loss)
+                if self.cfg.dp_clip_norm and self.cfg.dp_clip_norm > 0:
+                    try:
+                        from csfl_simulator.core.dp import clip_gradients
+
+                        clip_gradients(model, float(self.cfg.dp_clip_norm))
+                    except Exception:
+                        pass
+                if self.cfg.track_grad_norm:
+                    total_norm_squared = sum(
+                        parameter.grad.data.norm(2).item() ** 2
+                        for parameter in model.parameters()
+                        if parameter.grad is not None
+                    )
+                    last_grad_norm = total_norm_squared ** 0.5
+                optimizer.step()
+                last_loss = current_loss
+                if self.cfg.smoke_test_mode and batch_index > 1:
+                    break
+        with torch.no_grad():
+            state = {key: value.detach().clone() for key, value in model.state_dict().items()}
+        before = float(np.mean(first_losses)) if first_losses else 0.0
+        after = float(np.mean(tail_losses)) if tail_losses else last_loss
         client = self.clients[cid]
         client.meta["last_local_loss_before"] = before
         client.meta["last_local_loss_after"] = after
         client.meta["last_local_loss_reduction"] = before - after
-        return state, sample_count, last_loss, grad_norm
+        return state, len(loader.dataset), last_loss, (last_grad_norm if self.cfg.track_grad_norm else 0.0)
+
+    def _simulate_round_environment(self, round_idx: int) -> None:
+        """Apply the shared environment model with the manuscript's epoch factor."""
+        simulate_round_env(self.clients, {}, round_idx)
+        epochs = max(1, int(self.cfg.local_epochs))
+        for client in self.clients:
+            compute_seconds = epochs * float(client.data_size) / max(1e-6, float(client.compute_speed))
+            network_seconds = float(client.data_size) / 1000.0 / max(1e-6, float(client.channel_quality))
+            client.estimated_duration = compute_seconds + network_seconds
+            client.estimated_energy = float(client.energy_rate) * client.estimated_duration
+
+    def _selection_budget(self, method_key: str) -> float | None:
+        if self.cfg.time_budget is not None:
+            return float(self.cfg.time_budget)
+        if method_key != "system_aware.fedcs":
+            return None
+        tier_two = [
+            float(client.estimated_duration)
+            for client in self.clients
+            if int(client.tier if client.tier is not None else -1) == 1
+        ]
+        return self.cfg.clients_per_round * (float(np.mean(tier_two)) if tier_two else 0.0)
 
     def _evaluate(self, round_idx: int) -> Tuple[Dict[str, float], bool]:
         should_evaluate = (
@@ -252,7 +357,8 @@ class InstrumentedFLSimulator(FLSimulator):
             if is_cancelled and is_cancelled():
                 stopped_early = True
                 break
-            simulate_round_env(self.clients, {}, round_idx)
+            self._current_round_idx = round_idx
+            self._simulate_round_environment(round_idx)
             start = time.perf_counter()
             ids, scores, state = self.registry.invoke(
                 method_key,
@@ -261,7 +367,7 @@ class InstrumentedFLSimulator(FLSimulator):
                 self.clients,
                 self.history,
                 random,
-                self.cfg.time_budget,
+                self._selection_budget(method_key),
                 self.device,
                 energy_budget=self.cfg.energy_budget,
                 bytes_budget=self.cfg.bytes_budget,
@@ -302,7 +408,7 @@ class InstrumentedFLSimulator(FLSimulator):
             evaluation, evaluated = self._evaluate(round_idx)
             durations = [float(self.clients[cid].estimated_duration or 0.0) for cid in ids]
             energies_wh = [float(self.clients[cid].estimated_energy or 0.0) for cid in ids]
-            round_time = selection_seconds + (max(durations) if durations else 0.0)
+            round_time = max(durations) if durations else 0.0
             round_energy_wh = float(sum(energies_wh))
             round_flops = sum(
                 3.0 * float(self.model_macs_per_sample) * self.cfg.local_epochs * self.clients[cid].data_size
@@ -338,6 +444,7 @@ class InstrumentedFLSimulator(FLSimulator):
                     "selected_clients": ids,
                     "selected_count": len(ids),
                     "selection_seconds": selection_seconds,
+                    "selection_overhead_seconds": selection_seconds,
                     "round_time": round_time,
                     "cum_time": cumulative_time,
                     "round_modelled_energy_wh": round_energy_wh,
@@ -368,6 +475,13 @@ class InstrumentedFLSimulator(FLSimulator):
             metrics.append(row)
             if on_progress:
                 on_progress(round_idx, {"metrics": row, "selected": ids})
+            if (
+                evaluated
+                and self.stop_on_accuracy_target
+                and self.report_accuracy_target is not None
+                and float(row["accuracy"]) >= self.report_accuracy_target
+            ):
+                break
             if round_idx % 10 == 0:
                 cleanup_memory(force_cuda_empty=False, verbose=False)
 
@@ -378,6 +492,18 @@ class InstrumentedFLSimulator(FLSimulator):
         improvement = max(0.0, final_accuracy - base_accuracy)
         final["time_to_80pct_final"] = _first_time_to(metrics, base_accuracy + 0.8 * improvement)
         final["mean_cohort_size"] = float(np.mean([len(ids) for ids in self.history["selected"]]))
+        if self.report_accuracy_target is not None:
+            final["report_accuracy_target"] = self.report_accuracy_target
+            final["target_reached"] = bool(final_accuracy >= self.report_accuracy_target)
+            final["rounds_to_target"] = _first_metric_to(metrics, self.report_accuracy_target, "round") + 1.0
+            final["time_to_target"] = _first_metric_to(metrics, self.report_accuracy_target, "cum_time")
+            final["training_tflops_to_target"] = _first_metric_to(
+                metrics, self.report_accuracy_target, "cum_training_tflops"
+            )
+            final["modelled_energy_wh_to_target"] = _first_metric_to(
+                metrics, self.report_accuracy_target, "cum_modelled_energy_wh"
+            )
+            final["comm_mb_to_target"] = _first_metric_to(metrics, self.report_accuracy_target, "cum_comm_mb")
         save_json({"metrics": metrics}, Path(self.run_dir) / "metrics.json")
         return {
             "run_id": self.run_id,
@@ -386,6 +512,9 @@ class InstrumentedFLSimulator(FLSimulator):
             "config": asdict(self.cfg),
             "device": self.device,
             "stopped_early": stopped_early,
+            "stop_on_accuracy_target": self.stop_on_accuracy_target,
+            "report_accuracy_target": self.report_accuracy_target,
+            "rounds_completed": len(self.history["selected"]),
             "method": method_key,
             "history": {"selected": list(self.history["selected"])},
             "participation_counts": [int(client.participation_count) for client in self.clients],
