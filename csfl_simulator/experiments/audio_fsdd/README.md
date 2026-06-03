@@ -36,12 +36,31 @@ Run from the repository root:
 bash csfl_simulator/experiments/audio_fsdd/setup_and_run.sh
 ```
 
+On Windows PowerShell, run from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File csfl_simulator\experiments\audio_fsdd\setup_and_run_windows.ps1
+```
+
+Or use the CMD wrapper:
+
+```cmd
+csfl_simulator\experiments\audio_fsdd\setup_and_run_windows.cmd
+```
+
 Useful overrides:
 
 ```bash
 DEVICE=cuda bash csfl_simulator/experiments/audio_fsdd/setup_and_run.sh
 DEVICE=mps bash csfl_simulator/experiments/audio_fsdd/setup_and_run.sh
 NO_HARDWARE_METER=0 bash csfl_simulator/experiments/audio_fsdd/setup_and_run.sh
+```
+
+Windows PowerShell overrides:
+
+```powershell
+$env:DEVICE="cuda"; powershell -NoProfile -ExecutionPolicy Bypass -File csfl_simulator\experiments\audio_fsdd\setup_and_run_windows.ps1
+$env:NO_HARDWARE_METER="0"; powershell -NoProfile -ExecutionPolicy Bypass -File csfl_simulator\experiments\audio_fsdd\setup_and_run_windows.ps1
 ```
 
 Outputs:
