@@ -29,6 +29,7 @@ REPO_ROOT = HERE.parents[2]
 DEFAULT_OUTPUT = REPO_ROOT / "runs" / "maml_select"
 DEFAULT_ANALYSIS = REPO_ROOT / "artifacts" / "maml_select" / "analysis"
 MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
+MAML_V2_MODULE = "csfl_simulator.experiments.maml_select.selector_v2"
 CRITICALFL_MODULE = "csfl_simulator.experiments.maml_select.criticalfl"
 FEDGCS_MODULE = "csfl_simulator.experiments.maml_select.fedgcs"
 EXPERIMENT_ONLY_SCENARIO_FIELDS = {
@@ -44,6 +45,7 @@ _METHOD_SHORT = {
     "research.criticalfl": "criticalfl",
     "research.fedgcs": "fedgcs",
     "research.maml_select": "maml_select",
+    "research.maml_select_v2": "maml_select_v2",
 }
 
 
@@ -118,6 +120,13 @@ def _register_research_methods(simulator: Any, config: Dict[str, Any], item: Dic
         origin="resubmission experiment suite",
     )
     simulator.registry.register(
+        "research.maml_select_v2",
+        MAML_V2_MODULE,
+        params=dict(config["maml_select_v2"]),
+        display_name="MAML-Select v2",
+        origin="post-campaign experimental selector",
+    )
+    simulator.registry.register(
         "research.criticalfl",
         CRITICALFL_MODULE,
         params=dict(config["criticalfl"]),
@@ -140,6 +149,16 @@ def _register_research_methods(simulator: Any, config: Dict[str, Any], item: Dic
             params=params,
             display_name=item["method_label"],
             origin="MAML-Select experiment variant",
+        )
+    if item["method_key"].startswith("research.maml_select_v2."):
+        params = dict(config["maml_select_v2"])
+        params.update(item["method_params"])
+        simulator.registry.register(
+            item["method_key"],
+            MAML_V2_MODULE,
+            params=params,
+            display_name=item["method_label"],
+            origin="MAML-Select v2 experiment variant",
         )
 
 
@@ -181,6 +200,11 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
     print(f"[run ] {run_label}")
     output_dir.mkdir(parents=True, exist_ok=True)
     round_metrics_path = output_dir / "round_metrics.jsonl"
+    for stale_path in (
+        output_dir / "progress.json",
+        output_dir / f"codecarbon_{run_label}.csv",
+    ):
+        stale_path.unlink(missing_ok=True)
     round_metrics_path.write_text("")
 
     # Robust seeding
@@ -250,6 +274,7 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
         "seed": item["seed"],
         "training_protocol": config["local_training"],
         "maml_select_protocol": config["maml_select"],
+        "maml_select_v2_protocol": config.get("maml_select_v2", {}),
         "hardware_energy": hardware_energy,
         "simulation": simulation,
         "seed_record": seed_record.to_dict(),
@@ -370,7 +395,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--profile",
-        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full"),
+        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "maml_v2", "audio_fsdd"),
         default="core",
     )
     parser.add_argument("--only", action="append", default=[], metavar="EXPERIMENT_ID")
@@ -411,6 +436,7 @@ def main() -> None:
         "verified_hardware_telemetry": args.verified_hardware_telemetry,
         "training_protocol": config["local_training"],
         "maml_select_protocol": config["maml_select"],
+        "maml_select_v2_protocol": config.get("maml_select_v2", {}),
         "matrix": matrix,
     }
     _dump(manifest, args.output_dir / f"manifest_{args.profile}.json")

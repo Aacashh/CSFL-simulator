@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
 DEFAULT_RESULTS = REPO_ROOT / "runs" / "maml_select"
 DEFAULT_ANALYSIS = REPO_ROOT / "artifacts" / "maml_select" / "analysis"
+MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks"}
 METHOD_NAMES = {
     "baseline.fedavg": "FedAvg",
     "system_aware.fedcs": "FedCS",
@@ -44,6 +45,7 @@ METHOD_NAMES = {
     "research.criticalfl": "CriticalFL",
     "research.fedgcs": "FedGCS-style (approx.)",
     "research.maml_select": "MAML-Select",
+    "research.maml_select_v2": "MAML-Select v2",
 }
 COLORS = {
     "baseline.fedavg": "#4C78A8",
@@ -54,6 +56,7 @@ COLORS = {
     "research.criticalfl": "#9D755D",
     "research.fedgcs": "#FF9DA7",
     "research.maml_select": "#1B9E77",
+    "research.maml_select_v2": "#0072B2",
 }
 
 
@@ -174,7 +177,7 @@ def _save(fig: plt.Figure, output_dir: Path, stem: str) -> None:
 def _line_summary(payloads: Sequence[Dict[str, Any]], scenario_name: str) -> pd.DataFrame:
     rows = []
     for payload in payloads:
-        if payload["experiment_id"] != "main_benchmarks" or payload["scenario_name"] != scenario_name:
+        if payload["experiment_id"] not in MAIN_EXPERIMENT_IDS or payload["scenario_name"] != scenario_name:
             continue
         for metric in payload["simulation"]["metrics"]:
             if not bool(metric.get("evaluated", True)):
@@ -222,7 +225,7 @@ def roundwise_main_summary(frame: pd.DataFrame) -> pd.DataFrame:
         "participation_coverage_ratio",
     ]
     subset = frame[
-        (frame["experiment_id"] == "main_benchmarks")
+        frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS)
         & (frame["round"] >= 0)
         & frame["evaluated"].astype(bool)
     ]
@@ -310,7 +313,7 @@ def _bar_values(frame: pd.DataFrame, experiment_id: str, scenario_name: str, met
 
 def plot_hardware_energy(frame: pd.DataFrame, output_dir: Path, scenario_name: str) -> None:
     subset = frame[
-        (frame["experiment_id"] == "main_benchmarks")
+        frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS)
         & (frame["scenario_name"] == scenario_name)
         & (frame["hardware_status"] == "measured")
     ].copy()
@@ -338,7 +341,7 @@ def plot_hardware_energy(frame: pd.DataFrame, output_dir: Path, scenario_name: s
 
 def plot_tracked_energy_estimate(frame: pd.DataFrame, output_dir: Path, scenario_name: str) -> None:
     subset = frame[
-        (frame["experiment_id"] == "main_benchmarks")
+        frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS)
         & (frame["scenario_name"] == scenario_name)
         & frame["hardware_status"].isin(["measured", "tracked_unverified"])
     ].copy()
@@ -409,7 +412,7 @@ def plot_energy_to_target(frame: pd.DataFrame, output_dir: Path, scenario_name: 
 
 
 def plot_fairness(frame: pd.DataFrame, output_dir: Path, scenario_name: str) -> None:
-    subset = frame[(frame["experiment_id"] == "main_benchmarks") & (frame["scenario_name"] == scenario_name)]
+    subset = frame[frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS) & (frame["scenario_name"] == scenario_name)]
     if subset.empty:
         return
     summary = subset.groupby("method_key")[["fairness_jain", "utilization_entropy"]].mean()
@@ -473,7 +476,7 @@ def plot_scaling(frame: pd.DataFrame, output_dir: Path) -> None:
 
 def significance_tests(frame: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    subset = frame[frame["experiment_id"] == "main_benchmarks"]
+    subset = frame[frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS)]
     metrics = [
         "final_accuracy",
         "cum_time",
@@ -556,7 +559,7 @@ def summary_table(frame: pd.DataFrame) -> pd.DataFrame:
         "modelled_energy_wh_to_target",
         "comm_mb_to_target",
     ]
-    main = frame[frame["experiment_id"] == "main_benchmarks"]
+    main = frame[frame["experiment_id"].isin(MAIN_EXPERIMENT_IDS)]
     return main.groupby(["scenario_name", "method_key"])[columns].agg(["mean", "std", "count"])
 
 
@@ -578,6 +581,7 @@ def main() -> None:
     frame = aggregate(payloads, args.external_csv)
     frame.to_csv(output_dir / "runs.csv", index=False)
     frame[frame["dataset"] == "CIFAR-10"].to_csv(output_dir / "cifar10_reconciled_results.csv", index=False)
+    frame[frame["dataset"] == "CIFAR-100"].to_csv(output_dir / "cifar100_results.csv", index=False)
     round_metrics = round_metrics_table(payloads)
     round_metrics.to_csv(output_dir / "round_metrics.csv", index=False)
     round_summary = roundwise_main_summary(round_metrics)

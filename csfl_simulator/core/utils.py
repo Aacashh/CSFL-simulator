@@ -43,6 +43,8 @@ def set_seed(seed: int, deterministic: bool = True, performance_mode: bool = Fal
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    if hasattr(torch, "mps") and torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
     if performance_mode:
         # Performance mode: allow non-deterministic optimizations and pick the fastest
@@ -84,7 +86,11 @@ def set_seed(seed: int, deterministic: bool = True, performance_mode: bool = Fal
 
 
 def autodetect_device(prefer_gpu: bool = True) -> str:
-    return "cuda" if prefer_gpu and torch.cuda.is_available() else "cpu"
+    if prefer_gpu and torch.cuda.is_available():
+        return "cuda"
+    if prefer_gpu and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def new_run_dir(prefix: str = "run") -> Tuple[Path, str]:
@@ -162,6 +168,10 @@ def cleanup_memory(force_cuda_empty: bool = True, verbose: bool = False):
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
+    if hasattr(torch, "mps") and torch.backends.mps.is_available():
+        torch.mps.synchronize()
+        if force_cuda_empty:
+            torch.mps.empty_cache()
     
     # Final garbage collection pass
     gc.collect()

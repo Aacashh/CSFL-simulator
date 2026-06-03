@@ -64,7 +64,9 @@ METHOD_META = {
     "research.criticalfl":   {"name": "CriticalFL", "color": "#9D755D", "marker": "P"},
     "research.fedgcs":       {"name": "FedGCS-style (approx.)", "color": "#FF9DA7", "marker": "X"},
     "research.maml_select":  {"name": "MAML-Select","color": "#1B9E77", "marker": "*"},
+    "research.maml_select_v2": {"name": "MAML-Select v2", "color": "#0072B2", "marker": "*"},
 }
+MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks"}
 
 
 def _name(key: str) -> str:
@@ -167,12 +169,13 @@ def _mean_std_series(seeds_data: List[Dict]) -> Dict[str, np.ndarray]:
 def plot_figure2(payloads: List[Dict], output_dir: Path) -> None:
     """Recreate the 4-panel efficiency analysis for both datasets."""
     scenarios = [
-        ("fashion_main", "Fashion-MNIST"),
-        ("cifar10_main", "CIFAR-10"),
+        ("main_benchmarks", "fashion_main", "Fashion-MNIST"),
+        ("main_benchmarks", "cifar10_main", "CIFAR-10"),
+        ("cifar100_benchmarks", "cifar100_main", "CIFAR-100"),
     ]
 
-    for scenario_name, dataset_label in scenarios:
-        series = _extract_round_series(payloads, "main_benchmarks", scenario_name)
+    for experiment_id, scenario_name, dataset_label in scenarios:
+        series = _extract_round_series(payloads, experiment_id, scenario_name)
         if not series:
             # Try cifar10_reconciled too
             series = _extract_round_series(payloads, "cifar10_reconciled", scenario_name)
@@ -399,9 +402,9 @@ def plot_fairness_coverage(payloads: List[Dict], output_dir: Path) -> None:
     method_tiers: Dict[str, Dict[int, float]] = {}
 
     for payload in payloads:
-        if payload.get("experiment_id") != "main_benchmarks":
+        if payload.get("experiment_id") not in MAIN_EXPERIMENT_IDS:
             continue
-        if payload.get("scenario_name") not in ("fashion_main", "cifar10_main"):
+        if payload.get("scenario_name") not in ("fashion_main", "cifar10_main", "cifar100_main"):
             continue
 
         method = payload["method_key"]
@@ -465,6 +468,7 @@ def plot_scaling_overhead(output_dir: Path, scaling_dir: Optional[Path] = None) 
 
     highlight_methods = {
         "research.maml_select": {"lw": 3.0, "ls": "-"},
+        "research.maml_select_v2": {"lw": 3.0, "ls": "--"},
         "ml.fedcor": {"lw": 3.0, "ls": "-"},
     }
 

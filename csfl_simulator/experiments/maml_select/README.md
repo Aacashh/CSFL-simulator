@@ -1,8 +1,8 @@
 # MAML-Select Resubmission Experiments
 
-This additive suite implements the manuscript's MAML-Select algorithm without
-changing legacy simulator files. It prepares the experimental evidence needed
-for the IEEE TAI letter revision:
+This additive suite implements the manuscript's MAML-Select algorithm while
+keeping shared simulator changes limited to platform support. It prepares the
+experimental evidence needed for the IEEE TAI letter revision:
 
 - repeated runs with paired significance tests;
 - Fashion-MNIST and CIFAR-10 main benchmarks;
@@ -53,10 +53,41 @@ as defined in the manuscript.
 
 ## Run
 
-For a fresh workstation clone, the supported one-command workflow is:
+For a fresh Linux or macOS workstation clone, the supported one-command
+workflow is:
 
 ```bash
 bash csfl_simulator/experiments/maml_select/setup_and_run.sh
+```
+
+For a fresh Windows workstation clone, run this from PowerShell or Command
+Prompt:
+
+```powershell
+.\csfl_simulator\experiments\maml_select\setup_and_run_windows.cmd
+```
+
+The Windows launcher creates `.venv`, installs dependencies, downloads
+Fashion-MNIST and CIFAR-10, validates the matrix, and starts the same resumable
+campaign in a separate PowerShell process. Monitor it with:
+
+```powershell
+.\csfl_simulator\experiments\maml_select\show_windows_campaign.cmd
+```
+
+Use `-VerifiedHardwareTelemetry` only after confirming that CodeCarbon reports
+real host telemetry:
+
+```powershell
+.\csfl_simulator\experiments\maml_select\setup_and_run_windows.cmd -VerifiedHardwareTelemetry
+```
+
+If the default PyTorch package does not expose CUDA on the Windows machine,
+obtain the appropriate package-index URL from the official PyTorch installer
+selector and pass it explicitly:
+
+```powershell
+.\csfl_simulator\experiments\maml_select\setup_and_run_windows.cmd -TorchIndexUrl <official-pytorch-index-url>
 ```
 
 It writes JSON logs under `runs/maml_select/`, CSV and LaTeX analysis tables
@@ -113,6 +144,23 @@ bash csfl_simulator/experiments/maml_select/show_local_cpu_campaign.sh
 The CPU campaign writes an append-only `round_metrics.jsonl` file and a
 periodically refreshed `progress.json` checkpoint inside each active run
 directory. Completed runs remain resumable through `--resume`.
+
+On an Apple-Silicon Mac, start the focused CIFAR-100 comparison with PyTorch
+MPS from a normal Terminal:
+
+```bash
+PYTHON_BIN=/path/to/python \
+  bash csfl_simulator/experiments/maml_select/start_cifar100_mps_campaign.sh
+bash csfl_simulator/experiments/maml_select/show_cifar100_mps_campaign.sh
+```
+
+This runs all eight methods for seeds `42`, `123`, and `2026` with the primary
+`N=100`, `K=10`, `T=200`, `E=5`, batch-size `32`, and Dirichlet `alpha=0.5`
+protocol. It keeps the standard BatchNorm layers in the CIFAR ResNet18 model.
+JSON logs are written under `runs/maml_select_cifar100/`; CSV, LaTeX, and EPS
+outputs are written under `artifacts/maml_select_cifar100/`. CodeCarbon does
+not report Apple GPU telemetry by default, so treat its energy output as an
+estimate unless `powermetrics` access has been separately configured.
 
 Measure energy-to-accuracy on a dedicated host:
 

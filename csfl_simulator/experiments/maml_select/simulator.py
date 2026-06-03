@@ -237,9 +237,9 @@ class InstrumentedFLSimulator(FLSimulator):
             momentum=self.local_momentum,
             weight_decay=self.local_weight_decay,
         )
-        first_losses: List[float] = []
+        first_losses: List[torch.Tensor] = []
         tail_losses = deque(maxlen=self.credit_batches)
-        last_loss = 0.0
+        last_loss: torch.Tensor | None = None
         last_grad_norm = 0.0
         for _ in range(self.cfg.local_epochs):
             for batch_index, (x, y) in enumerate(loader):
@@ -247,7 +247,10 @@ class InstrumentedFLSimulator(FLSimulator):
                 optimizer.zero_grad()
                 loss = self.criterion(model(x), y)
                 loss.backward()
-                current_loss = float(loss.item())
+                # Keep scalar feedback on-device until the client finishes. Calling
+                # item() for every batch serializes MPS execution and dominates the
+                # ResNet18 runtime on Apple Silicon.
+                current_loss = loss.detach()
                 if len(first_losses) < self.credit_batches:
                     first_losses.append(current_loss)
                 tail_losses.append(current_loss)
@@ -258,26 +261,28 @@ class InstrumentedFLSimulator(FLSimulator):
                         clip_gradients(model, float(self.cfg.dp_clip_norm))
                     except Exception:
                         pass
-                if self.cfg.track_grad_norm:
-                    total_norm_squared = sum(
-                        parameter.grad.data.norm(2).item() ** 2
-                        for parameter in model.parameters()
-                        if parameter.grad is not None
-                    )
-                    last_grad_norm = total_norm_squared ** 0.5
                 optimizer.step()
                 last_loss = current_loss
                 if self.cfg.smoke_test_mode and batch_index > 1:
                     break
+        if self.cfg.track_grad_norm:
+            gradients = [
+                parameter.grad.detach().norm(2)
+                for parameter in model.parameters()
+                if parameter.grad is not None
+            ]
+            if gradients:
+                last_grad_norm = float(torch.linalg.vector_norm(torch.stack(gradients)).item())
         with torch.no_grad():
             state = {key: value.detach().clone() for key, value in model.state_dict().items()}
-        before = float(np.mean(first_losses)) if first_losses else 0.0
-        after = float(np.mean(tail_losses)) if tail_losses else last_loss
+        before = float(torch.stack(first_losses).mean().item()) if first_losses else 0.0
+        after = float(torch.stack(list(tail_losses)).mean().item()) if tail_losses else 0.0
+        final_loss = float(last_loss.item()) if last_loss is not None else 0.0
         client = self.clients[cid]
         client.meta["last_local_loss_before"] = before
         client.meta["last_local_loss_after"] = after
         client.meta["last_local_loss_reduction"] = before - after
-        return state, len(loader.dataset), last_loss, (last_grad_norm if self.cfg.track_grad_norm else 0.0)
+        return state, len(loader.dataset), final_loss, (last_grad_norm if self.cfg.track_grad_norm else 0.0)
 
     def _simulate_round_environment(self, round_idx: int) -> None:
         """Apply the shared environment model with the manuscript's epoch factor."""
@@ -488,6 +493,17 @@ class InstrumentedFLSimulator(FLSimulator):
                     "criticalfl_sparse_round": criticalfl_sparse_round,
                 }
             )
+            v2_state = self.history["state"].get("research_maml_select_v2_state")
+            if isinstance(v2_state, dict):
+                components = v2_state.get("last_components", {}) or {}
+                for key, value in components.items():
+                    row[f"maml_v2_{key}"] = float(value)
+                row["maml_v2_selection_mode"] = str(v2_state.get("last_selection_mode", ""))
+                row["maml_v2_adjusted_cost_mean"] = float(v2_state.get("last_adjusted_cost_mean", 0.0))
+                row["maml_v2_overuse_mean"] = float(v2_state.get("last_overuse_mean", 0.0))
+                bucket_counts = v2_state.get("last_bucket_counts", {}) or {}
+                for key, value in bucket_counts.items():
+                    row[f"maml_v2_bucket_{key}"] = int(value)
             self.history["state"]["last_reward"] = row["accuracy_delta"]
             if evaluated:
                 previous_accuracy = float(evaluation["accuracy"])

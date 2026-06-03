@@ -1,0 +1,93 @@
+defaults:
+  partition: label-shard
+  dirichlet_alpha: 0.5
+  shards_per_client: 2
+  total_clients: 30
+  clients_per_round: 5
+  rounds: 100
+  local_epochs: 2
+  batch_size: 16
+  lr: 0.02
+  eval_every: 5
+  parallel_clients: 0
+  track_grad_norm: true
+  performance_mode: true
+
+local_training:
+  optimizer: SGD
+  momentum: 0.9
+  weight_decay: 0.0001
+  scheduler: constant
+  model_initialization: pytorch_default
+
+maml_select:
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 1
+  lambda_latency: 0.5
+  target_latency_quantile: 0.5
+  normalize_latency_penalty: true
+  exploration_clients: 1
+  selector_seed: 2026
+
+maml_select_v2:
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 1
+  lambda_latency: 0.25
+  target_latency_quantile: 0.5
+  normalize_latency_penalty: true
+  exploration_clients: 1
+  learned_clients: 3
+  diversity_clients: 1
+  fairness_clients: 1
+  cost_clients: 0
+  overuse_factor: 1.5
+  energy_weight: 0.10
+  diversity_weight: 0.35
+  fairness_weight: 0.35
+  novelty_weight: 0.20
+  uncertainty_weight: 0.05
+  global_reward_weight: 0.0
+  reward_ema_alpha: 0.30
+  replay_capacity: 128
+  support_size: 32
+  pairwise_weight: 0.30
+  listwise_weight: 0.10
+  ranking_temperature: 0.50
+  selector_seed: 2026
+
+criticalfl:
+  delta: 0.01
+  growth_factor: 2.0
+  sparse_fraction: 0.20
+
+fedgcs:
+  latent_dim: 16
+  optimisation_steps: 5
+  lr: 0.001
+  beta_kl: 0.01
+  selector_seed: 2026
+
+scenarios:
+  fsdd_100r:
+    dataset: FSDD
+    model: AudioCNN
+    report_accuracy_target: 0.90
+
+integrated_methods:
+  - baseline.fedavg
+  - system_aware.fedcs
+  - system_aware.oort
+  - system_aware.tifl
+  - ml.fedcor
+  - research.criticalfl
+  - research.fedgcs
+  - research.maml_select
+
+experiments:
+  - id: audio_fsdd_100r
+    profiles: [audio_fsdd]
+    scenarios: [fsdd_100r]
+    methods_from: integrated_methods
+    seeds: [42]

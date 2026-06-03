@@ -357,6 +357,12 @@ class FLSimulator:
             print("Warning: 'thop' not installed. Research efficiency metrics will be 0.")
         except Exception as e:
             print(f"Warning: Model profiling failed: {e}")
+        finally:
+            # THOP registers float64 counters as module buffers. They are profiling
+            # metadata, not model state, and MPS cannot clone float64 buffers.
+            for module in self.model.modules():
+                module._buffers.pop("total_ops", None)
+                module._buffers.pop("total_params", None)
 
         # Save initial model state for fair multi-method comparisons
         with torch.no_grad():

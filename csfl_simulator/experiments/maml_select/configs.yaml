@@ -31,6 +31,33 @@ maml_select:
   exploration_clients: 1
   selector_seed: 2026
 
+maml_select_v2:
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 1
+  lambda_latency: 0.25
+  target_latency_quantile: 0.5
+  normalize_latency_penalty: true
+  exploration_clients: 1
+  learned_clients: 6
+  diversity_clients: 2
+  fairness_clients: 1
+  cost_clients: 1
+  overuse_factor: 1.5
+  energy_weight: 0.10
+  diversity_weight: 0.35
+  fairness_weight: 0.35
+  novelty_weight: 0.20
+  uncertainty_weight: 0.05
+  global_reward_weight: 0.0
+  reward_ema_alpha: 0.30
+  replay_capacity: 128
+  support_size: 32
+  pairwise_weight: 0.30
+  listwise_weight: 0.10
+  ranking_temperature: 0.50
+  selector_seed: 2026
+
 criticalfl:
   delta: 0.01
   growth_factor: 2.0
@@ -64,6 +91,11 @@ scenarios:
     rounds: 36
     local_epochs: 1
     eval_every: 3
+  fashion_v2_pilot:
+    dataset: Fashion-MNIST
+    model: LightCNN
+    rounds: 50
+    eval_every: 5
   cifar10_main:
     dataset: CIFAR-10
     model: ResNet18
@@ -76,6 +108,14 @@ scenarios:
     lr: 0.01
     lr_scheduler: cosine
     lr_warmup_rounds: 10
+  cifar100_main:
+    dataset: CIFAR-100
+    model: ResNet18
+  cifar100_v2_pilot:
+    dataset: CIFAR-100
+    model: ResNet18
+    rounds: 50
+    eval_every: 5
   fashion_energy_target:
     dataset: Fashion-MNIST
     model: LightCNN
@@ -153,6 +193,34 @@ experiments:
     scenarios: [cifar10_reconciled]
     methods_from: integrated_methods
     seeds: [42, 123, 2026]
+
+  - id: cifar100_benchmarks
+    profiles: [cifar100]
+    scenarios: [cifar100_main]
+    methods_from: integrated_methods
+    seeds: [42, 123, 2026]
+
+  - id: maml_v2_pilot_compare
+    profiles: [maml_v2]
+    scenarios: [fashion_v2_pilot, cifar100_v2_pilot]
+    methods: [research.maml_select, research.maml_select_v2]
+    seeds: [42]
+
+  - id: maml_v2_tuning
+    profiles: [maml_v2]
+    scenarios: [fashion_v2_pilot]
+    seeds: [42]
+    method_variants:
+      - {key: research.maml_select_v2.default, label: "v2 default", params: {}}
+      - {key: research.maml_select_v2.no_diversity, label: "v2 w/o diversity", params: {diversity_clients: 0, diversity_weight: 0.0}}
+      - {key: research.maml_select_v2.no_fairness, label: "v2 w/o fairness", params: {fairness_clients: 0, fairness_weight: 0.0}}
+      - {key: research.maml_select_v2.no_uncertainty, label: "v2 w/o uncertainty", params: {uncertainty_weight: 0.0}}
+      - {key: research.maml_select_v2.explore_1, label: "v2 exploration=1", params: {exploration_clients: 1}}
+      - {key: research.maml_select_v2.explore_2, label: "v2 exploration=2", params: {exploration_clients: 2, learned_clients: 5}}
+      - {key: research.maml_select_v2.explore_3, label: "v2 exploration=3", params: {exploration_clients: 3, learned_clients: 4}}
+      - {key: research.maml_select_v2.lambda_0p1, label: "v2 lambda=0.1", params: {lambda_latency: 0.1}}
+      - {key: research.maml_select_v2.lambda_0p25, label: "v2 lambda=0.25", params: {lambda_latency: 0.25}}
+      - {key: research.maml_select_v2.lambda_0p5, label: "v2 lambda=0.5", params: {lambda_latency: 0.5}}
 
   - id: local_fashion_pilot
     profiles: [pilot]

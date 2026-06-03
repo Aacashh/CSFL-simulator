@@ -56,6 +56,8 @@ def set_global_seed(
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    if hasattr(torch, "mps") and torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
     # Environment variable for hash-based operations
     os.environ["PYTHONHASHSEED"] = str(seed)

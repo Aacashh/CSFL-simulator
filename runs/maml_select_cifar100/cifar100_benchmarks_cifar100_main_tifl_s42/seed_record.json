@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "python_rng_state_hash": "4bff465b2d77cfe4",
+  "numpy_rng_state_hash": "20290f6fd34b2bb3",
+  "torch_rng_state_hash": "ca9f6cf4fc112b83",
+  "cuda_available": false,
+  "cudnn_deterministic": true,
+  "cudnn_benchmark": false,
+  "model_weight_hash": "0772be2a99d6c778"
+}

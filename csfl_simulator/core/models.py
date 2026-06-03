@@ -120,6 +120,33 @@ class LightCIFAR(nn.Module):
         return self.fc2(x)
 
 
+class AudioCNN(nn.Module):
+    """Small CNN for 32x32 log-spectrogram keyword/digit experiments."""
+
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 32):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 16, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((4, 4)),
+        )
+        self.fc1 = nn.Linear(64 * 4 * 4, 64)
+        self.fc2 = nn.Linear(64, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.features[0].in_channels)
+        x = self.features(x)
+        x = x.reshape(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
+
+
 # ---------------------------------------------------------------------------
 # FD-specific CNN architectures (Mu et al., IEEE TCCN 2024, Table III)
 # Three heterogeneous architectures for federated distillation experiments.
@@ -245,6 +272,8 @@ def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
     if d in ("mnist", "fashion-mnist", "fashionmnist", "kmnist", "emnist"):
         return 1, 28
+    if d in ("fsdd", "free-spoken-digit", "free-spoken-digit-dataset"):
+        return 1, 32
     if d in ("cifar10", "cifar-10", "cifar100", "cifar-100"):
         return 3, 32
     if d in ("stl-10", "stl10"):
@@ -262,6 +291,8 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
         model = CNNMnistFedAvg(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("lightcnn", "light-cifar"):
         model = LightCIFAR(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("audiocnn", "audio-cnn", "tiny-audio-cnn", "tiny_audiocnn"):
+        model = AudioCNN(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("fd-cnn1", "fd_cnn1", "fdcnn1"):
         model = FDCNN1(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("fd-cnn2", "fd_cnn2", "fdcnn2"):
