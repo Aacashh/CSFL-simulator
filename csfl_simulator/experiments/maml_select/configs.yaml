@@ -212,6 +212,34 @@ experiments:
     methods_from: integrated_methods
     seeds: [42, 123, 2026]
 
+  - id: cifar100_v2_benchmarks
+    profiles: [cifar100_v2]
+    scenarios: [cifar100_main]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - key: research.maml_select_v2
+        label: "MAML-Select v2 CIFAR-100"
+        params:
+          lambda_latency: 0.10
+          energy_weight: 0.05
+          diversity_weight: 0.55
+          fairness_weight: 0.25
+          novelty_weight: 0.35
+          uncertainty_weight: 0.10
+          global_reward_weight: 0.02
+          learned_clients: 5
+          diversity_clients: 3
+          fairness_clients: 1
+          cost_clients: 1
+          exploration_clients: 1
+          overuse_factor: 1.75
+          replay_capacity: 256
+          support_size: 48
+          pairwise_weight: 0.45
+          listwise_weight: 0.15
+          ranking_temperature: 0.40
+          reward_ema_alpha: 0.40
+
   - id: maml_v2_windows_cpu
     profiles: [maml_v2_cpu]
     scenarios: [fashion_v2_cpu_main, cifar10_v2_cpu_main]
