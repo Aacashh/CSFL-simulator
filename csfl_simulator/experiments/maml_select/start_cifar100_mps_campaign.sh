@@ -40,9 +40,10 @@ printf -v REPO_ROOT_QUOTED '%q' "${REPO_ROOT}"
 printf -v PYTHON_BIN_QUOTED '%q' "${PYTHON_BIN}"
 printf -v CAMPAIGN_SCRIPT_QUOTED '%q' "${CAMPAIGN_SCRIPT}"
 printf -v LOG_FILE_QUOTED '%q' "${LOG_FILE}"
+printf -v EXTRA_ARGS_QUOTED '%q' "${MAML_SELECT_EXTRA_ARGS:-}"
 
 launchctl submit -l "${LABEL}" -- /bin/zsh -lc \
-  "cd ${REPO_ROOT_QUOTED} && exec env MPLCONFIGDIR=/tmp/maml-select-matplotlib PYTHONUNBUFFERED=1 PYTHON_BIN=${PYTHON_BIN_QUOTED} bash ${CAMPAIGN_SCRIPT_QUOTED} >>${LOG_FILE_QUOTED} 2>&1"
+  "cd ${REPO_ROOT_QUOTED} && exec env MPLCONFIGDIR=/tmp/maml-select-matplotlib PYTHONUNBUFFERED=1 PYTHON_BIN=${PYTHON_BIN_QUOTED} MAML_SELECT_EXTRA_ARGS=${EXTRA_ARGS_QUOTED} bash ${CAMPAIGN_SCRIPT_QUOTED} >>${LOG_FILE_QUOTED} 2>&1"
 sleep 1
 JOB="$(launchctl list "${LABEL}")"
 PID="$(printf '%s\n' "${JOB}" | awk -F'= ' '/"PID"/ {gsub(/;/, "", $2); print $2}')"

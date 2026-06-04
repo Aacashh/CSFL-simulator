@@ -112,17 +112,23 @@ def build_matrix(config: Dict[str, Any], profile: str, only: Iterable[str], seed
 
 
 def _register_research_methods(simulator: Any, config: Dict[str, Any], item: Dict[str, Any]) -> None:
+    maml_params = dict(config["maml_select"])
+    maml_v2_params = dict(config["maml_select_v2"])
+    if item["method_key"] == "research.maml_select":
+        maml_params.update(item.get("method_params", {}))
+    if item["method_key"] == "research.maml_select_v2":
+        maml_v2_params.update(item.get("method_params", {}))
     simulator.registry.register(
         "research.maml_select",
         MAML_MODULE,
-        params=dict(config["maml_select"]),
+        params=maml_params,
         display_name="MAML-Select",
         origin="resubmission experiment suite",
     )
     simulator.registry.register(
         "research.maml_select_v2",
         MAML_V2_MODULE,
-        params=dict(config["maml_select_v2"]),
+        params=maml_v2_params,
         display_name="MAML-Select v2",
         origin="post-campaign experimental selector",
     )
@@ -395,11 +401,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--profile",
-        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "maml_v2", "audio_fsdd"),
+        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "maml_v2", "maml_v2_cpu", "audio_fsdd"),
         default="core",
     )
     parser.add_argument("--only", action="append", default=[], metavar="EXPERIMENT_ID")
     parser.add_argument("--seed", action="append", type=int, dest="seeds")
+    parser.add_argument(
+        "--method-key",
+        action="append",
+        default=[],
+        help="Run only the specified method key. May be repeated.",
+    )
     parser.add_argument("--device", default="auto", help="Simulator device, for example cuda or cpu.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--analysis-dir", type=Path, default=DEFAULT_ANALYSIS)
@@ -414,6 +426,11 @@ def parse_args() -> argparse.Namespace:
         help="Mark CodeCarbon energy as measured only after telemetry is verified on the host.",
     )
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--start-at-run-label",
+        default=None,
+        help="Drop earlier matrix entries and begin at this exact run label.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the matrix without loading data or training.")
     parser.add_argument("--fail-fast", action="store_true")
     return parser.parse_args()
@@ -423,6 +440,20 @@ def main() -> None:
     args = parse_args()
     config = _load(args.config)
     matrix = build_matrix(config, args.profile, args.only, args.seeds)
+    if args.method_key:
+        requested_methods = set(args.method_key)
+        matrix = [item for item in matrix if item["method_key"] in requested_methods]
+    if args.start_at_run_label:
+        labels = [_run_label(item) for item in matrix]
+        try:
+            start_index = labels.index(args.start_at_run_label)
+        except ValueError as exc:
+            available = "\n  ".join(labels)
+            raise SystemExit(
+                f"Run label {args.start_at_run_label!r} was not found in the matrix.\n"
+                f"Available labels:\n  {available}"
+            ) from exc
+        matrix = matrix[start_index:]
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.analysis_dir.mkdir(parents=True, exist_ok=True)
     manifest = {

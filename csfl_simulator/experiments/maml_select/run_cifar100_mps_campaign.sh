@@ -9,6 +9,10 @@ ARTIFACTS_DIR="${REPO_ROOT}/artifacts/maml_select_cifar100"
 ANALYSIS_DIR="${ARTIFACTS_DIR}/analysis"
 PLOTS_DIR="${ARTIFACTS_DIR}/plots"
 LOG_DIR="${RUNS_DIR}/logs"
+EXTRA_RUN_ARGS=()
+if [[ -n "${MAML_SELECT_EXTRA_ARGS:-}" ]]; then
+  read -r -a EXTRA_RUN_ARGS <<< "${MAML_SELECT_EXTRA_ARGS}"
+fi
 
 mkdir -p "${LOG_DIR}" "${ANALYSIS_DIR}" "${PLOTS_DIR}"
 cd "${REPO_ROOT}"
@@ -31,7 +35,8 @@ PY
   --analysis-dir "${ANALYSIS_DIR}" \
   --country-iso-code IND \
   --grid-intensity 475 \
-  --resume
+  --resume \
+  "${EXTRA_RUN_ARGS[@]}"
 
 "${PYTHON_BIN}" -m csfl_simulator.experiments.maml_select.analyze_results \
   --results-dir "${RUNS_DIR}" \
