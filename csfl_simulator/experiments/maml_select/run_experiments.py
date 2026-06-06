@@ -199,6 +199,12 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
     run_label = _run_label(item)
     output_dir = args.output_dir / run_label
     result_path = output_dir / "result.json"
+    skip_marker = output_dir / ".skip_run"
+    if args.resume and skip_marker.exists():
+        reason = skip_marker.read_text(encoding="utf-8").strip()
+        suffix = f": {reason}" if reason else ""
+        print(f"[skip] {run_label}{suffix}")
+        return {"run_label": run_label, "status": "skipped", "result_path": str(result_path)}
     if args.resume and result_path.exists():
         print(f"[skip] {run_label}")
         return {"run_label": run_label, "status": "skipped", "result_path": str(result_path)}

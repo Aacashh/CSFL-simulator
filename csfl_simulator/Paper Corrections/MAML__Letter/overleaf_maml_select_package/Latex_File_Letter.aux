@@ -1,0 +1,101 @@
+\relax 
+\citation{mcmahan2017communication}
+\citation{karimireddy2020scaffold,mai2024study,tapwal2026stragglers,forootani2026asynchronous}
+\citation{borazjani2026redefining}
+\citation{nishio2019client,chai2020tifl}
+\citation{lai2021oort,tang2022fedcor,xu2024federated,yan2023criticalfl,ning2024fedgcs}
+\citation{wang2020optimizing,pan2024contextual,kazemi2026robust}
+\citation{finn2017model}
+\citation{fallah2020personalized}
+\citation{nishio2019client,chai2020tifl}
+\citation{tapwal2026stragglers,forootani2026asynchronous}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}1}System-Aware Selection}{1}{}\protected@file@percent }
+\citation{lai2021oort,tang2022fedcor}
+\citation{yan2023criticalfl,ning2024fedgcs}
+\citation{xu2024federated,tran2026fedimp}
+\citation{wang2020optimizing,pan2024contextual}
+\citation{kazemi2026robust}
+\citation{arisdakessian2026vox}
+\citation{fallah2020personalized}
+\citation{nishio2019client}
+\citation{chai2020tifl}
+\citation{lai2021oort}
+\citation{tang2022fedcor}
+\citation{wang2020optimizing}
+\citation{pan2024contextual}
+\citation{xu2024federated}
+\citation{yan2023criticalfl}
+\citation{ning2024fedgcs}
+\citation{kazemi2026robust}
+\citation{arisdakessian2026vox}
+\citation{pan2024contextual,xu2024federated}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}2}Data-Aware and Utility-Based Selection}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}3}Learning-Based and Meta-Learning Approaches}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}System Model and Problem Formulation}{2}{}\protected@file@percent }
+\newlabel{eq:global_objective}{{1}{2}{}{equation.1}{}}
+\newlabel{eq:round_latency}{{2}{2}{}{equation.2}{}}
+\newlabel{eq:bi_objective}{{3}{2}{}{equation.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Methodology: MAML-Select Algorithm}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-}1}State Space}{2}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison of representative methods and MAML-Select.}}{3}{}\protected@file@percent }
+\newlabel{tab:related_work_comparison}{{I}{3}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-}2}Cost Function}{3}{}\protected@file@percent }
+\newlabel{eq:cost}{{4}{3}{}{equation.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}The MAML-Select Algorithm}{3}{}\protected@file@percent }
+\newlabel{eq:inner_loop}{{5}{3}{}{equation.5}{}}
+\newlabel{eq:selection}{{6}{3}{}{equation.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textcolor {blue}{System model and MAML-Select workflow. A central server observes client states, selects $K$ clients from the available pool, aggregates their local updates, and uses returned local-loss and system feedback for support-set adaptation, candidate scoring, and query-set meta-update.}}}{3}{}\protected@file@percent }
+\newlabel{fig:model_diagram}{{1}{3}{}{figure.1}{}}
+\newlabel{eq:outer_loop}{{7}{3}{}{equation.7}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}1}Computational Complexity}{3}{}\protected@file@percent }
+\citation{wu2018light}
+\citation{he2016deep}
+\citation{ignatov2018ai}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces MAML-Select Algorithm}}{4}{}\protected@file@percent }
+\newlabel{alg:maml_select}{{1}{4}{}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Evaluation and Results}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}\textcolor {blue}{Accuracy and Resource Cost}}{4}{}\protected@file@percent }
+\newlabel{eq:tflops}{{8}{4}{}{equation.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textcolor {blue}{CIFAR-100 convergence over 150 rounds. The panels report accuracy, precision, cumulative modelled carbon, and test loss.}}}{4}{}\protected@file@percent }
+\newlabel{fig:convergence}{{2}{4}{}{figure.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Benchmark summary across non-IID datasets. Accuracy, precision, recall, F1, and coverage are in percent; energy is in Wh and carbon is in gCO$_2$e. Standard deviations are shown where at least two completed seeds are available.}}{5}{}\protected@file@percent }
+\newlabel{tab:main_summary}{{II}{5}{}{table.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textcolor {blue}{Efficiency--accuracy trade-off relative to FedAvg. $x<1$ indicates lower cumulative training compute, while $y$ reports accuracy change in percentage points.}}}{5}{}\protected@file@percent }
+\newlabel{fig:tradeoff}{{3}{5}{}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}\textcolor {blue}{Sensitivity and Ablation}}{5}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textcolor {blue}{$\lambda $ sensitivity on Fashion-MNIST. Curves are normalized to the value at $\lambda =0.1$ and report accuracy, compute, energy, and fairness.}}}{5}{}\protected@file@percent }
+\newlabel{fig:lambda_sensitivity}{{4}{5}{}{figure.4}{}}
+\bibstyle{IEEEtran}
+\bibdata{References_letter}
+\bibcite{mcmahan2017communication}{1}
+\bibcite{karimireddy2020scaffold}{2}
+\bibcite{mai2024study}{3}
+\bibcite{tapwal2026stragglers}{4}
+\bibcite{forootani2026asynchronous}{5}
+\bibcite{borazjani2026redefining}{6}
+\bibcite{nishio2019client}{7}
+\bibcite{chai2020tifl}{8}
+\bibcite{lai2021oort}{9}
+\bibcite{tang2022fedcor}{10}
+\bibcite{xu2024federated}{11}
+\bibcite{yan2023criticalfl}{12}
+\bibcite{ning2024fedgcs}{13}
+\bibcite{wang2020optimizing}{14}
+\bibcite{pan2024contextual}{15}
+\bibcite{kazemi2026robust}{16}
+\bibcite{finn2017model}{17}
+\bibcite{fallah2020personalized}{18}
+\bibcite{tran2026fedimp}{19}
+\bibcite{arisdakessian2026vox}{20}
+\bibcite{wu2018light}{21}
+\bibcite{he2016deep}{22}
+\bibcite{ignatov2018ai}{23}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces State-feature ablation on Fashion-MNIST ($n=3$). Each row removes one feature from the six-dimensional state vector; the full vector is the reference.}}{6}{}\protected@file@percent }
+\newlabel{tab:ablation}{{III}{6}{}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textcolor {blue}{State-feature ablation on Fashion-MNIST. Each bar reports the accuracy change relative to the full six-feature state vector.}}}{6}{}\protected@file@percent }
+\newlabel{fig:feature_ablation}{{5}{6}{}{figure.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Conclusion and Future Work}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{6}{}\protected@file@percent }
+\gdef \@abspage@last{6}

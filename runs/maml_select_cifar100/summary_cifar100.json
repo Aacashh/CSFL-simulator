@@ -1,16 +1,11 @@
 {
-  "created_utc": "2026-06-04T17:40:18.786854+00:00",
+  "created_utc": "2026-06-05T06:19:07.063555+00:00",
   "profile": "cifar100",
   "statuses": [
     {
-      "run_label": "cifar100_benchmarks_cifar100_main_maml_select_s2026",
+      "run_label": "cifar100_benchmarks_cifar100_main_criticalfl_s42",
       "status": "skipped",
-      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select_cifar100/cifar100_benchmarks_cifar100_main_maml_select_s2026/result.json"
-    },
-    {
-      "run_label": "cifar100_benchmarks_cifar100_main_fedavg_s2026",
-      "status": "skipped",
-      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select_cifar100/cifar100_benchmarks_cifar100_main_fedavg_s2026/result.json"
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select_cifar100/cifar100_benchmarks_cifar100_main_criticalfl_s42/result.json"
     }
   ]
 }

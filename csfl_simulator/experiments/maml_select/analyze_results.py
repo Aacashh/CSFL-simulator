@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
 DEFAULT_RESULTS = REPO_ROOT / "runs" / "maml_select"
 DEFAULT_ANALYSIS = REPO_ROOT / "artifacts" / "maml_select" / "analysis"
-MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks"}
+MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks", "cifar100_v2_benchmarks"}
 METHOD_NAMES = {
     "baseline.fedavg": "FedAvg",
     "system_aware.fedcs": "FedCS",

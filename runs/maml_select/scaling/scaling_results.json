@@ -1,0 +1,327 @@
+{
+  "created_utc": "2026-06-05T06:18:55.287731+00:00",
+  "seed": 42,
+  "rounds_per_run": 10,
+  "results": [
+    {
+      "method": "baseline.fedavg",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0001577916002133861,
+      "std_selection_seconds": 0.0002038603679424111,
+      "total_selection_seconds": 0.0015779160021338612,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.fedcs",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00024939180293586104,
+      "std_selection_seconds": 0.00043851163435697227,
+      "total_selection_seconds": 0.0024939180293586105,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.oort",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00021189159306231887,
+      "std_selection_seconds": 0.00033670414587422,
+      "total_selection_seconds": 0.0021189159306231886,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.tifl",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00022473329736385494,
+      "std_selection_seconds": 0.000396852204600093,
+      "total_selection_seconds": 0.0022473329736385494,
+      "samples": 10
+    },
+    {
+      "method": "ml.fedcor",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0006038250023266301,
+      "std_selection_seconds": 0.0004972665523269313,
+      "total_selection_seconds": 0.0060382500232663006,
+      "samples": 10
+    },
+    {
+      "method": "research.criticalfl",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0003021918004378676,
+      "std_selection_seconds": 0.0006469823213368596,
+      "total_selection_seconds": 0.0030219180043786764,
+      "samples": 10
+    },
+    {
+      "method": "research.fedgcs",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.02835458750196267,
+      "std_selection_seconds": 0.025145906315159547,
+      "total_selection_seconds": 0.2835458750196267,
+      "samples": 10
+    },
+    {
+      "method": "research.maml_select",
+      "N": 20,
+      "K": 2,
+      "rounds": 10,
+      "mean_selection_seconds": 0.01268862069118768,
+      "std_selection_seconds": 0.010617366691749796,
+      "total_selection_seconds": 0.1268862069118768,
+      "samples": 10
+    },
+    {
+      "method": "baseline.fedavg",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 8.328320109285414e-05,
+      "std_selection_seconds": 1.1813074083130962e-05,
+      "total_selection_seconds": 0.0008328320109285414,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.fedcs",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 9.434189996682107e-05,
+      "std_selection_seconds": 2.9955508484832474e-05,
+      "total_selection_seconds": 0.0009434189996682107,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.oort",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00014551239146385342,
+      "std_selection_seconds": 0.00019413459613875302,
+      "total_selection_seconds": 0.0014551239146385342,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.tifl",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 9.554159478284419e-05,
+      "std_selection_seconds": 4.736918159246254e-05,
+      "total_selection_seconds": 0.0009554159478284419,
+      "samples": 10
+    },
+    {
+      "method": "ml.fedcor",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0026763291010865943,
+      "std_selection_seconds": 0.00038799392872202994,
+      "total_selection_seconds": 0.02676329101086594,
+      "samples": 10
+    },
+    {
+      "method": "research.criticalfl",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00010554170003160835,
+      "std_selection_seconds": 3.99240506661086e-05,
+      "total_selection_seconds": 0.0010554170003160834,
+      "samples": 10
+    },
+    {
+      "method": "research.fedgcs",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 0.025830595998559146,
+      "std_selection_seconds": 0.015917726691537917,
+      "total_selection_seconds": 0.25830595998559147,
+      "samples": 10
+    },
+    {
+      "method": "research.maml_select",
+      "N": 40,
+      "K": 4,
+      "rounds": 10,
+      "mean_selection_seconds": 0.011159829099779018,
+      "std_selection_seconds": 0.006030422584374089,
+      "total_selection_seconds": 0.11159829099779017,
+      "samples": 10
+    },
+    {
+      "method": "baseline.fedavg",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00010319179564248771,
+      "std_selection_seconds": 1.9419222517091966e-05,
+      "total_selection_seconds": 0.001031917956424877,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.fedcs",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0001291500055231154,
+      "std_selection_seconds": 2.327743255827079e-05,
+      "total_selection_seconds": 0.001291500055231154,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.oort",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.0001236748998053372,
+      "std_selection_seconds": 2.5167450900517544e-05,
+      "total_selection_seconds": 0.001236748998053372,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.tifl",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 9.825429879128933e-05,
+      "std_selection_seconds": 2.038923609784893e-05,
+      "total_selection_seconds": 0.0009825429879128933,
+      "samples": 10
+    },
+    {
+      "method": "ml.fedcor",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.020562366503872907,
+      "std_selection_seconds": 0.0019019997670012476,
+      "total_selection_seconds": 0.2056236650387291,
+      "samples": 10
+    },
+    {
+      "method": "research.criticalfl",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00010058760235551745,
+      "std_selection_seconds": 1.324845817306541e-05,
+      "total_selection_seconds": 0.0010058760235551745,
+      "samples": 10
+    },
+    {
+      "method": "research.fedgcs",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.026627070794347674,
+      "std_selection_seconds": 0.01722778598277999,
+      "total_selection_seconds": 0.26627070794347674,
+      "samples": 10
+    },
+    {
+      "method": "research.maml_select",
+      "N": 80,
+      "K": 8,
+      "rounds": 10,
+      "mean_selection_seconds": 0.01190680410072673,
+      "std_selection_seconds": 0.006404727320735583,
+      "total_selection_seconds": 0.11906804100726731,
+      "samples": 10
+    },
+    {
+      "method": "baseline.fedavg",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00010438309982419014,
+      "std_selection_seconds": 1.712542976637711e-05,
+      "total_selection_seconds": 0.0010438309982419014,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.fedcs",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00014227499486878513,
+      "std_selection_seconds": 2.1542119026256748e-05,
+      "total_selection_seconds": 0.0014227499486878514,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.oort",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00012292939354665577,
+      "std_selection_seconds": 2.2747392430857755e-05,
+      "total_selection_seconds": 0.0012292939354665577,
+      "samples": 10
+    },
+    {
+      "method": "system_aware.tifl",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 9.860830323304981e-05,
+      "std_selection_seconds": 1.724751125717628e-05,
+      "total_selection_seconds": 0.000986083032330498,
+      "samples": 10
+    },
+    {
+      "method": "ml.fedcor",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.038099004203104414,
+      "std_selection_seconds": 0.0019248314252492875,
+      "total_selection_seconds": 0.38099004203104414,
+      "samples": 10
+    },
+    {
+      "method": "research.criticalfl",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.00010959139617625624,
+      "std_selection_seconds": 1.585412885929093e-05,
+      "total_selection_seconds": 0.0010959139617625624,
+      "samples": 10
+    },
+    {
+      "method": "research.fedgcs",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.02711636679887306,
+      "std_selection_seconds": 0.017223320050912143,
+      "total_selection_seconds": 0.2711636679887306,
+      "samples": 10
+    },
+    {
+      "method": "research.maml_select",
+      "N": 100,
+      "K": 10,
+      "rounds": 10,
+      "mean_selection_seconds": 0.011871108200284652,
+      "std_selection_seconds": 0.0064383150243622605,
+      "total_selection_seconds": 0.11871108200284652,
+      "samples": 10
+    }
+  ]
+}

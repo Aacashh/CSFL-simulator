@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "created_utc": "2026-06-04T17:40:17.097796+00:00",
+  "created_utc": "2026-06-05T06:19:04.811232+00:00",
   "profile": "cifar100",
-  "config": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/csfl_simulator/experiments/maml_select/configs.yaml",
+  "config": "/var/folders/tc/xw4gr7n95sn_r9_37lmdbtqh0000gn/T/maml_select_cifar100_150.ESxqir",
   "country_iso_code": "IND",
   "declared_grid_intensity_g_per_kwh": 475.0,
   "hardware_meter_enabled": true,
@@ -60,7 +60,7 @@
         "dirichlet_alpha": 0.5,
         "total_clients": 100,
         "clients_per_round": 10,
-        "rounds": 200,
+        "rounds": 151,
         "local_epochs": 5,
         "batch_size": 32,
         "lr": 0.01,
@@ -71,33 +71,9 @@
         "dataset": "CIFAR-100",
         "model": "ResNet18"
       },
-      "seed": 2026,
-      "method_key": "research.maml_select",
-      "method_label": "research.maml_select",
-      "method_params": {}
-    },
-    {
-      "experiment_id": "cifar100_benchmarks",
-      "scenario_name": "cifar100_main",
-      "scenario": {
-        "partition": "dirichlet",
-        "dirichlet_alpha": 0.5,
-        "total_clients": 100,
-        "clients_per_round": 10,
-        "rounds": 200,
-        "local_epochs": 5,
-        "batch_size": 32,
-        "lr": 0.01,
-        "eval_every": 10,
-        "parallel_clients": 0,
-        "track_grad_norm": true,
-        "performance_mode": true,
-        "dataset": "CIFAR-100",
-        "model": "ResNet18"
-      },
-      "seed": 2026,
-      "method_key": "baseline.fedavg",
-      "method_label": "baseline.fedavg",
+      "seed": 42,
+      "method_key": "research.criticalfl",
+      "method_label": "research.criticalfl",
       "method_params": {}
     }
   ]

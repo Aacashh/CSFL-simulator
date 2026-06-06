@@ -79,14 +79,16 @@ def _criticalfl_sparse_fedavg(updates, weights, global_state, keep_fraction: flo
         magnitudes = []
         for key, value in state_dict.items():
             if isinstance(value, torch.Tensor) and value.is_floating_point():
-                magnitudes.append((value.detach() - global_state[key].detach()).abs().reshape(-1))
+                reference = global_state[key].detach().to(value.device)
+                magnitudes.append((value.detach() - reference).abs().reshape(-1))
         flat = torch.cat(magnitudes) if magnitudes else torch.empty(0)
         keep_count = max(1, int(math.ceil(keep_fraction * flat.numel()))) if flat.numel() else 0
         threshold = torch.topk(flat, min(keep_count, flat.numel()), sorted=False).values.min() if keep_count else None
         client_masks = {}
         for key, value in state_dict.items():
             if isinstance(value, torch.Tensor) and value.is_floating_point() and threshold is not None:
-                client_masks[key] = (value.detach() - global_state[key].detach()).abs() >= threshold
+                reference = global_state[key].detach().to(value.device)
+                client_masks[key] = (value.detach() - reference).abs() >= threshold
         masked_updates.append(state_dict)
         masks.append(client_masks)
 
@@ -97,17 +99,35 @@ def _criticalfl_sparse_fedavg(updates, weights, global_state, keep_fraction: flo
             if not isinstance(initial, torch.Tensor) or not initial.is_floating_point():
                 aggregated[key] = initial.detach().clone() if isinstance(initial, torch.Tensor) else initial
                 continue
-            numerator = torch.zeros_like(initial)
-            denominator = torch.zeros_like(initial)
+            first_value = next(
+                (state_dict[key] for state_dict in masked_updates if isinstance(state_dict.get(key), torch.Tensor)),
+                initial,
+            )
+            device_initial = initial.detach().to(first_value.device)
+            numerator = torch.zeros_like(device_initial)
+            denominator = torch.zeros_like(device_initial)
             for state_dict, client_masks, weight in zip(masked_updates, masks, weights):
                 mask = client_masks.get(key)
                 if mask is None:
                     continue
+                value = state_dict[key].to(numerator.device)
                 fraction = float(weight) / total
-                numerator.add_(state_dict[key] * mask, alpha=fraction)
-                denominator.add_(mask, alpha=fraction)
-            aggregated[key] = torch.where(denominator > 0.0, numerator / denominator.clamp_min(1e-12), initial)
+                numerator.add_(value * mask.to(numerator.device), alpha=fraction)
+                denominator.add_(mask.to(numerator.device), alpha=fraction)
+            aggregated[key] = torch.where(
+                denominator > 0.0,
+                numerator / denominator.clamp_min(1e-12),
+                device_initial,
+            )
     return aggregated
+
+
+def _state_dict_to_cpu(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    """Move a client update off accelerator memory before cohort aggregation."""
+    return {
+        key: value.detach().cpu().clone() if isinstance(value, torch.Tensor) else value
+        for key, value in state_dict.items()
+    }
 
 
 class InstrumentedFLSimulator(FLSimulator):
@@ -407,6 +427,9 @@ class InstrumentedFLSimulator(FLSimulator):
             updates, weights = [], []
             for cid in ids:
                 state_dict, sample_count, loss, grad_norm = self._local_train(cid)
+                if method_key == "research.criticalfl" and self.device == "mps":
+                    state_dict = _state_dict_to_cpu(state_dict)
+                    cleanup_memory()
                 client = self.clients[cid]
                 client.last_loss = float(loss)
                 client.grad_norm = float(grad_norm)
@@ -428,6 +451,9 @@ class InstrumentedFLSimulator(FLSimulator):
                 else:
                     new_state = fedavg(updates, weights, keep_on_device=self.device.startswith("cuda"))
                 self.model.load_state_dict(new_state)
+                if method_key == "research.criticalfl" and self.device == "mps":
+                    updates.clear()
+                    cleanup_memory()
 
             evaluation, evaluated = self._evaluate(round_idx)
             durations = [float(self.clients[cid].estimated_duration or 0.0) for cid in ids]

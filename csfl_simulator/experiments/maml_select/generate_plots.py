@@ -66,7 +66,7 @@ METHOD_META = {
     "research.maml_select":  {"name": "MAML-Select","color": "#1B9E77", "marker": "*"},
     "research.maml_select_v2": {"name": "MAML-Select v2", "color": "#0072B2", "marker": "*"},
 }
-MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks"}
+MAIN_EXPERIMENT_IDS = {"main_benchmarks", "cifar100_benchmarks", "cifar100_v2_benchmarks"}
 
 
 def _name(key: str) -> str:
@@ -172,6 +172,7 @@ def plot_figure2(payloads: List[Dict], output_dir: Path) -> None:
         ("main_benchmarks", "fashion_main", "Fashion-MNIST"),
         ("main_benchmarks", "cifar10_main", "CIFAR-10"),
         ("cifar100_benchmarks", "cifar100_main", "CIFAR-100"),
+        ("cifar100_v2_benchmarks", "cifar100_main", "CIFAR-100 v2"),
     ]
 
     for experiment_id, scenario_name, dataset_label in scenarios:

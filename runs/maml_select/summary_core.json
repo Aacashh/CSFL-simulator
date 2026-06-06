@@ -1,0 +1,111 @@
+{
+  "created_utc": "2026-06-05T06:19:11.709206+00:00",
+  "profile": "core",
+  "statuses": [
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_latency_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_latency_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.full_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.full_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_loss_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_loss_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_battery_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_battery_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_staleness_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_staleness_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_grad_norm_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_grad_norm_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_frequency_s42",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_frequency_s42/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_latency_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_latency_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_loss_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_loss_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_grad_norm_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_grad_norm_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_staleness_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_staleness_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_frequency_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_frequency_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_battery_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_battery_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.full_s123",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.full_s123/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_latency_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_latency_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_staleness_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_staleness_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_loss_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_loss_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.full_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.full_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_grad_norm_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_grad_norm_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_frequency_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_frequency_s2026/result.json"
+    },
+    {
+      "run_label": "feature_ablation_fashion_main_research.maml_select.no_battery_s2026",
+      "status": "skipped",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs/maml_select/feature_ablation_fashion_main_research.maml_select.no_battery_s2026/result.json"
+    }
+  ]
+}
