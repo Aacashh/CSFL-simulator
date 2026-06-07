@@ -56,14 +56,14 @@ def parameter_count() -> int:
     return sum(p.numel() for p in MetaPolicy().parameters())
 
 
-def _seeded_policy(selector_seed: int, device: str) -> MetaPolicy:
+def _seeded_policy(selector_seed: int, device: str, hidden_dim: int = 64) -> MetaPolicy:
     """Initialize policy reproducibly without perturbing the FL training RNG."""
     devices = []
     if str(device).startswith("cuda") and torch.cuda.is_available():
         devices = list(range(torch.cuda.device_count()))
     with torch.random.fork_rng(devices=devices):
         torch.manual_seed(int(selector_seed))
-        return MetaPolicy().to(device)
+        return MetaPolicy(hidden_dim=int(hidden_dim)).to(device)
 
 
 def _zscore(matrix: np.ndarray) -> np.ndarray:
@@ -270,6 +270,7 @@ def select_clients(
     exploration_clients: int = 1,
     disabled_features: Sequence[str] = (),
     selector_seed: int = 2026,
+    hidden_dim: int = 64,
 ) -> Tuple[List[int], Optional[List[float]], Optional[Dict]]:
     """Select the lowest predicted-cost clients after online FOMAML adaptation."""
     if not clients:
@@ -281,7 +282,7 @@ def select_clients(
     clients_by_id = {client.id: client for client in clients}
     state = history.get("state", {}).get(STATE_KEY)
     if state is None:
-        model = _seeded_policy(selector_seed, dev)
+        model = _seeded_policy(selector_seed, dev, hidden_dim)
         state = {
             "model": model,
             "optimizer": torch.optim.Adam(model.parameters(), lr=float(outer_lr)),

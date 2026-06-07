@@ -100,6 +100,11 @@ scenarios:
     dataset: CIFAR-10
     model: ResNet18
     report_accuracy_target: 0.88
+  cifar10_review_100:
+    dataset: CIFAR-10
+    model: ResNet18
+    rounds: 100
+    report_accuracy_target: 0.88
   cifar10_reconciled:
     dataset: CIFAR-10
     model: ResNet18
@@ -330,6 +335,25 @@ experiments:
       - {key: research.maml_select.no_frequency, label: "without frequency", params: {disabled_features: [frequency]}}
       - {key: research.maml_select.no_staleness, label: "without staleness", params: {disabled_features: [staleness]}}
 
+  - id: cifar10_lambda_sensitivity
+    profiles: [review_hardening]
+    scenarios: [cifar10_review_100]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.cifar10_lambda_0p1, label: "lambda=0.1", params: {lambda_latency: 0.1}}
+      - {key: research.maml_select.cifar10_lambda_0p5, label: "lambda=0.5", params: {lambda_latency: 0.5}}
+      - {key: research.maml_select.cifar10_lambda_1p0, label: "lambda=1.0", params: {lambda_latency: 1.0}}
+      - {key: research.maml_select.cifar10_lambda_5p0, label: "lambda=5.0", params: {lambda_latency: 5.0}}
+
+  - id: inner_step_ablation
+    profiles: [review_hardening]
+    scenarios: [cifar10_review_100]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.inner_steps_1, label: "inner steps=1", params: {inner_steps: 1}}
+      - {key: research.maml_select.inner_steps_2, label: "inner steps=2", params: {inner_steps: 2}}
+      - {key: research.maml_select.inner_steps_5, label: "inner steps=5", params: {inner_steps: 5}}
+
   - id: hardware_energy_to_target
     profiles: [energy, full]
     scenarios: [fashion_energy_target, cifar10_energy_target]
@@ -353,3 +377,17 @@ experiments:
     scenarios: [fashion_n20, fashion_n40, fashion_n80, fashion_main]
     methods_from: integrated_methods
     seeds: [42]
+
+  # Selector-architecture (meta-policy capacity) ablation, added for the resubmission
+  # to answer the reviewer note that the 6-64-64-1 MLP width is never ablated.
+  # Fashion-MNIST/LightCNN (fashion_main, 200 rounds) for direct comparability with
+  # the existing lambda_sensitivity and feature_ablation Fashion tables.
+  - id: architecture_ablation
+    profiles: [arch_ablation]
+    scenarios: [fashion_main]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.hidden_16, label: "hidden=16", params: {hidden_dim: 16}}
+      - {key: research.maml_select.hidden_32, label: "hidden=32", params: {hidden_dim: 32}}
+      - {key: research.maml_select.hidden_64, label: "hidden=64", params: {hidden_dim: 64}}
+      - {key: research.maml_select.hidden_128, label: "hidden=128", params: {hidden_dim: 128}}

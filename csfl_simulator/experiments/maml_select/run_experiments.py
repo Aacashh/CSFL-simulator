@@ -219,8 +219,14 @@ def run_one(item: Dict[str, Any], config: Dict[str, Any], args: argparse.Namespa
         stale_path.unlink(missing_ok=True)
     round_metrics_path.write_text("")
 
-    # Robust seeding
-    set_global_seed(item["seed"], deterministic=True)
+    # Robust seeding. Default is strict deterministic (bit-for-bit); --performance-mode
+    # switches to the CUDA fast path (cuDNN benchmark + TF32) while keeping seed-based
+    # reproducibility of high-level results.
+    set_global_seed(
+        item["seed"],
+        deterministic=not args.performance_mode,
+        performance_mode=args.performance_mode,
+    )
 
     def record_round(round_idx: int, payload: Dict[str, Any]) -> None:
         metric = dict(payload["metrics"])
@@ -407,7 +413,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--profile",
-        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "cifar100_v2", "maml_v2", "maml_v2_cpu", "audio_fsdd"),
+        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "cifar100_v2", "maml_v2", "maml_v2_cpu", "audio_fsdd", "review_hardening", "arch_ablation"),
         default="core",
     )
     parser.add_argument("--only", action="append", default=[], metavar="EXPERIMENT_ID")
@@ -439,6 +445,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the matrix without loading data or training.")
     parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument(
+        "--performance-mode",
+        action="store_true",
+        help="CUDA fast path: enable cuDNN benchmark autotuning + TF32 (the single largest "
+             "GPU-throughput win). Seed-based reproducibility of high-level results is preserved, "
+             "but results are not bit-for-bit deterministic. No effect on CPU; AMP mixed precision "
+             "is already on by default for CUDA. Recommended on NVIDIA GPUs.",
+    )
     return parser.parse_args()
 
 
