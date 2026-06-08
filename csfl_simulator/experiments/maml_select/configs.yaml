@@ -391,3 +391,21 @@ experiments:
       - {key: research.maml_select.hidden_32, label: "hidden=32", params: {hidden_dim: 32}}
       - {key: research.maml_select.hidden_64, label: "hidden=64", params: {hidden_dim: 64}}
       - {key: research.maml_select.hidden_128, label: "hidden=128", params: {hidden_dim: 128}}
+
+  # Lambda no-penalty anchor (lambda=0), added for the resubmission so the lambda sweep
+  # has a pure-accuracy baseline on BOTH datasets. Dedicated profile so it can be launched
+  # without re-running the completed 21-run lambda/inner-step campaign. Scenarios mirror
+  # the existing lambda tables (CIFAR-10 = cifar10_review_100/100 rounds, Fashion = fashion_main).
+  - id: cifar10_lambda_anchor
+    profiles: [lambda_anchor]
+    scenarios: [cifar10_review_100]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.cifar10_lambda_0p0, label: "lambda=0.0", params: {lambda_latency: 0.0}}
+
+  - id: fashion_lambda_anchor
+    profiles: [lambda_anchor]
+    scenarios: [fashion_main]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.lambda_0p0, label: "lambda=0.0", params: {lambda_latency: 0.0}}

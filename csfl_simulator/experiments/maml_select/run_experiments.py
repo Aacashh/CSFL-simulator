@@ -413,7 +413,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
         "--profile",
-        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "cifar100_v2", "maml_v2", "maml_v2_cpu", "audio_fsdd", "review_hardening", "arch_ablation"),
+        choices=("quick", "pilot", "pilot_lambda", "core", "energy", "scaling", "full", "cifar100", "cifar100_v2", "maml_v2", "maml_v2_cpu", "audio_fsdd", "review_hardening", "arch_ablation", "lambda_anchor"),
         default="core",
     )
     parser.add_argument("--only", action="append", default=[], metavar="EXPERIMENT_ID")
