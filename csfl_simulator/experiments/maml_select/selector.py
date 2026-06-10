@@ -7,7 +7,9 @@ suite registers this implementation dynamically as ``research.maml_select``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
+import os
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -140,6 +142,23 @@ def _adapt(
     return params
 
 
+def _maybe_log_convergence(round_idx: int, diag: Dict[str, float]) -> None:
+    """Append per-round convergence diagnostics to a sidecar JSONL when requested.
+
+    Activated only when the environment variable ``MAML_SELECT_CONV_LOG`` points to
+    a file path.  This decouples convergence logging from the simulator and adds no
+    cost to normal runs.  Used for the selector-convergence verification study.
+    """
+    path = os.environ.get("MAML_SELECT_CONV_LOG")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"round": int(round_idx), **diag}) + "\n")
+    except OSError:
+        pass
+
+
 def _outer_step(
     model: MetaPolicy,
     optimizer: torch.optim.Optimizer,
@@ -148,29 +167,60 @@ def _outer_step(
     device: str,
     inner_lr: float,
     inner_steps: int,
-) -> None:
-    """Apply one first-order MAML update.
+) -> Optional[Dict[str, float]]:
+    """Apply one first-order MAML update and return convergence diagnostics.
 
     The query gradient is evaluated at the adapted parameters and copied onto the
-    persistent initialization.  This deliberately omits second derivatives.
+    persistent initialization.  This deliberately omits second derivatives.  The
+    returned dictionary records the inner-step support descent (Statement~1), the
+    query objective (Statement~2), the meta-gradient norm, and the meta-update
+    magnitude, all measured before the optimizer mutates the parameters.
     """
     if not query:
-        return
+        return None
+    base_params = {name: value.detach().clone() for name, value in model.named_parameters()}
     if support:
         sx = _as_tensor(np.stack([r.features for r in support]), device)
         sy = _as_tensor(np.asarray([r.cost for r in support], dtype=np.float32), device)
+        with torch.no_grad():
+            l_sup_before = float(_loss(model, base_params, sx, sy))
         adapted = _adapt(model, sx, sy, inner_lr, inner_steps)
+        with torch.no_grad():
+            l_sup_after = float(_loss(model, adapted, sx, sy))
     else:
         adapted = dict(model.named_parameters())
+        l_sup_before = float("nan")
+        l_sup_after = float("nan")
 
     qx = _as_tensor(np.stack([r.features for r in query]), device)
     qy = _as_tensor(np.asarray([r.cost for r in query], dtype=np.float32), device)
+    with torch.no_grad():
+        l_query = float(_loss(model, adapted, qx, qy))
     query_gradients = torch.autograd.grad(_loss(model, adapted, qx, qy), tuple(adapted.values()))
+    meta_grad_norm = float(
+        torch.sqrt(sum((g.detach() ** 2).sum() for g in query_gradients)).item()
+    )
 
     optimizer.zero_grad(set_to_none=True)
     for parameter, gradient in zip(model.parameters(), query_gradients):
         parameter.grad = gradient.detach().clone()
     optimizer.step()
+
+    with torch.no_grad():
+        dphi_sq = sum(
+            ((value.detach() - base_params[name]) ** 2).sum()
+            for name, value in model.named_parameters()
+        )
+        dphi_norm = float(torch.sqrt(dphi_sq).item())
+
+    return {
+        "l_sup_before": l_sup_before,
+        "l_sup_after": l_sup_after,
+        "l_sup_descent": l_sup_after - l_sup_before,
+        "l_query": l_query,
+        "meta_grad_norm": meta_grad_norm,
+        "dphi_norm": dphi_norm,
+    }
 
 
 def _ingest_previous_feedback(
@@ -302,8 +352,10 @@ def select_clients(
     )
 
     if query:
-        _outer_step(model, optimizer, previous_adaptation_support, query, dev, inner_lr, inner_steps)
+        diag = _outer_step(model, optimizer, previous_adaptation_support, query, dev, inner_lr, inner_steps)
         state["outer_updates"] = int(state.get("outer_updates", 0)) + 1
+        if diag is not None:
+            _maybe_log_convergence(round_idx, diag)
 
     current_features = _features(round_idx, clients, state["battery_wh"], disabled_features)
     if query:

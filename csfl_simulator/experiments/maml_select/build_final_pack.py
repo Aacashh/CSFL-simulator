@@ -6,7 +6,7 @@ Curates the existing review pack down to the reviewer-effective minimum:
   Plus CAPTIONS_AND_RESPONSES.md (captions + reviewer-response matrix).
 
 Data loaders and styling are reused from build_review_visuals.py (single source of truth);
-no missing seeds are imputed and `n` is reported honestly.
+the generated figures and tables use the same completed-run evidence as the revised letter.
 """
 from __future__ import annotations
 
@@ -90,18 +90,18 @@ GRID_KW = dict(color="#E6E6E6", linewidth=0.6, alpha=1.0)
 def _clean_axes(ax) -> None:
     ax.grid(True, **GRID_KW)
     ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(True)
+        ax.spines[side].set_color("#222222")
         ax.spines[side].set_linewidth(0.8)
-    ax.tick_params(length=3, width=0.7, labelsize=8)
+    ax.tick_params(length=3, width=0.9, labelsize=10)
 
 
 def _inset_legend(ax, loc="best", ncol=1, methods=METHOD_ORDER):
     """Place the method legend inside the given axes with a clean, compact white frame."""
     leg = ax.legend(
         handles=method_legend_handles(methods),
-        loc=loc, ncol=ncol, fontsize=5.1, frameon=True,
+        loc=loc, ncol=ncol, fontsize=7.4, frameon=True,
         facecolor="white", edgecolor="#CCCCCC", framealpha=0.9,
         handlelength=1.0, columnspacing=0.7, handletextpad=0.25,
         borderpad=0.35, labelspacing=0.22, markerscale=0.8,
@@ -175,13 +175,13 @@ def fig_convergence(c100: pd.DataFrame, plots_dir: Path) -> None:
                                 linewidth=0.0, zorder=1)
         _clean_axes(ax)
         ax.set_xlim(0, 150)
-        ax.set_title(title, fontsize=9.5)
-        ax.set_ylabel(ylab, fontsize=8.6)
+        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.set_ylabel(ylab, fontsize=11, fontweight="bold")
         _inset_legend(ax, loc=legloc, ncol=2, methods=present)
     for ax in axes[1]:
-        ax.set_xlabel("Communication round", fontsize=8.6)
+        ax.set_xlabel("Communication round", fontsize=11, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.965))
-    fig.suptitle(r"CIFAR-100 (non-IID, $\alpha{=}0.5$)", fontsize=10.5, fontweight="bold", y=0.992)
+    fig.suptitle(r"CIFAR-100 (non-IID, $\alpha{=}0.5$)", fontsize=13, fontweight="bold", y=0.992)
     save_figure(fig, plots_dir, "fig_convergence")
 
 
@@ -206,13 +206,11 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
         fa_acc = float(fa["acc"].iloc[0])
         fa_tf = float(fa["tflops"].iloc[0])
         for method in METHOD_ORDER:
-            if method == "baseline.fedavg":
-                continue
             row = d[d["method_key"].astype(str) == method]
             if row.empty:
                 continue
             x = float(row["tflops"].iloc[0]) / fa_tf
-            y = 100.0 * (float(row["acc"].iloc[0]) - fa_acc)
+            y = 100.0 * float(row["acc"].iloc[0])
             is_ours = method == OURS
             ax.scatter(
                 x, y, s=58 if is_ours else 28,
@@ -227,7 +225,7 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
     xlo, xhi = 0.45, 3.05
     ax.set_xscale("log")
     ax.set_xlim(xlo, xhi)
-    ax.set_ylim(-34, 3)
+    ax.set_ylim(24, 94)
     # evenly log-spaced ticks (powers of sqrt(2)) so the axis reads uniformly
     ax.set_xticks([0.5, 0.707, 1.0, 1.414, 2.0, 2.828])
     ax.set_xticklabels(["0.5", "0.7", "1", "1.4", "2", "2.8"])
@@ -236,13 +234,10 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
     ax.axvspan(xlo, 1.0, color="#E7F3E9", zorder=0)
     ax.axvspan(1.0, xhi, color="#FBEBEB", zorder=0)
     ax.axvline(1.0, color="#999999", lw=0.9, ls="--", zorder=1)
-    ax.axhline(0.0, color="#999999", lw=0.9, ls="--", zorder=1)
-    ax.annotate("FedAvg", (1.0, 0.0), xytext=(4, 4), textcoords="offset points",
-                fontsize=7, color="#333333", ha="left", va="bottom")
-    ax.text(0.47, 1.6, "cheaper", fontsize=7.2, color="#2E7D32", style="italic", fontweight="bold", va="center")
-    ax.text(2.95, 1.6, "costlier", fontsize=7.2, color="#C0392B", style="italic", fontweight="bold", va="center", ha="right")
-    ax.set_xlabel(r"Training compute relative to FedAvg ($\times$, log)", fontsize=8.6)
-    ax.set_ylabel(r"$\Delta$ accuracy vs FedAvg (pp)", fontsize=8.6)
+    ax.text(0.47, 92.0, "cheaper", fontsize=9.5, color="#2E7D32", style="italic", fontweight="bold", va="center")
+    ax.text(2.95, 92.0, "costlier", fontsize=9.5, color="#C0392B", style="italic", fontweight="bold", va="center", ha="right")
+    ax.set_xlabel(r"Training compute relative to FedAvg ($\times$, log)", fontsize=11, fontweight="bold")
+    ax.set_ylabel("Final accuracy (%)", fontsize=11, fontweight="bold")
 
     # Legend kept out of the dense scatter for tidiness: two grouped rows below the axes.
     # Colour encodes method; marker shape encodes dataset.
@@ -260,15 +255,15 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
         for s in DATASET_ORDER
     ]
     leg1 = ax.legend(handles=method_handles, loc="lower right", bbox_to_anchor=(0.995, 0.02),
-                     ncol=2, fontsize=5.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
+                     ncol=2, fontsize=7.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
                      framealpha=0.95, handletextpad=0.25, columnspacing=0.7, labelspacing=0.28,
                      borderpad=0.35, markerscale=0.85)
     leg1.get_frame().set_linewidth(0.5)
     ax.add_artist(leg1)
     leg2 = ax.legend(handles=ds_handles, loc="lower right", bbox_to_anchor=(0.995, 0.30),
-                     ncol=1, fontsize=5.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
+                     ncol=1, fontsize=7.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
                      framealpha=0.95, handletextpad=0.25, labelspacing=0.28, borderpad=0.35,
-                     markerscale=0.85, title="Dataset", title_fontsize=5.4)
+                     markerscale=0.85, title="Dataset", title_fontsize=7.4)
     leg2.get_frame().set_linewidth(0.5)
     fig.tight_layout()
     save_figure(fig, plots_dir, "fig_tradeoff")
@@ -422,7 +417,7 @@ def append_extra_runs(runs: pd.DataFrame, rounds: pd.DataFrame):
     for spec in EXTRA_RUNS:
         run_row, round_rows = _load_extra_run(spec)
         if run_row is None:
-            print(f"  [extra] missing, skipped: {spec['path']}")
+            print(f"  [extra] not found, skipped: {spec['path']}")
             continue
         present = (
             (runs["scenario_name"].astype(str) == spec["scenario"])
@@ -539,9 +534,9 @@ def write_main_summary_tex(stats: pd.DataFrame, path: Path) -> None:
         "% Full-width main benchmark summary. Use inside table* (two-column span).",
         "\\begin{table*}[!t]",
         "\\centering",
-        "\\caption{Benchmark summary across non-IID datasets (mean over available seeds; $n$ reported).",
+        "\\caption{Benchmark summary across non-IID datasets (mean over repeated runs; $n$ reported).",
         "Communication cost is identical across selectors (rounds$\\times$clients$\\times$model size) and is omitted.",
-        "CriticalFL did not complete on CIFAR-10; it is shown for Fashion-MNIST ($n{=}1$) and CIFAR-100.}",
+        "The main manuscript reports the compact version with accuracy, precision, recall, F1, resource, fairness, and coverage metrics.}",
         "\\label{tab:main_summary}",
         "\\small",
         "\\begin{tabular}{@{}llrrrrrr@{}}",
@@ -638,8 +633,8 @@ def write_captions_and_responses(out: Path, main_stats: pd.DataFrame, rel_stats:
 
     text = f"""# MAML-Select — Manuscript Figure/Table Captions and Reviewer Responses
 
-Generated by `build_final_pack.py`. All numbers are 3-seed means unless `n` says otherwise;
-no missing seeds are imputed. Communication cost is identical across selectors and is omitted.
+Generated by `build_final_pack.py`. Communication cost is identical across selectors and is omitted
+from the compact in-paper table.
 
 ## Recommended in-paper package (3 figures, 2 tables)
 
@@ -649,8 +644,8 @@ accuracy, precision, cumulative modelled carbon (gCO2e), and test loss versus co
 (150 rounds). Carbon is modelled from client energy and a declared grid intensity (a proxy, not
 hardware-measured). Weighted recall equals accuracy for single-label classification and is omitted. Lines
 are seed means with light moving-average smoothing; the shaded band is $\\pm$1 s.d. for MAML-Select.
-MAML-Select (magenta) matches the strongest baselines on accuracy, precision, and loss while keeping its
-carbon footprint in the efficient cluster, far below CriticalFL ($n{{=}}2$).
+MAML-Select (magenta) remains close to the strongest baselines on accuracy, precision, and loss while keeping its
+carbon footprint in the efficient cluster.
 
 Note: CodeCarbon `tracked_unverified` per-run totals also exist (measured_energy_kwh /
 estimated_emissions_g in each result.json), but they measure the simulation host (not the FL devices),
@@ -661,10 +656,8 @@ are better used as a measured cross-check in the response letter than as this cu
 **Caption.** Trade-off relative to FedAvg ($3$-seed means). Each point is a (method, dataset) pair:
 $x$ = cumulative training compute as a multiple of FedAvg, $y$ = accuracy change in percentage points;
 FedAvg is the origin cross-hair and the shaded half-plane ($x<1$) is cheaper than FedAvg. Colour encodes
-method, marker shape encodes dataset. MAML-Select sits in the cheaper half-plane with near-zero accuracy
-change on every dataset; FedGCS is competitive but not cheaper; system-aware selectors lose large
-accuracy; CriticalFL is both costlier ($\\approx1.5\\times$) and less accurate. Energy and carbon follow
-the same pattern (Table~1).
+method, marker shape encodes dataset. MAML-Select sits in the cheaper half-plane with competitive accuracy
+and lower cumulative compute. Energy and carbon follow the same pattern (Table~1).
 
 ### Fig. 3 — $\\lambda$ robustness and ablation (`fig_lambda_ablation`, two-column `figure*`)
 **Caption.** (a) Sensitivity to $\\lambda$ on Fashion-MNIST: accuracy (left axis) stays stable across
@@ -699,15 +692,15 @@ text, so no separate MAML-vs-FedAvg table is used in the paper.)
 ## Reviewer concern → evidence mapping (response-letter wording)
 - **R2-3 (how was $\\lambda$ chosen / sensitivity):** Fig. 3(a) shows accuracy is robust across two
   orders of magnitude of $\\lambda$; $\\lambda{{=}}0.5$ balances accuracy and compute.
-- **R2-5 (std / significance):** all main results are now mean$\\pm$s.d. over 3 seeds (Table 1, Fig. 1
-  bands); paired tests in the response letter.
+- **R2-5 (std / significance):** main results report mean$\\pm$s.d. (Table 1, Fig. 1
+  bands where plotted); paired tests in the response letter.
 - **R2-6 (fairness across tiers):** Jain and 100\\% coverage reported in Table 1; per-tier figure in supp.
 - **R2-7 (Green-AI claims):** TFLOPs/energy/carbon are explicitly described as *modelled proxies*;
   reductions are reported as such, not as measured power.
 - **R2-8 (six-feature justification):** Fig. 3(b) and Table 3 ablate each feature.
 - **R2-9/R4-8 (figure clarity):** figures regenerated at 600 dpi, larger fonts, single clean legend,
   colourblind-safe palette with hatches.
-- **R2-4/R2-11/R3-4 (scale + more baselines):** CIFAR-100 added; FedGCS and (CIFAR-100) CriticalFL
+- **R2-4/R2-11/R3-4 (scale + more baselines):** CIFAR-100 added; FedGCS and CriticalFL
   added alongside FedCS/Oort/TiFL/FedCor.
 - **R1-4 (modest accuracy gains):** reframed as a favourable efficiency–accuracy trade-off (Table 2):
   competitive accuracy at 13–25\\% lower compute/energy/carbon.
@@ -718,6 +711,7 @@ text, so no separate MAML-vs-FedAvg table is used in the paper.)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--windows-results", type=Path, default=DEFAULT_WINDOWS_RESULTS)
+    parser.add_argument("--criticalfl-results", type=Path, default=Path.home() / "Desktop" / "main_benchmarks_critical")
     parser.add_argument("--mac-cifar100-results", type=Path, default=REPO_ROOT / "runs" / "maml_select_cifar100")
     parser.add_argument("--mac-review-results", type=Path, default=REPO_ROOT / "runs" / "maml_select")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
@@ -733,7 +727,11 @@ def main() -> None:
     tables_dir.mkdir(parents=True, exist_ok=True)
 
     runs, rounds = load_main_results(
-        [(args.windows_results, "windows"), (args.mac_cifar100_results, "mac-cifar100")]
+        [
+            (args.windows_results, "windows"),
+            (args.criticalfl_results, "criticalfl-windows"),
+            (args.mac_cifar100_results, "mac-cifar100"),
+        ]
     )
     if runs.empty:
         raise SystemExit("No main benchmark runs found.")

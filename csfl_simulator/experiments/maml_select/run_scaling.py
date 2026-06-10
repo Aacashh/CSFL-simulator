@@ -1,12 +1,14 @@
 """Selection overhead scaling benchmark.
 
 Benchmarks the wall-clock time of client selection for all integrated methods
-as the client pool scales: N = 20, 40, 80, 100. This practical sweep avoids
-prohibitively long local runs while exposing the overhead trend.
+as the client pool scales. The default sweep now measures up to N = 1000 so the
+linear O(NP) selector-overhead trend is observed directly rather than
+extrapolated. Override with --pool-sizes for a custom sweep.
 
 Usage:
     python -m csfl_simulator.experiments.maml_select.run_scaling
-    python -m csfl_simulator.experiments.maml_select.run_scaling --rounds 10 --device cpu
+    python -m csfl_simulator.experiments.maml_select.run_scaling --rounds 10 --device cuda
+    python -m csfl_simulator.experiments.maml_select.run_scaling --pool-sizes 20 40 80 100 200 500 1000
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ MAML_MODULE = "csfl_simulator.experiments.maml_select.selector"
 CRITICALFL_MODULE = "csfl_simulator.experiments.maml_select.criticalfl"
 FEDGCS_MODULE = "csfl_simulator.experiments.maml_select.fedgcs"
 
-CLIENT_POOL_SIZES = [20, 40, 80, 100]
+CLIENT_POOL_SIZES = [20, 40, 80, 100, 200, 500, 1000]
 
 ALL_METHODS = [
     "baseline.fedavg",
@@ -62,10 +64,11 @@ def run_scaling(args: argparse.Namespace) -> None:
     rounds = args.rounds
     results: List[Dict[str, Any]] = []
 
-    total_runs = len(CLIENT_POOL_SIZES) * len(ALL_METHODS)
+    pool_sizes = list(getattr(args, "pool_sizes", None) or CLIENT_POOL_SIZES)
+    total_runs = len(pool_sizes) * len(ALL_METHODS)
     run_idx = 0
 
-    for N in CLIENT_POOL_SIZES:
+    for N in pool_sizes:
         K = max(1, N // 10)  # Keep K/N ratio consistent at 10%
 
         for method_key in ALL_METHODS:
@@ -186,6 +189,8 @@ def parse_args() -> argparse.Namespace:
                         help="Rounds per run (short for overhead measurement)")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--pool-sizes", type=int, nargs="+", default=None,
+                        help="Client pool sizes to sweep (default: 20 40 80 100 200 500 1000)")
     return parser.parse_args()
 
 

@@ -1,0 +1,219 @@
+\documentclass[10pt,psfig]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\oddsidemargin -0.04cm
+\evensidemargin -0.04cm
+\textwidth 16.59cm
+\textheight 21.94cm
+\topmargin -0.25cm
+\renewcommand{\baselinestretch}{1.35}
+
+\newcommand{\paperTitle}{MAML-Select: An Online Adaptive Client Selection Method for Federated Learning via Meta-Learning}
+\long\def\ReviewerHeading#1{%
+    \vspace{2em}
+    \begin{center}
+    {\bfseries\Large Response to Comments of #1}
+    \end{center}
+    \vspace{0.5em}
+}
+\long\def\ReviewerComment#1#2{%
+    \par\noindent\hspace{-0.65cm}{\bfseries #1:} {\itshape #2}\par\vspace{0.55em}
+}
+\long\def\ReviewerReply#1#2{%
+    \par\noindent\hspace{-0.65cm}{\bfseries #1:} {\normalfont #2}\par\vspace{1.0em}
+}
+
+\begin{document}
+
+\title{\small Response to Reviewers' Comments and Changes Incorporated in the Revised Manuscript\\[1.5em]
+{\Large \bfseries \paperTitle}\\[0.75em]
+(\textbf{Original Manuscript ID: TAI-2026-Mar-L-00619 (REX-PROD-2-93FE7680-3CDE-4B0D-B867-877CC519FD0C-D439D5C3-D340-44E2-AD85-F9F4390D1993-38188)})}
+\date{}
+\maketitle
+\vspace{-1.5em}
+
+We sincerely thank the Editor, the Associate Editor, and the anonymous Reviewers. They gave our manuscript careful and expert attention. The comments were detailed and constructive. They improved the paper a great deal. We have revised the manuscript for clarity, technical completeness, stronger evidence, and better presentation. We answer every comment below. Each reply states our answer and the matching change to the manuscript together, in one place. The Reviewers' comments are shown in \textit{italics}. Our reply follows in normal text. We provide a clean manuscript and a colour-marked manuscript with the revisions in blue. In this letter, all text is black.
+
+\vspace{1.5em}
+\begin{center}
+{\bfseries\Large Summary of Major Revisions}
+\end{center}
+
+\begin{itemize}[leftmargin=*,itemsep=0.35em]
+    \item \textbf{Sharpened novelty.} MAML-Select meta-learns the client-selection policy on the server. It re-adapts this policy every round. This is different from model personalization, reinforcement learning, and bandit selectors. We add a comparison table (Table~I).
+    \item \textbf{Local theory for a dynamic policy.} The selector is adapted online from changing feedback. So we add a local convergence statement and proof for the per-round adaptation step (Statement~1, Section~IV).
+    \item \textbf{Broader, harder evaluation.} We evaluate on Fashion-MNIST, CIFAR-10, and CIFAR-100. The setting is non-IID Dirichlet $\alpha=0.5$, $N=100$, $K=10$, and $E=5$. We use seeds $42$, $123$, and $2026$. We add FedGCS and CriticalFL, giving eight methods. We report mean\,$\pm$\,std with paired-test significance.
+    \item \textbf{Mechanism analysis.} We add a complexity result and an $N$-scaling study. We add a two-dataset $\lambda$ study, inner-step and selector-width ablations, and a six-feature state ablation. We add fairness and coverage metrics. We add modelled energy and carbon with stated device-tier values.
+    \item \textbf{Reproducibility.} We list all hyper-parameters. We give a full step-by-step pseudocode as Algorithm~S1 in Section~S5 of the Supplementary Material.
+    \item \textbf{Presentation.} We regenerated all figures with larger, bolder fonts and clearer axes. We shortened the Conclusion. We shortened the prose throughout.
+\end{itemize}
+
+\ReviewerHeading{Reviewer 1}
+
+\ReviewerComment{Comment 1}{Simplify long and complex sentences, especially in the Introduction and Related Work.}
+\ReviewerReply{Reply 1}{Agreeing with the Reviewer, we have now rewritten the manuscript with shorter sentences and a clearer flow. We made a full editing pass. It covers the Abstract, Impact Statement, Introduction, Related Work, System Model, Methodology, Evaluation, and Conclusion. We split long sentences into single-idea sentences. We also state the main motivation directly in the first paragraphs of the Introduction. Client utility changes during training. So a fixed selection rule becomes stale. A policy that re-adapts each round is therefore needed. We are grateful for this advice. It improved the readability of the whole paper, not only the two named sections.}
+
+\ReviewerComment{Comment 2}{Provide more implementation details, including optimizer type, learning rates, schedules, exact meta-policy architecture, initialization, random seeds, and code or detailed pseudocode.}
+\ReviewerReply{Reply 2}{We thank the Reviewer. Reproducibility is essential, and the method can now be reproduced from the paper. The meta-policy is a $6$-$64$-$64$-$1$ MLP with ReLU activations. It has $4{,}673$ trainable parameters. Local models use PyTorch default initialization. They use SGD with learning rate $0.01$, momentum $0.9$, weight decay $10^{-4}$, a constant schedule, batch size $32$, and $E=5$ local epochs. The MAML policy uses one inner step with $\beta=0.01$. The outer update uses Adam with $\eta=0.001$. The selector seed is fixed to $2026$. The data and training seeds are $42$, $123$, and $2026$. We also added a full step-by-step pseudocode. It is Algorithm~S1 (``MAML-Select (extended)'') in Section~S5 of the Supplementary Material. It expands Algorithm~1 of the main paper. It adds the state-feature construction, the cold-start rule, the exploration step, and the first-order inner and outer updates. It is the exact procedure used for every reported result. We also checked the two most specific design choices. A selector-width ablation varies the hidden width $h$ over $\{16,32,64,128\}$. This is $401$ to $17{,}537$ parameters. Final accuracy moves by less than about $0.6$ points. An inner-step ablation shows that one inner step is both the most accurate and the cheapest setting. Both results are in Section~V (Table~III), with a figure in Section~S3.}
+
+\ReviewerComment{Comment 3}{The accuracy gains are modest. Please justify why they are meaningful and identify scenarios where efficiency is prioritized.}
+\ReviewerReply{Reply 3}{We are grateful for this question. It goes to the heart of what the paper claims. We want to make the argument in plain terms, not only with numbers.
+
+In cross-device federated learning, the main limit at deployment is usually not the last fraction of a percent of accuracy. The main limit is compute, energy, battery, bandwidth, and the per-round deadline. A varied fleet of devices must meet these limits. Two points follow.
+
+First, an accuracy difference matters only when we compare it to its cost. We can trade a small, measured accuracy change for a large drop in compute and energy. That is a good trade whenever energy, carbon, or battery is the limiting budget.
+
+Second, where accuracy is not the bottleneck, MAML-Select matches the strongest baselines. So the efficiency gain comes almost for free. Our paired tests support this. Against FedGCS, the accuracy difference is not significant on CIFAR-10 ($p=0.10$) or CIFAR-100 ($p=0.49$). Against FedAvg, it is not significant on Fashion-MNIST ($p=0.84$).
+
+The efficiency benefit is consistent and significant. In federated learning, it is not only an environmental gain. A device that uses less energy per round can run more rounds before its battery or heat budget forces it to drop out. This raises its real availability. Over a full run, it also raises participation coverage. A synchronous round waits for the slowest selected client. So choosing feasible, low-cost clients also shortens each round. It reduces straggler delay. A selector that keeps accuracy within a small margin, while lowering compute, energy, and latency, improves the very limit that decides whether federated learning can run on a given fleet.
+
+The settings where this trade-off is the right one are concrete. They include battery and solar IoT and wearable sensors. They include mobile clients on metered, busy, or intermittent links. They include industrial IoT nodes with heat and power caps. They include carbon-aware (``Green-AI'') deployments. They include deadline-driven synchronous federated learning, where stragglers must be avoided. In all of these, a small, bounded accuracy cost for a large efficiency gain is the desired operating point.
+
+We are also careful not to over-claim. We present CIFAR-10 as the trade-off case. Its larger accuracy gap reflects the harder ResNet-18 task. There, one low-cost cohort per round can miss useful class variation. We describe MAML-Select as a resource-efficient selector with competitive accuracy, not dominant accuracy. This framing now appears in the Abstract, the Introduction, the Evaluation (the trade-off discussion and Fig.~3), and the Conclusion. The CIFAR-10 trade-off is stated openly.}
+
+\ReviewerHeading{Reviewer 2}
+
+\ReviewerComment{Comment 1}{Clarify the exact novelty compared with RL-based approaches, contextual bandits, and meta-learning-based personalization frameworks. Add a dedicated comparison table.}
+\ReviewerReply{Reply 1}{We thank the Reviewer. A clean separation from these three families is important. We now give it in both text and a table. The key difference is what is learned and when it is adapted.
+
+\noindent$\bullet$~\textbf{Reinforcement-learning selectors}, such as FAVOR with deep $Q$-learning, learn a long-horizon policy. They maximize a reward over many episodes. They need a lot of exploration. They must also assign credit across time. The learned controller is not re-fitted to the current situation just before each decision.
+
+\noindent$\bullet$~\textbf{Contextual and combinatorial bandits}, such as neural contextual bandits, learn a reward model from client features. They balance exploration and exploitation. They update reward estimates step by step. They do not take a gradient step on the scoring network from a fresh support set right before the next selection.
+
+\noindent$\bullet$~\textbf{Meta-learning personalization}, such as Per-FedAvg and pFedMe, uses MAML to adapt the client model to each client's data. There, the meta-learned object is the model.
+
+MAML-Select is different from all three. It meta-learns the initialization of the server-side ranking policy $\phi$. It then takes a first-order MAML inner step on that policy. The support set is the previous round's selected-client feedback. It then scores the current candidate pool, which is the query set, with the adapted policy. So the adapted object is the selector, not the client model. The adaptation is done every round by a gradient step on recent feedback. It is not a long-horizon RL update. It is not a slow bandit estimate. To our knowledge, this is the first method to frame per-round client selection as a meta-learning task with a clear support and query split and fast adaptation. Table~I now compares FedAvg, FedCS, Oort, TiFL, FedCor, FAVOR, the neural contextual bandit, FedCG, CriticalFL, FedGCS, a personalization baseline, and MAML-Select. It uses four columns: primary objective, adaptation mechanism, selection complexity or dominant operation, and optimization strategy. The ``Difference from prior work'' paragraph in Related Work and the Introduction also state this directly.}
+
+\ReviewerComment{Comment 2}{The manuscript has empirical evaluation only. There is no convergence proof or theoretical justification for non-stationary adaptation.}
+\ReviewerReply{Reply 2}{We thank the Reviewer for pressing on the theory. This is a fair and important point, and we have strengthened the analysis well beyond a disclaimer. The selection policy in MAML-Select is dynamic. It is re-adapted every round from fresh, changing feedback. So the right object to analyze is the per-round adaptation. We now prove a descent property for \emph{both} of its steps, add a convergence rate, and verify both empirically.
+
+\emph{Inner step (Statement~1).} Let $g_t(\phi)=\mathcal{L}_{sup}(h_\phi;\mathcal{D}_{sup}(t))$. If $g_t$ is $L$-smooth and $0<\beta<2/L$, the inner update satisfies $g_t(\phi'_t)\le g_t(\phi_t)-\beta(1-\tfrac{L\beta}{2})\lVert\nabla g_t(\phi_t)\rVert_2^2$. So one support step does not increase, and generically decreases, the round's selector loss before ranking.
+
+\emph{Outer step (Statement~2).} This is the part the Reviewer notes was missing, and we now prove it. Let $q_t(\phi)=\mathcal{L}_{query}(h_\phi)$ be $L_q$-smooth and $0<\eta\le 1/L_q$. The first-order meta-update obeys $q_t(\phi_{t+1})\le q_t(\phi_t)-\tfrac{\eta}{2}\lVert\nabla q_t(\phi_t)\rVert_2^2+\tfrac{\eta}{2}\delta_t^2$, where $\delta_t\le L_q\beta\lVert\nabla g_t(\phi_t)\rVert_2$ is the first-order approximation error. So the meta-update decreases the query objective, up to a correction of order $\beta^2$. With $\beta=0.01$ this correction is negligible. This gives the outer loop a per-step descent guarantee and makes the first-order approximation rigorous.
+
+\emph{Rate (Corollary).} Summing Statement~2 over rounds gives $\min_{t\le T}\lVert\nabla q(\phi_t)\rVert_2^2\le \tfrac{2(q(\phi_1)-q^\star)}{\eta T}+\tfrac1T\sum_t\delta_t^2$. So the meta-policy reaches an $\mathcal{O}(\beta^2)$-approximate stationary point at rate $\mathcal{O}(1/(\eta T))$.
+
+\emph{Empirical check.} Because the query target drifts slowly, we also verify both properties empirically. The Supplementary Material (Section~S6) plots, over a full run on each dataset, the inner-step descent (at or below zero every round), the query objective (decreasing then stabilizing), and the meta-update magnitude (shrinking and settling). The global model also converges, as the accuracy and loss curves in the main paper show.
+
+Statements~1 and~2 appear in Section~IV, after the inner-loop equation~(5) and the outer-loop equation~(7). Only one problem now remains open, which we state plainly in the Conclusion: a closed-form \emph{global} guarantee for the entire FL loop under adaptive partial participation, where the selection distribution, the global model, and the data partition all evolve together.}
+
+\ReviewerComment{Comment 3}{Explain the manually chosen trade-off parameter $\lambda$ and evaluate sensitivity.}
+\ReviewerReply{Reply 3}{We appreciate the request for both an explanation and evidence. We have strengthened both.
+
+\emph{What $\lambda$ is.} $\lambda$ is the price the selector puts on latency, compared to learning progress. It enters the per-client cost in Eq.~(4): $c_{i,t}=\lambda\,\max(0,T_{i,t}-T_{target})-\Delta_{i,t}$. Here $\Delta_{i,t}$ is the observed local loss reduction. At $\lambda=0$, the selector is purely utility-driven. It then ignores latency. As $\lambda$ grows, it prefers feasible, low-cost clients more and more. So $\lambda$ moves the operating point along the efficiency and accuracy frontier. It is not a tuned accuracy knob. It is a budget dial for the deployer. It is also defined in the System Model (Eq.~(3)).
+
+\emph{Evidence.} The study now sweeps $\lambda$ over $\{0.1,0.5,1.0,5.0\}$. It does this on both Fashion-MNIST and CIFAR-10 (Fig.~5, two panels, plus a two-dataset table). Before, the sweep was on Fashion-MNIST alone. On Fashion-MNIST, accuracy is nearly flat. It changes by about one point across the range. So the cost term can be raised almost for free. On CIFAR-10, the trade-off is sharper. Accuracy falls from $64.9\%$ at $\lambda=0.1$ to $56.3\%$ at $\lambda=5$. At the same time, compute drops by about $26\%$ and modelled energy by about $30\%$. The reason is that ResNet-18 training is costly. Strong cost-minimization can drop class-diverse but costly clients. Fairness also drops at large $\lambda$.
+
+\emph{Why $\lambda=0.5$.} It sits at the knee of this frontier. It keeps accuracy close to the best setting. It still gives a clear compute and energy reduction. It also avoids the sharp fairness drop seen at $\lambda\ge1$. We use $0.5$ as a balanced default. We report the full sweep so a reader can pick another point for a different budget.}
+
+\ReviewerComment{Comment 4}{The experimental validation is limited to small-scale datasets. Add larger or more realistic FL benchmarks.}
+\ReviewerReply{Reply 4}{We understand the concern. We address it in two ways. We add a harder benchmark, and we add a clear scalability argument. We are also honest about what we did and did not run.
+
+First, we added CIFAR-100 with ResNet-18. It is a $100$-class non-IID task. It is much harder than Fashion-MNIST and CIFAR-10. It stresses the selector under fine-grained class heterogeneity. MAML-Select stays competitive with the strongest baselines there. It also keeps its efficiency advantage.
+
+Second, the concern is really about scale. So we added a selector-overhead scaling study (Fig.~4). It uses $N$ over $\{20,40,80,100\}$ with $K/N=0.1$. We also added a complexity result (Eq.~(8)). The per-round server cost is $\mathcal{O}(NP+N\log K+2KP)$. This is linear in the client-pool size $N$ for a fixed policy size $P$ and cohort $K$. The measured overhead stays at about $11$ to $13$~ms per round across the range. So the method is ready, in compute terms, for much larger pools.
+
+We agree that very large, naturally-federated datasets are valuable. Examples are LEAF-style FEMNIST or Shakespeare, or pools with thousands of clients. We mark them as future work in the Conclusion. Our contribution is the selection mechanism and its resource behaviour. We validate it across three datasets of growing difficulty and an explicit $N$-scaling study. We chose to report only experiments run at the full protocol with repeated seeds. We did not want to add a benchmark we could not validate to the same standard. The Evaluation now covers Fashion-MNIST, CIFAR-10, and CIFAR-100. The scaling study and complexity result are in Section~V.}
+
+\ReviewerComment{Comment 5}{Include standard deviation across multiple runs and statistical significance analysis.}
+\ReviewerReply{Reply 5}{Reporting variability and significance is essential for a fair comparison. The revised paper now does both. Every entry in the main benchmark table (Table~II) is a mean\,$\pm$\,standard deviation. It is over the three seeds $42$, $123$, and $2026$. The selector seed is held fixed. So the reported variance reflects model-training and data-partition randomness. It does not reflect selector re-initialization.
+
+For significance, we use paired $t$-tests over shared seeds. Each method is evaluated on the same seed. So the test controls for partition and initialization effects. The resource reductions versus FedAvg are significant on all three datasets. The TFLOP $p$-values are $0.009$, $0.002$, and $0.012$. The energy and carbon $p$-values are $0.007$, $0.001$, and $0.003$. These are for Fashion-MNIST, CIFAR-10, and CIFAR-100.
+
+For accuracy, we report the paired comparison honestly, not selectively. Against FedGCS, the difference is not significant on CIFAR-10 ($p=0.10$) or CIFAR-100 ($p=0.49$). Against FedAvg, it is not significant on Fashion-MNIST ($p=0.84$). This is exactly why we frame the result as an efficiency gain at competitive accuracy. The full paired tests and standardized effect sizes are also in Section~S2 of the Supplementary Material.}
+
+\ReviewerComment{Comment 6}{Evaluate fairness across heterogeneous clients using participation fairness, client coverage, or tier-level selection rates.}
+\ReviewerReply{Reply 6}{We have made the fairness analysis more complete and, we hope, clearer. We report two quantities. They measure different things.
+
+Coverage is the breadth of participation. It is the percentage of clients selected at least once during a run: $\mathrm{Cov}=\tfrac{100}{N}\,|\{i:\sum_t a_{i,t}\ge1\}|$. It answers one question. Is any client left out forever?
+
+Jain's index measures how evenly participation is spread. It is $J=(\sum_i p_i)^2/(N\sum_i p_i^2)$, over the per-client selection counts $p_i$. A value of $J=1$ means perfectly even participation.
+
+MAML-Select reaches $100\%$ coverage on all three datasets. So no client is ever starved. Its Jain index is $0.61$ to $0.78$. This is more concentrated than random selection. This is the expected and intended result of utility-aware selection. The policy prefers high-utility, low-cost clients. So the counts are less even. But the staleness and frequency features keep the concentration bounded. They prevent permanent exclusion. The contrast with the system-aware baselines is the key point. FedCS, Oort, and TiFL reach only $10$ to $12\%$ coverage. Their Jain index is about $0.10$. They keep selecting a small fast subset and never include slow clients. So MAML-Select is far more inclusive than those selectors. It is also more efficient. We do not claim it is the fairest selector overall. FedAvg and FedGCS have a higher Jain index. So our claim is precise. MAML-Select gives full coverage with a much better compute and energy profile. Table~II reports Jain and coverage for every method. The Evaluation discusses the coverage versus evenness point directly. We also report the tier-level selection rates the Reviewer asks for (Supplementary Material, Section~S2). The device pool is $20\%$ slow (Tier~1), $50\%$ medium (Tier~2), and $30\%$ fast (Tier~3), so a proportional selector reads $0.20/0.50/0.30$. The tier pattern matches the coverage result. FedCS selects no slow-tier client at all ($0.00$) and sends $80$ to $83\%$ of its picks to the fast tier. MAML-Select shifts toward faster tiers to save latency and energy (fast-tier rate $0.44$ to $0.49$), but it still selects the slow tier ($0.09$) and keeps $100\%$ coverage. So MAML-Select is cost-aware at the tier level without abandoning any tier.}
+
+\ReviewerComment{Comment 7}{The claims regarding energy efficiency and Green AI are indirect. Moderate the wording or provide stronger evidence.}
+\ReviewerReply{Reply 7}{We agree that the basis of the energy claims must be clear. We made the measurement model explicit. We also kept the efficiency evidence. The revised paper reports TFLOPs. It also reports model-based energy and carbon estimates. These come from stated client-tier values. Tier~1 uses $4$~W power and an $18$~Wh battery. Tier~2 uses $7$~W and $30$~Wh. Tier~3 uses $12$~W and $48$~Wh. Carbon uses $475$~gCO$_2$e/kWh. Energy and carbon are defined by explicit equations in Section~V. The same accounting model is applied to every method. So the comparison isolates the effect of client selection, not of an outside estimator. We also call these values ``modelled'' estimates throughout. We cite CodeCarbon~v2.4.1 for the carbon metadata and units. We believe this gives a stronger and reproducible basis than an unqualified Green-AI claim.}
+
+\ReviewerComment{Comment 8}{Justify the six state features and provide an ablation study.}
+\ReviewerReply{Reply 8}{We expanded both the justification and the ablation. The state vector $\bm{s}_{i,t}$ has six entries. We group them by the signal each one carries.
+
+\emph{Statistical utility.} The local training loss $\hat{L}_{i,t}$ tells us if the client still has useful gradients. The gradient norm $\lVert\nabla F_i\rVert_2$ tells us the size and value of the update.
+
+\emph{System feasibility.} The estimated latency $\hat{T}_{i,t}$ tells us the straggler and round-time risk. The battery level $b_{i,t}$ tells us the energy feasibility and the drop-out risk.
+
+\emph{Participation balance.} The selection frequency $q_{i,t}$ helps avoid over-using a few clients. The staleness $\tau_{i,t}$, the rounds since last selected, helps avoid starving clients.
+
+Together, these six cover the statistical, system, and fairness signals a selector must weigh. They also stay compact and privacy-preserving. No raw client data leaves the device. Only the six scalars and a scalar cost are shared.
+
+The leave-one-feature-out ablation is in Table~IV (Fashion-MNIST). Final accuracy moves by less than about $0.35$ percentage points under any single removal. So the policy is not sensitive to one missing input. The largest drops happen when battery or loss is removed. This confirms that both system status and learning feedback are truly used. Removing frequency or staleness can raise accuracy slightly in some runs. But it hurts coverage and fairness stability. So we keep them on purpose, rather than chase a small accuracy gain. The per-feature reasons are in the State-Space paragraph (Section~IV). The ablation is in Section~V (Table~IV). A companion figure is in Section~S3.}
+
+\ReviewerComment{Comment 9}{Fig. 2 has small font sizes and unclear axis scaling.}
+\ReviewerReply{Reply 9}{Thank you for catching this. Legibility matters, and we rebuilt the figures. All figures were regenerated with much larger, bold fonts, boxed axes, clearer legends, and consistent placement. The convergence figure (Fig.~2) is now at full column width. It reports CIFAR-100 test accuracy, weighted precision, cumulative modelled carbon, and test loss over rounds. So the comparison is no longer a single efficiency curve. It is now a multi-metric, round-wise view across all eight methods. We also enlarged the axis ranges and tick labels. So the curves and scales read clearly in print.}
+
+\ReviewerComment{Comment 10}{The definition of ``Time (Units)'' is unclear.}
+\ReviewerReply{Reply 10}{We agree the abstract time unit was unclear. We removed it. The main results table (Table~II) now reports only well-defined quantities. These are accuracy, weighted precision, recall, F1, TFLOPs, modelled energy (Wh), modelled carbon (gCO$_2$e), Jain fairness, and coverage. Each one is defined in the Evaluation. Where round latency matters, we describe it through the straggler-bound round time in the System Model, not an unlabeled time unit.}
+
+\ReviewerComment{Comment 11}{Include recent baselines such as CriticalFL and FedGCS.}
+\ReviewerReply{Reply 11}{We added both methods. FedGCS uses generative client-combination search. CriticalFL uses critical-period cohort scaling. Both are now in the benchmark table, the related-work discussion, and the main evidence figures. The comparison now has eight methods in total. These are FedAvg, FedCS, Oort, TiFL, FedCor, FedGCS, CriticalFL, and the proposed MAML-Select. They span random, system-aware, utility-aware, correlation-based, generative, and critical-period selection. So the evaluation now places MAML-Select against current state-of-the-art selectors.}
+
+\ReviewerComment{Comment 12}{Proofread the manuscript for grammar, punctuation, and sentence structure.}
+\ReviewerReply{Reply 12}{We completed a full proofreading and prose pass over the whole manuscript. We shortened sentences. We fixed grammar and punctuation. We removed vague or unsupported claims. The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were all edited for clarity and consistent terms.}
+
+\ReviewerHeading{Reviewer 3}
+
+\ReviewerComment{Comment 1}{The motivation is not clear.}
+\ReviewerReply{Reply 1}{We thank the Reviewer and have sharpened the motivation. The central issue is that client utility in federated learning is non-stationary. A client that is useful in one round may be less useful later. The reason is that many things change during training. The global model changes. The local loss changes. The device latency and battery state change. The participation history also changes. A fixed scoring rule cannot track this drift. Re-training a heavy controller from scratch each round is also impractical at the edge. MAML-Select solves this by meta-learning a ranking policy. Its initialization can be adapted with a single gradient step. This step uses the most recent round's feedback, just before the next decision. So it is fast enough to run every round. It is also responsive to the changing utility. This motivation now opens the Abstract and the Introduction. It frames the contributions.}
+
+\ReviewerComment{Comment 2}{Highlight the novelty and main contribution.}
+\ReviewerReply{Reply 2}{We have stated the contribution more precisely. We also gave it a clear three-part structure. The novelty is methodological. To our knowledge, this is the first method to treat per-round federated client selection as a meta-learning task, and to solve it with first-order MAML. Three elements are new together. First, the meta-learned object is the server-side ranking policy, not the client model. So this is not personalization. Second, each round is treated as a task. It has an explicit support set, which is the previous round's selected-client feedback. It also has a query set, which is the current candidate pool. So the policy is re-fitted by a gradient step right before every selection. It is not learned once, as in RL. It is not updated only as reward estimates, as in bandits. Third, the cost that supervises the policy joins learning progress and system latency. It does so through one clear parameter, $\lambda$. This gives a tunable efficiency and accuracy operating point. The Introduction, the ``Difference from prior work'' paragraph in Related Work, and Table~I now make this three-part contribution explicit. It is the same distinction summarized in our reply to Reviewer~2, Comment~1.}
+
+\ReviewerComment{Comment 3}{Add appropriate constraints to the problem formulation.}
+\ReviewerReply{Reply 3}{We added the missing constraints, so the selection problem is fully specified. The System Model now introduces the per-round available-client set $\mathcal{A}_t$. It adds binary decision variables $a_{i,t}\in\{0,1\}$. It adds the cohort-size constraint $\sum_i a_{i,t}=K$. It adds the availability constraint $a_{i,t}\le\mathbf{1}\{i\in\mathcal{A}_t\}$, with $\mathcal{S}_t=\{i:a_{i,t}=1\}$. These appear in the constrained problem of Eq.~(3). This makes clear that selection is a combinatorial choice. It is limited by availability and made over a small feasible cohort.}
+
+\ReviewerComment{Comment 4}{Why is only one method considered as a baseline? Consider at least two more baselines.}
+\ReviewerReply{Reply 4}{The revised evaluation compares MAML-Select against seven baselines. They span the major design philosophies. FedAvg is random. FedCS is system-aware and deadline-constrained. Oort uses utility-based importance sampling. TiFL is tier-based. FedCor is correlation-based, using Gaussian Processes. FedGCS is generative. CriticalFL uses critical-period cohort scaling. All appear in Table~II, the related-work comparison (Table~I), and the main evidence figures. So the comparison is now broad, not single-baseline.}
+
+\ReviewerComment{Comment 5}{Provide more simulation results to ensure effectiveness.}
+\ReviewerReply{Reply 5}{We expanded the empirical evidence a great deal. The revised paper covers three datasets. Fashion-MNIST and CIFAR-10 run for $200$ rounds. CIFAR-100 runs for $150$ rounds. It covers eight methods and three seeds, with mean\,$\pm$\,std and paired-test significance. It adds fairness and coverage metrics. It adds a two-dataset $\lambda$ sweep. It adds inner-step and selector-width ablations. It adds a six-feature state ablation. It adds modelled energy and carbon. It adds a selector-overhead scaling study with a supporting complexity result. The reported metrics include accuracy, precision, recall, F1, compute, energy, carbon, fairness, coverage, sensitivity, ablation, and server-side overhead. More tables and figures are in the Supplementary Material (Sections~S2 to~S5).}
+
+\ReviewerComment{Comment 6}{Remove references from the conclusion and write the conclusion as a concise single paragraph.}
+\ReviewerReply{Reply 6}{We followed this suggestion. The Conclusion is now a single concise paragraph with no citations. It summarizes the method and findings. It ends with a short statement of open directions. These include the global FL-loop convergence analysis noted in our reply to Reviewer~2, Comment~2.}
+
+\ReviewerHeading{Reviewer 4}
+
+\ReviewerComment{Comment 1}{Correct the Impact Statement wording for heterogeneous environments and industrial Internet of Things.}
+\ReviewerReply{Reply 1}{We adopted the suggested terms and moderated the impact claims. The Impact Statement now uses ``heterogeneous environments'' and the ``industrial Internet of Things.'' It also states clearly that the reported energy and carbon figures are modelled estimates. They follow the stated device-tier and grid-intensity assumptions. So the impact is framed transparently, not as a fixed energy guarantee.}
+
+\ReviewerComment{Comment 2}{Improve long sentences, grammar, and proofreading throughout the manuscript.}
+\ReviewerReply{Reply 2}{We revised the manuscript for shorter, clearer prose. We also corrected grammar and punctuation throughout. The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were all edited. This adds to the proofreading pass noted in our reply to Reviewer~1, Comment~1, and Reviewer~2, Comment~12.}
+
+\ReviewerComment{Comment 3}{Update the literature review with recent and related papers.}
+\ReviewerReply{Reply 3}{We updated the Related Work and focused the bibliography. The revised paper keeps the canonical algorithm references for every compared method. It also adds recent, relevant work. This covers robust selection, adaptive straggler handling, inclusive participation, asynchronous heterogeneity, and non-IID federated learning. So the discussion reflects the current state of the field. It also stays focused on client selection.}
+
+\ReviewerComment{Comment 4}{Include a comparison table with previous state-of-the-art works.}
+\ReviewerReply{Reply 4}{We added the requested table. Table~I compares representative client-selection and meta-learning approaches against MAML-Select. It uses four columns: primary objective, adaptation mechanism, selection complexity or dominant server-side operation, and optimization strategy. This makes the method's position relative to prior work clear at a glance.}
+
+\ReviewerComment{Comment 5}{Make the Conclusion and Future Work section accurate and concise. Avoid too many citations.}
+\ReviewerReply{Reply 5}{We revised the Conclusion to a single concise paragraph without citations. It ends with a short, accurate statement of future directions. These are a global convergence analysis under partial participation, an asynchronous extension, and a differentially-private treatment of the client-state vector.}
+
+\ReviewerComment{Comment 6}{Fig. 2 requires clarification, justification, and a clearer comparison with other schemes.}
+\ReviewerReply{Reply 6}{The original single-curve figure has been replaced by clearer, multi-metric evidence. The convergence figure (Fig.~2) now reports CIFAR-100 accuracy, precision, cumulative modelled carbon, and test loss over rounds, for all eight methods. The efficiency and accuracy trade-off figure (Fig.~3) places MAML-Select directly against every baseline. It uses final accuracy and training compute relative to FedAvg. Together with the $\lambda$-sensitivity, feature-ablation, and selector-scaling figures, the visual evidence now justifies the design choices. It also compares schemes clearly. The fonts are larger and bold, and the axes are labeled.}
+
+\vspace{1.5em}
+\begin{center}
+{\bfseries\Large Closing Remark on Measurement Scope}
+\end{center}
+
+We have kept the energy and carbon scope explicit throughout. We did not weaken the efficiency contribution. The reported values are modelled estimates. They are tied to the stated client-tier power, battery, and grid-intensity assumptions. The same accounting model is applied to every method. So the resource comparison is reproducible and fair. We are grateful to the Reviewers for guidance that improved the rigour, clarity, and completeness of the paper. We hope the revised manuscript and this response address their comments fully.
+
+\end{document}

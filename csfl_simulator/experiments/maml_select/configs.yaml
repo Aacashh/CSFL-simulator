@@ -217,6 +217,27 @@ experiments:
     methods_from: integrated_methods
     seeds: [42, 123, 2026]
 
+  # Selector-convergence verification (Statements 1-2). One scenario per
+  # experiment id so each run writes its own selector-convergence log via the
+  # MAML_SELECT_CONV_LOG environment variable. Driven by run_convergence.sh.
+  - id: conv_fashion
+    profiles: [convergence]
+    scenarios: [fashion_main]
+    methods: [research.maml_select]
+    seeds: [42]
+
+  - id: conv_cifar10
+    profiles: [convergence]
+    scenarios: [cifar10_main]
+    methods: [research.maml_select]
+    seeds: [42]
+
+  - id: conv_cifar100
+    profiles: [convergence]
+    scenarios: [cifar100_main]
+    methods: [research.maml_select]
+    seeds: [42]
+
   - id: cifar100_v2_benchmarks
     profiles: [cifar100_v2]
     scenarios: [cifar100_main]

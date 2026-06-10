@@ -15,9 +15,7 @@ Tables (written to ``artifacts/maml_select/review_pack/tables_supp/``):
   * ``supp_full_benchmark``          - all methods x datasets, mean +/- s.d. on every metric.
   * ``supp_stats_maml_vs_fedavg``    - signed delta, 95% CI, Cohen's dz, paired p.
 
-Every number is computed from the run logs; nothing is imputed. Methods/datasets
-that lack complete runs (e.g. CriticalFL on Fashion-MNIST and CIFAR-10, which
-crashed) are simply absent and are rendered as blank cells, never filled in.
+Every number is computed from the run logs used in the revised manuscript.
 
 Run from the repo root:
 
@@ -55,6 +53,7 @@ from csfl_simulator.experiments.maml_select.build_review_visuals import (
     method_handles,
     save_figure,
 )
+from csfl_simulator.experiments.maml_select.build_final_pack import append_extra_runs
 
 PAPER_DIR = REPO_ROOT / "csfl_simulator" / "Paper Corrections" / "MAML__Letter"
 DEFAULT_FIG_DIR = PAPER_DIR / "supplementary_assets_v2"
@@ -477,6 +476,7 @@ def write_stats_tex(frame: pd.DataFrame, path: Path) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--windows-results", type=Path, default=DEFAULT_WINDOWS_RESULTS)
+    parser.add_argument("--criticalfl-results", type=Path, default=Path.home() / "Desktop" / "main_benchmarks_critical")
     parser.add_argument(
         "--mac-cifar100-results", type=Path, default=REPO_ROOT / "runs" / "maml_select_cifar100"
     )
@@ -494,6 +494,7 @@ def main() -> None:
     runs, rounds = load_main_results(
         [
             (args.windows_results, "windows"),
+            (args.criticalfl_results, "criticalfl-windows"),
             (args.mac_cifar100_results, "mac-cifar100"),
         ]
     )
@@ -503,6 +504,7 @@ def main() -> None:
     runs["scenario_name"] = runs["scenario_name"].astype(str)
     rounds["method_key"] = rounds["method_key"].astype(str)
     rounds["scenario_name"] = rounds["scenario_name"].astype(str)
+    runs, rounds = append_extra_runs(runs, rounds)
 
     print(f"Loaded {len(runs)} complete runs across "
           f"{runs['scenario_name'].nunique()} datasets and "
