@@ -1,0 +1,106 @@
+\relax 
+\citation{mcmahan2017communication}
+\citation{karimireddy2020scaffold,mai2024study,tapwal2026stragglers,forootani2026asynchronous,borazjani2026redefining}
+\citation{nishio2019client,chai2020tifl}
+\citation{lai2021oort,tang2022fedcor,xu2024federated,yan2023criticalfl,ning2024fedgcs}
+\citation{wang2020optimizing,pan2024contextual,kazemi2026robust}
+\citation{finn2017model}
+\citation{fallah2020personalized}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\citation{nishio2019client,chai2020tifl}
+\citation{tapwal2026stragglers,forootani2026asynchronous}
+\citation{lai2021oort,tang2022fedcor}
+\citation{yan2023criticalfl,ning2024fedgcs}
+\citation{xu2024federated,tran2026fedimp}
+\citation{wang2020optimizing,pan2024contextual}
+\citation{kazemi2026robust,arisdakessian2026vox}
+\citation{fallah2020personalized}
+\citation{nishio2019client}
+\citation{chai2020tifl}
+\citation{lai2021oort}
+\citation{tang2022fedcor}
+\citation{wang2020optimizing}
+\citation{pan2024contextual}
+\citation{xu2024federated}
+\citation{yan2023criticalfl}
+\citation{ning2024fedgcs}
+\citation{kazemi2026robust}
+\citation{arisdakessian2026vox}
+\citation{fallah2020personalized}
+\citation{nishio2019client}
+\citation{pan2024contextual,xu2024federated}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}1}System-Aware Selection}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}2}Data-Aware and Utility-Based Selection}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-}3}Learning-Based and Meta-Learning Approaches}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}System Model and Problem Formulation}{2}{}\protected@file@percent }
+\newlabel{eq:global_objective}{{1}{2}{}{equation.1}{}}
+\newlabel{eq:round_latency}{{2}{2}{}{equation.2}{}}
+\newlabel{eq:bi_objective}{{3}{2}{}{equation.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}MAML-Select Algorithm}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-}1}State Space}{2}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison of representative methods and MAML-Select.}}{3}{}\protected@file@percent }
+\newlabel{tab:related_work_comparison}{{I}{3}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-}2}Utility Function}{3}{}\protected@file@percent }
+\newlabel{eq:cost}{{4}{3}{}{equation.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}The MAML-Select Algorithm}{3}{}\protected@file@percent }
+\newlabel{eq:inner_loop}{{5}{3}{}{equation.5}{}}
+\newlabel{stmt:inner}{{1}{3}{}{Lemma.1}{}}
+\newlabel{eq:selection}{{6}{3}{}{equation.6}{}}
+\newlabel{eq:outer_loop}{{7}{3}{}{equation.7}{}}
+\newlabel{stmt:outer}{{2}{3}{}{Lemma.2}{}}
+\citation{tang2022fedcor}
+\citation{wu2018light}
+\citation{he2016deep}
+\citation{li2020federated}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces System model and MAML-Select workflow. A central server observes client states, selects $K$ clients from the available pool, aggregates their local updates, and uses returned local-loss and system feedback for support-set adaptation, candidate scoring, and query-set meta-update.}}{4}{}\protected@file@percent }
+\newlabel{fig:model_diagram}{{1}{4}{}{figure.1}{}}
+\newlabel{cor:rate}{{1}{4}{}{corollary.1}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces \relax \fontsize  {9}{10pt}\selectfont  MAML-Select Algorithm}}{4}{}\protected@file@percent }
+\newlabel{alg:maml_select}{{1}{4}{}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}1}Computational Complexity}{4}{}\protected@file@percent }
+\newlabel{eq:selector_complexity}{{8}{4}{}{equation.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Evaluation and Results}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Accuracy and Resource Cost}{5}{}\protected@file@percent }
+\newlabel{eq:tflops}{{9}{5}{}{equation.9}{}}
+\newlabel{eq:energy}{{10}{5}{}{equation.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces CIFAR-100 convergence over 150 rounds. The panels report (a)~accuracy, (b)~the selector meta-update magnitude $\lVert \phi _{t+1}-\phi _t\rVert _2$ for MAML-Select (the empirical signature of Corollary~\ref {cor:rate}), (c)~cumulative modelled energy consumption, and (d)~test loss.}}{5}{}\protected@file@percent }
+\newlabel{fig:convergence}{{2}{5}{}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces (a)~Efficiency--accuracy trade-off: the $x$-axis is cumulative training computational cost relative to FedAvg (log scale; $x<1$ is cheaper than FedAvg), the $y$-axis is final accuracy, and marker shape encodes the dataset. (b)~Measured per-round selection computational overhead (mean with $95\%$ confidence intervals over $10$ rounds) and (c)~the analytical operation count $C(N,K)=NP+N\log K+2KP$ from~\eqref  {eq:selector_complexity} (policy size $P=4{,}673$, normalized to its value at $N=20$), both as the client pool size $N$ grows with the selection rate held at $10\%$ ($K/N=0.1$).}}{5}{}\protected@file@percent }
+\newlabel{fig:effscale}{{3}{5}{}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Benchmark summary across non-IID datasets. Accuracy, precision, recall, F1, and coverage are in percent; energy is in Watt-hour (Wh).}}{6}{}\protected@file@percent }
+\newlabel{tab:main_summary}{{II}{6}{}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Selector Scaling}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Sensitivity and Ablation}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Sensitivity to the cost trade-off $\lambda $ on Fashion-MNIST (left) and CIFAR-10 (right). The black curve is accuracy. Computational cost, energy consumption, and fairness are normalized to their $\lambda =0.1$ values. The trade-off is mild on Fashion-MNIST and sharper on CIFAR-10.}}{6}{}\protected@file@percent }
+\newlabel{fig:lambda_sensitivity}{{4}{6}{}{figure.4}{}}
+\bibcite{mcmahan2017communication}{1}
+\bibcite{karimireddy2020scaffold}{2}
+\bibcite{mai2024study}{3}
+\bibcite{tapwal2026stragglers}{4}
+\bibcite{forootani2026asynchronous}{5}
+\bibcite{borazjani2026redefining}{6}
+\bibcite{nishio2019client}{7}
+\bibcite{chai2020tifl}{8}
+\bibcite{lai2021oort}{9}
+\bibcite{tang2022fedcor}{10}
+\bibcite{xu2024federated}{11}
+\bibcite{yan2023criticalfl}{12}
+\bibcite{ning2024fedgcs}{13}
+\bibcite{wang2020optimizing}{14}
+\bibcite{pan2024contextual}{15}
+\bibcite{kazemi2026robust}{16}
+\bibcite{finn2017model}{17}
+\bibcite{fallah2020personalized}{18}
+\bibcite{tran2026fedimp}{19}
+\bibcite{arisdakessian2026vox}{20}
+\bibcite{wu2018light}{21}
+\bibcite{he2016deep}{22}
+\bibcite{li2020federated}{23}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Inner-step (CIFAR-10) and selector-width (Fashion-MNIST) ablations: final accuracy and selection computational overhead, mean$\pm $std over three seeds. Defaults ($1$ step, $h=64$) in bold.}}{7}{}\protected@file@percent }
+\newlabel{tab:design_ablation}{{III}{7}{}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces State-feature ablation on Fashion-MNIST ($n=3$); each row removes one feature from the six-dimensional state vector.}}{7}{}\protected@file@percent }
+\newlabel{tab:ablation}{{IV}{7}{}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Conclusion and Future Work}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{7}{}\protected@file@percent }
+\gdef \@abspage@last{7}

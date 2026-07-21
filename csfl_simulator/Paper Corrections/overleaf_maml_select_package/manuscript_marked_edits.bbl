@@ -30,13 +30,13 @@ S.~P. Karimireddy, S.~Kale, M.~Mohri, S.~Reddi, S.~Stich, and A.~T. Suresh, ``{S
 V.~S. Mai, R.~J. La, and T.~Zhang, ``A study of enhancing federated learning on non-{IID} data with server learning,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~5, no.~11, pp. 5589--5604, 2024.
 
 \bibitem{tapwal2026stragglers}
-S.~Tapwal, ``Stragglers reimagined: Explainability-driven adaptive federated learning for resource constrained {IoMT} system,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, pp. 1002--1011, 2026.
+R.~Tapwal, ``Stragglers reimagined: Explainability-driven adaptive federated learning for resource constrained {IoMT} system,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, no.~2, pp. 1002--1011, 2026.
 
 \bibitem{forootani2026asynchronous}
-A.~Forootani, R.~Iervolino, and M.~Tipaldi, ``Asynchronous federated learning with nonconvex client objective functions and heterogeneous dataset,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, pp. 2610--2624, 2026.
+A.~Forootani and R.~Iervolino, ``Asynchronous federated learning with nonconvex client objective functions and heterogeneous dataset,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, no.~5, pp. 2610--2624, 2026.
 
 \bibitem{borazjani2026redefining}
-P.~Borazjani, M.~S. Fouladgar, and R.~Ghanbarzadeh, ``Redefining non-{IID} data in federated learning for computer vision tasks,'' \emph{IEEE Transactions on Artificial Intelligence}, 2026, early Access.
+K.~Borazjani, P.~Abdisarabshali, N.~Khosravan, and S.~Hosseinalipour, ``Redefining non-{IID} data in federated learning for computer vision tasks: Migrating from labels to embeddings for task-specific data distributions,'' \emph{IEEE Transactions on Artificial Intelligence}, 2026, early Access.
 
 \bibitem{nishio2019client}
 T.~Nishio and R.~Yonetani, ``Client selection for federated learning with heterogeneous resources in mobile edge,'' in \emph{IEEE International Conference on Communications (ICC)}.\hskip 1em plus 0.5em minus 0.4em\relax IEEE, 2019, pp. 1--7.
@@ -66,7 +66,7 @@ H.~Wang, Z.~Kaplan, D.~Niu, and B.~Li, ``Optimizing federated learning on non-{I
 Q.~Pan, H.~Cao, Y.~Zhu, J.~Liu, and B.~Li, ``Contextual client selection for efficient federated learning over edge devices,'' \emph{IEEE Transactions on Mobile Computing}, vol.~23, no.~6, pp. 6538--6548, 2024.
 
 \bibitem{kazemi2026robust}
-F.~Kazemi, A.~Badiei, and H.~Kebriaei, ``Robust peer-to-peer federated learning with deep reinforcement learning based client selection against data poisoning attacks,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, pp. 262--271, 2026.
+K.~Kazemi, M.~H. Badiei, and H.~Kebriaei, ``Robust peer-to-peer federated learning with deep reinforcement learning based client selection against data poisoning attacks,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, no.~1, pp. 262--271, 2026.
 
 \bibitem{finn2017model}
 C.~Finn, P.~Abbeel, and S.~Levine, ``Model-agnostic meta-learning for fast adaptation of deep networks,'' in \emph{International Conference on Machine Learning (ICML)}.\hskip 1em plus 0.5em minus 0.4em\relax PMLR, 2017, pp. 1126--1135.
@@ -75,7 +75,7 @@ C.~Finn, P.~Abbeel, and S.~Levine, ``Model-agnostic meta-learning for fast adapt
 A.~Fallah, A.~Mokhtari, and A.~Ozdaglar, ``Personalized federated learning with theoretical guarantees: A model-agnostic meta-learning approach,'' \emph{Advances in Neural Information Processing Systems}, vol.~33, pp. 3557--3568, 2020.
 
 \bibitem{tran2026fedimp}
-N.~T. Tran, L.~H.~T. Tam, and M.~T. Thai, ``{FedImp}: Enhancing federated learning convergence with impurity-based weighting aggregation,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, pp. 1652--1665, 2026.
+H.~A. Tran, C.~Ta, and T.~X. Tran, ``{FedImp}: Enhancing federated learning convergence with impurity-based weighting,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, no.~3, pp. 1652--1665, 2026.
 
 \bibitem{arisdakessian2026vox}
 S.~Arisdakessian, O.~A. Wahab, A.~Mourad, and H.~Otrok, ``Towards vox populi in federated learning: A fair and inclusive client selection framework,'' \emph{IEEE Transactions on Artificial Intelligence}, vol.~7, pp. 1997--2011, 2026.
@@ -86,12 +86,12 @@ X.~Wu, R.~He, Z.~Sun, and T.~Tan, ``A light {CNN} for deep face representation w
 \bibitem{he2016deep}
 K.~He, X.~Zhang, S.~Ren, and J.~Sun, ``Deep residual learning for image recognition,'' in \emph{IEEE Conference on Computer Vision and Pattern Recognition}.\hskip 1em plus 0.5em minus 0.4em\relax IEEE, 2016, pp. 770--778.
 
-\bibitem{ignatov2018ai}
-A.~Ignatov, R.~Timofte, A.~Kulik, S.~Yang, K.~Wang, F.~Baum, M.~Wu, L.~Xu, and L.~Van~Gool, ``{AI Benchmark}: Running deep neural networks on android smartphones,'' in \emph{European Conference on Computer Vision Workshops}, 2018, pp. 288--314.
+\bibitem{li2020federated}
+T.~Li, A.~K. Sahu, A.~Talwalkar, and V.~Smith, ``Federated learning: Challenges, methods, and future directions,'' \emph{IEEE Signal Processing Magazine}, vol.~37, no.~3, pp. 50--60, 2020.
 
 \bibitem{courty2024codecarbon}
 \BIBentryALTinterwordspacing
-B.~Courty, V.~Schmidt, S.~Luccioni, Goyal-Kamal, MarionCoutarel, B.~Feld, J.~Lecourt, LiamConnell, A.~Saboni, Inimaz, supatomic, M.~Leval, L.~Blanche, A.~Cruveiller, ouminasara, F.~Zhao, A.~Joshi, A.~Bogroff, H.~de~Lavoreille, N.~Laskaris, E.~Abati, D.~Blank, Z.~Wang, A.~Catovic, M.~Alencon, M.~Stechly, C.~Bauer, L.~O.~N. de~Araujo, JPW, and MinervaBooks, ``{mlco2/codecarbon}: v2.4.1,'' May 2024. [Online]. Available: \url{https://doi.org/10.5281/zenodo.11171501}
+B.~Courty \emph{et~al.}, ``{mlco2/codecarbon}: v2.4.1,'' May 2024. [Online]. Available: \url{https://doi.org/10.5281/zenodo.11171501}
 \BIBentrySTDinterwordspacing
 
 \end{thebibliography}

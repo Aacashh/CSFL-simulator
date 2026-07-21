@@ -1,0 +1,2 @@
+experiment_id,scenario_name,method_key,accuracy_mean,accuracy_std,tflops_mean,tflops_std,rounds_mean,rounds_std,n_seeds
+architecture_ablation,fashion_main,research.maml_select.hidden_128,0.895,,123.4545647616,,200.0,,1

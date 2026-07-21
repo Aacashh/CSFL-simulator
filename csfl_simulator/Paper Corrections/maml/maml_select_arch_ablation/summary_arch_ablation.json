@@ -1,0 +1,11 @@
+{
+  "created_utc": "2026-06-09T09:57:39.963937+00:00",
+  "profile": "arch_ablation",
+  "statuses": [
+    {
+      "run_label": "architecture_ablation_fashion_main_research.maml_select.hidden_128_s2026",
+      "status": "completed",
+      "result_path": "/Users/advaitpathak/CSFL-simulator/CSFL-simulator/csfl_simulator/Paper Corrections/maml/maml_select_arch_ablation/architecture_ablation_fashion_main_research.maml_select.hidden_128_s2026/result.json"
+    }
+  ]
+}

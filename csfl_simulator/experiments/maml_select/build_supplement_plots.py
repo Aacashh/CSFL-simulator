@@ -123,10 +123,9 @@ def fig_resource_trajectories(rounds: pd.DataFrame, fig_dir: Path) -> None:
     metrics = [
         ("cum_training_tflops", "Cumulative compute (TFLOPs)"),
         ("cum_modelled_energy_wh", "Cumulative energy (Wh)"),
-        ("cum_modelled_carbon_g", "Cumulative carbon (g CO$_2$)"),
     ]
     nrows, ncols = len(DATASET_ORDER), len(metrics)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(11.6, 8.6))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(8.0, 8.6))
     for r, scenario in enumerate(DATASET_ORDER):
         for c, (metric, col_title) in enumerate(metrics):
             ax = axes[r, c]

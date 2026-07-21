@@ -1,0 +1,104 @@
+<manuscript_metadata>
+Journal: IEEE Transactions on Artificial Intelligence
+Manuscript ID: TAI-2026-May-A-00956
+Title: SCOPE-FD: A Client Selection Method in Federated Distillation For Massive-MIMO Systems
+Decision: Major Revision
+</manuscript_metadata>
+
+<reviewer_comments>
+
+<reviewer id="Associate Editor">
+A revision stage is needed
+</reviewer>
+
+<reviewer id="Reviewer 1">
+The paper aims to demonstrate convergence compatibility with FedTSKD and client selection. However, the convergence proof is based on FedTSKD, and the effect of client selection via a client subset with bounded variance can easily be derived. Therefore, the analytical contribution of Section V-B is minimal.
+
+Only two datasets, Fashion-MNIST and MNIST, which have very similar characteristics, are tested. The dataset is compatible with the given model. However, as mentioned in the conclusion and future work, the applicability of the proposed method to domains other than images is questionable, as the proposed SCOPE-FD was tested under a narrow scenario.
+
+As the experimental results were conducted in limited settings, it would be useful to show confidence intervals on the graphs.
+
+The coefficients (e.g., alphau and alphad) are not ablated. The selection process for these coefficients needs to be described.
+
+The baseline is too simple when considering uniform randomization. There are other client selection mechanisms in FL (e.g., DevFL) that apply submodular diversity maximization to the client histogram, which is similar to SCOPE-FD's coverage penalty. Therefore, the authors need to consider more realistic and fair comparison baselines.
+
+Only a single value of Dirichlet α (0.5) is tested, producing moderate heterogeneity. Experiment scale is too small to represent Massive-MIMO systems.
+</reviewer>
+
+<reviewer id="Reviewer 2">
+This paper studies client selection for federated distillation (FD) in massive-MIMO wireless systems with partial participation, where only K of N devices can upload logits in each communication round. It proposes SCOPE-FD, a deterministic three-term selector that combines participation debt, a server under-prediction bonus, and a class-coverage penalty. The paper also provides a theoretical analysis to show that cumulative participation counts differ by at most 1, yielding a zero participation Gini over N/K-round windows when K divides N. Experiments on Fashion-MNIST/MNIST and EMNIST/digits show improvements over baseline methods.
+
+In short, my overall recommendation is Major Revision. The paper addresses a real problem, and the proposed selector is conceptually clean. However, I have some concerns, which are listed below.
+
+1. The most important missing comparison is a debt-only selector with alpha_u $_u=alpha_d=0$ Section IV-A states that this setting reduces SCOPE-FD to deterministic round-robin, and Section V-A shows that the debt term dominates the fairness guarantee. Without this baseline, it is unclear whether the gains in Fig. 3 come from the under-prediction and coverage terms or simply from replacing random selection with balanced rotation. Please also report ablations for debt plus under-prediction only and debt plus coverage only.
+
+2. Equations (12) and (14) require each client to reveal its label histogram h_i. This is not raw-data sharing, but it still discloses the local class distribution. Since FD is partly motivated by privacy, this assumption should be treated as a central limitation. Please either evaluate the Laplace-noise or server-side surrogate variants mentioned in Section IV-D, or narrow the privacy-related claims.
+
+3. The participation-fairness proof is convincing, but the convergence claim needs more care. Section V-B says that the FedTSKD $O(1/t)$ bound holds "without modification," but SCOPE-FD changes full participation into partial participation. Please provide a clearer theorem for the partial-participation setting, or state more modestly that SCOPE-FD is compatible with the FedTSKD pipeline under the assumptions of [13].
+
+4. The experiments use a single reported seed and do not show confidence intervals or standard deviations. It remains unclear what the actual performance is under all possible scenarios. Claims such as "statistically tied" and "3x faster" should be supported by multi-seed results and error bars. The rounds-to-80%-of-final-accuracy metric is useful, but it should be complemented with final accuracy tables, rounds to a fixed absolute accuracy, and sensitivity to alpha_u, alpha_d, Dirichlet alpha, and K/N.
+
+5. The motivation emphasizes massive-MIMO, energy budgets, and contention-limited uplinks, but the selection score in Eq. (8) does not include any channel or energy information. The SNR sweep mainly shows that FedTSKD remains robust under noise; it does not show that SCOPE-FD exploits MIMO properties. Please either add channel/energy-aware experiments or clearly position SCOPE-FD as a fairness/data-coverage selector running on top of an mMIMO communication substrate.
+
+6. Please define $"K|N"$ clearly as a divisibility condition in the abstract. In Section VI-A, fix missing spaces such as "[13].FMNIST" and "sweeps. In every configuration." The title should likely use lowercase "for" if title case is applied consistently.
+
+Overall, the paper has a clear idea and a readable presentation, but it currently overstates the evidence. A stronger revision should separate the effect of debt-based fairness from the added value of the under-prediction and coverage terms, and should make the privacy and wireless-system assumptions explicit.
+</reviewer>
+
+<reviewer id="Reviewer 3">
+Major revision
+This manuscript presents SCOPE-FD, a deterministic client selection strategy for Federated Distillation (FD) over massive MIMO systems under partial client participation. The proposed approach combines participation fairness, server under-prediction awareness, and class coverage into a unified client selection mechanism. The paper addresses an important problem that has received relatively limited attention in the federated distillation literature, namely client selection under communication constraints.
+
+But the authors must address the following questions.
+1.The authors clearly explain why traditional federated learning client selection methods cannot be directly applied to federated distillation.
+2. How sensitive is the proposed algorithm to different values of αu and αd?
+3. Improve the resolution of Figure 1.
+3.How does SCOPE-FD perform under more severe non-IID settings?
+4. How would the method perform under asynchronous federated learning or client dropout scenarios?
+5. Since the proposed method relies on a public dataset, how sensitive is its performance to the quality or distribution of that public dataset?
+</reviewer>
+
+<reviewer id="Reviewer 4">
+(There are no comments.)
+</reviewer>
+
+<reviewer id="Attached Review Document (AUTHORS.pdf)">
+Comments to the Authors
+I have reviewed the manuscript entitled "SCOPE-FD: A Client Selection Method in Federated Distillation for Massive-MIMO Systems". After carefully studying the manuscript and examining the related literature, I believe that the paper presents an interesting and technically meaningful contribution. To the best of my knowledge, the proposed combination of deterministic client selection, participation fairness, and federated distillation for Massive-MIMO systems has not been explicitly investigated in this form before.
+
+The conceptual motivation of the work is clear and well justified. The discussion explaining why data-size-weighted logit averaging limits the effectiveness of conventional quality-based client selection in federated distillation provides an interesting perspective on the problem. The proposed three-term scoring mechanism, which combines participation debt, server-side under-prediction, and class coverage within a deterministic framework, is well motivated and represents a thoughtful design.
+
+Among all contributions, I consider Proposition 1 to be the strongest part of the manuscript. The proof establishes a deterministic participation-fairness guarantee by showing that the cumulative participation counts of any two clients differ by at most one throughout the training process. This is an important theoretical contribution because it provides a strict fairness guarantee rather than relying solely on penalty-based objectives. The accompanying argument showing that the participation-debt term remains dominant whenever $lpha_{u}+lpha_{d}<1$ further strengthens the theoretical foundation of the proposed selector.
+
+The manuscript has the potential to make a valuable contribution. Nevertheless, several aspects would benefit from additional clarification and stronger experimental validation.
+
+1. Convergence analysis
+The manuscript states that the convergence behavior of FedTSKD is preserved because SCOPE-FD only changes the composition of the selected client subset while leaving the remaining learning procedure unchanged.
+Since deterministic partial participation introduces a different client-selection policy, it would be helpful to clarify whether the assumptions required in the original convergence analysis of FedTSKD remain satisfied. If a complete theoretical extension is beyond the scope of this work, a brief discussion of the underlying assumptions would improve the presentation.
+
+2. Fairness evaluation
+The theoretical participation-fairness guarantee is one of the main strengths of the manuscript. However, the experimental validation could be expanded to demonstrate the proposed behavior under a broader range of settings.
+For example, additional experiments using different values of N and R, configurations where K does not divide N, or evaluation windows that do not exactly coincide with complete participation cycles would provide stronger empirical evidence for the generality of the proposed fairness behavior.
+
+3. Experimental reproducibility
+The reported results appear to be obtained using a single random seed.
+Since federated learning performance can vary due to random initialization and data partitioning, reporting results over multiple independent runs together with statistics such as mean standard deviation would substantially improve the reproducibility and reliability of the reported performance, particularly for convergence-speed comparisons and the sparse participation setting.
+
+4. Ablation study
+The proposed scoring function consists of three complementary components.
+An ablation study comparing
+ participation debt only,
+ debt plus under-prediction bonus,
+ debt plus class-coverage penalty,
+ and the complete SCOPE-FD score
+would help quantify the contribution of each component and provide additional insight into the design choices.
+
+5. Privacy discussion
+The proposed method requires each client to upload its normalized label histogram.
+Although the manuscript briefly discusses possible privacy-preserving alternatives, a slightly more detailed discussion of the practical implications of sharing these statistics would further improve the completeness of the paper.
+
+Final Remarks
+I believe the proposed framework addresses an important problem in federated distillation and contains a meaningful theoretical contribution. In particular, Proposition 1 is, in my opinion, the strongest part of the manuscript and represents the primary scientific contribution of this work. The suggestions above are intended to strengthen the experimental evidence, improve reproducibility, and further clarify the theoretical scope of the proposed method. Addressing these points would considerably enhance the quality and impact of the manuscript.
+</reviewer>
+
+</reviewer_comments>

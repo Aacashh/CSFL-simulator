@@ -38,21 +38,25 @@ SPINE = "#222222"
 
 
 def _style() -> None:
+    # Font sizes chosen so that, at the on-page include width (scale ~1.0), figure
+    # text reads at the manuscript body size. No bold: matches the running text.
     plt.rcParams.update({
         "font.family": "serif",
         "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
         "mathtext.fontset": "stix",
-        "font.weight": "bold",
-        "font.size": 10.5,
-        "axes.titlesize": 12.0,
-        "axes.titleweight": "bold",
-        "axes.labelsize": 11.0,
-        "axes.labelweight": "bold",
-        "legend.fontsize": 9.0,
-        "xtick.labelsize": 9.5,
-        "ytick.labelsize": 9.5,
+        "font.weight": "normal",
+        "font.size": 9.5,
+        "axes.titlesize": 10.0,
+        "axes.titleweight": "normal",
+        "axes.labelsize": 9.5,
+        "axes.labelweight": "normal",
+        "legend.fontsize": 8.5,
+        "xtick.labelsize": 9.0,
+        "ytick.labelsize": 9.0,
         "axes.spines.top": True,
         "axes.spines.right": True,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
     })
 
 
@@ -78,42 +82,50 @@ def lambda_two_dataset(out: Path) -> None:
     df = df[df["family"] == "lambda_sensitivity"].copy()
     order = ["Fashion-MNIST", "CIFAR-10"]
     datasets = [d for d in order if d in set(df["dataset"])]
-    fig, axes = plt.subplots(len(datasets), 1, figsize=(3.5, 4.7), squeeze=False)
-    for ax, ds in zip(axes[:, 0], datasets):
+    # Side-by-side, single-column width: two compact panels share one row.
+    fig, axes = plt.subplots(1, len(datasets), figsize=(3.5, 1.65), squeeze=False)
+    handles, labels = [], []
+    for j, (ax, ds) in enumerate(zip(axes[0], datasets)):
         part = df[df["dataset"] == ds].sort_values("lambda")
         x = part["lambda"].to_numpy(float)
         acc = 100.0 * part["accuracy_mean"].to_numpy(float)
         err = 100.0 * part["accuracy_std"].fillna(0.0).to_numpy(float)
-        ax.errorbar(x, acc, yerr=err, marker="o", color=C_ACC, lw=1.8, ms=4.2,
-                    capsize=2.5, label="Accuracy", zorder=4)
+        ha = ax.errorbar(x, acc, yerr=err, marker="o", color=C_ACC, lw=1.0, ms=2.8,
+                         capsize=1.8, elinewidth=0.8, label="Accuracy", zorder=4)
         ax.set_xscale("log")
         ax.set_xticks(x)
         ax.set_xticklabels([f"{v:g}" for v in x])
-        ax.set_xlabel(r"$\lambda$")
-        ax.set_ylabel("Final accuracy (%)")
-        ax.set_title(ds)
+        ax.set_xlabel(r"$\lambda$", labelpad=1.5)
+        ax.set_title(ds, pad=2.5)
         ax.grid(True, color=GRID, lw=0.6, zorder=0)
         _boxed(ax)
+        if j == 0:
+            ax.set_ylabel("Final accuracy (%)")
         ax2 = ax.twinx()
         base = part.iloc[0]
-        ax2.plot(x, part["tflops_mean"] / base["tflops_mean"], marker="s", color=C_COMPUTE,
-                 lw=1.5, ms=3.8, label="Compute")
-        ax2.plot(x, part["energy_mean"] / base["energy_mean"], marker="^", color=C_ENERGY,
-                 lw=1.5, ms=3.8, label="Energy")
-        ax2.plot(x, part["jain_mean"] / base["jain_mean"], marker="D", color=C_FAIR,
-                 lw=1.5, ms=3.6, label="Fairness")
-        ax2.set_ylabel(r"Relative to $\lambda=0.1$")
+        hc, = ax2.plot(x, part["tflops_mean"] / base["tflops_mean"], marker="s", color=C_COMPUTE,
+                       lw=1.0, ms=2.6, label="Computational cost")
+        he, = ax2.plot(x, part["energy_mean"] / base["energy_mean"], marker="^", color=C_ENERGY,
+                       lw=1.0, ms=2.7, label="Energy")
+        hf, = ax2.plot(x, part["jain_mean"] / base["jain_mean"], marker="D", color=C_FAIR,
+                       lw=1.0, ms=2.5, label="Fairness")
+        ax2.set_ylim(0.35, 1.06)
         for side in ("top", "right", "bottom", "left"):
             ax2.spines[side].set_visible(True)
             ax2.spines[side].set_color(SPINE)
             ax2.spines[side].set_linewidth(0.8)
-        h1, l1 = ax.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        leg = ax.legend(h1 + h2, l1 + l2, loc="lower left", frameon=True,
-                        framealpha=0.95, edgecolor="#CCCCCC", ncol=1,
-                        columnspacing=1.0, handletextpad=0.4, labelspacing=0.3)
-        leg.get_frame().set_linewidth(0.5)
-    fig.tight_layout(pad=0.4, w_pad=1.4)
+        if j == len(datasets) - 1:
+            ax2.set_ylabel(r"Relative to $\lambda=0.1$")
+        else:
+            ax2.set_yticklabels([])  # inner edge: keep only the outer relative axis labelled
+        if not handles:
+            handles = [ha, hc, he, hf]
+            labels = ["Accuracy", "Computational cost", "Energy", "Fairness"]
+    leg = fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.04),
+                     ncol=4, frameon=True, framealpha=0.95, edgecolor="#CCCCCC",
+                     columnspacing=0.9, handletextpad=0.3, handlelength=1.3)
+    leg.get_frame().set_linewidth(0.5)
+    fig.tight_layout(pad=0.3, w_pad=1.0, rect=(0, 0.10, 1, 1))
     _save(fig, "fig_lambda_two_dataset", out)
 
 

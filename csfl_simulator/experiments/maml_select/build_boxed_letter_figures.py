@@ -30,6 +30,51 @@ DEFAULT_OUTPUT_DIR = bfp.REPO_ROOT / "csfl_simulator" / "Paper Corrections" / "M
 OURS = "research.maml_select"
 
 
+# Compact Table-II source for the combined efficiency/scaling figure.  The
+# figure is a visual summary of Table II, so drawing from these values prevents
+# missing points when an external run directory is unavailable.
+TABLE2_TRADEOFF = [
+    # scenario, method_key, final accuracy (%), cumulative training TFLOPs
+    ("fashion_main", "baseline.fedavg", 90.22, 140.0),
+    ("fashion_main", "system_aware.fedcs", 84.11, 76.0),
+    ("fashion_main", "system_aware.oort", 86.70, 149.0),
+    ("fashion_main", "system_aware.tifl", 86.73, 147.0),
+    ("fashion_main", "ml.fedcor", 89.35, 121.0),
+    ("fashion_main", "research.criticalfl", 90.16, 304.0),
+    ("fashion_main", "research.fedgcs", 90.65, 136.0),
+    ("fashion_main", "research.maml_select", 90.11, 122.0),
+    ("cifar10_main", "baseline.fedavg", 79.43, 8341.0),
+    ("cifar10_main", "system_aware.fedcs", 50.45, 4081.0),
+    ("cifar10_main", "system_aware.oort", 60.19, 8303.0),
+    ("cifar10_main", "system_aware.tifl", 61.93, 8200.0),
+    ("cifar10_main", "ml.fedcor", 67.20, 7748.0),
+    ("cifar10_main", "research.criticalfl", 77.34, 14239.0),
+    ("cifar10_main", "research.fedgcs", 77.88, 7656.0),
+    ("cifar10_main", "research.maml_select", 75.63, 6549.0),
+    ("cifar100_main", "baseline.fedavg", 59.66, 6331.0),
+    ("cifar100_main", "system_aware.fedcs", 27.52, 5334.0),
+    ("cifar100_main", "system_aware.oort", 29.41, 5955.0),
+    ("cifar100_main", "system_aware.tifl", 32.12, 5986.0),
+    ("cifar100_main", "ml.fedcor", 34.18, 6428.0),
+    ("cifar100_main", "research.criticalfl", 48.84, 9469.0),
+    ("cifar100_main", "research.fedgcs", 58.66, 6140.0),
+    ("cifar100_main", "research.maml_select", 58.15, 6224.0),
+]
+
+
+def table2_tradeoff_frame() -> pd.DataFrame:
+    """Return Table-II values in the run-summary schema expected by _draw_tradeoff."""
+    return pd.DataFrame(
+        {
+            "scenario_name": scenario,
+            "method_key": method,
+            "final_accuracy": acc / 100.0,
+            "cum_training_tflops": tflops,
+        }
+        for scenario, method, acc, tflops in TABLE2_TRADEOFF
+    )
+
+
 def boxed_axes(ax) -> None:
     """Give every individual subplot a closed axis box."""
     ax.grid(True, **bfp.GRID_KW)
@@ -139,7 +184,9 @@ def build_feature_ablation_boxed(ablation_frame: pd.DataFrame, output_dir: Path)
     save_boxed(fig, output_dir, "fig_feature_ablation_trimmed")
 
 
-def build_scaling_boxed(scaling_csv: Path, output_dir: Path) -> None:
+def _draw_scaling(ax, ax2, scaling_csv: Path, *, label_fs: float = 9.0, tick_fs: float = 8.0,
+                  title_fs: float = 9.0, letters=("a", "b"), stacked: bool = False) -> None:
+    """Draw the (measured-time, analytical-work) scaling pair onto two given axes."""
     frame = load_maml_scaling(scaling_csv)
     n = frame["N"].astype(float).to_numpy()
     k = frame["K"].astype(float).to_numpy()
@@ -151,37 +198,125 @@ def build_scaling_boxed(scaling_csv: Path, output_dir: Path) -> None:
 
     line_color = "#0072B2"
     theory_color = "#D55E00"
-    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(3.48, 1.85), gridspec_kw={"width_ratios": [1.1, 1.0]})
     ax.fill_between(n, mean_ms - ci95, mean_ms + ci95, color="#CFE8FF", linewidth=0.0, zorder=1)
-    ax.plot(n, mean_ms, "o-", color=line_color, markersize=4.8, linewidth=2.0, zorder=3)
-    ax.errorbar(n, mean_ms, yerr=ci95, fmt="none", ecolor=line_color, elinewidth=0.9, capsize=2.5, zorder=4)
-    ax2.plot(n, work_rel, "s--", color=theory_color, markersize=4.3, linewidth=2.0, zorder=3)
+    ax.plot(n, mean_ms, "o-", color=line_color, markersize=4.4, linewidth=1.8, zorder=3)
+    ax.errorbar(n, mean_ms, yerr=ci95, fmt="none", ecolor=line_color, elinewidth=0.9, capsize=2.3, zorder=4)
+    ax2.plot(n, work_rel, "s--", color=theory_color, markersize=4.0, linewidth=1.8, zorder=3)
     for axis in (ax, ax2):
         boxed_axes(axis)
+        axis.set_xscale("log")
         axis.set_xticks(n)
+        axis.set_xticklabels([str(int(v)) if int(v) in (20, 100, 1000) else "" for v in n], fontsize=tick_fs)
+        axis.minorticks_off()
         axis.grid(axis="y", color="#E6E6E6", linewidth=0.6)
-    ax.set_xlabel("Client pool size $N$", fontsize=11, fontweight="bold")
-    ax2.set_xlabel("Client pool size $N$", fontsize=11, fontweight="bold")
-    ax.set_ylabel("Overhead (ms/round)", fontsize=11, fontweight="bold")
-    ax2.set_ylabel(r"Work ($\times$ vs. $N=20$)", fontsize=11, fontweight="bold")
-    ax.set_ylim(0, max(18, float(np.nanmax(mean_ms + ci95)) + 1.5))
-    ax2.set_ylim(0.6, max(5.5, float(work_rel.max()) + 0.3))
-    ax2.set_yticks([1, 2, 3, 4, 5])
-    ax.set_title("(a) Measured time", fontsize=11.5, fontweight="bold")
-    ax2.set_title("(b) Analytical work", fontsize=11.5, fontweight="bold")
-    ax.text(0.95, 0.10, "< 13 ms", transform=ax.transAxes, ha="right", va="bottom",
-            fontsize=9.0, color=line_color, fontweight="bold")
-    ax2.annotate(
-        r"$C(N,K)=NP+N\log K+2KP$" + "\n" + rf"$P={POLICY_PARAMS:,},\;K=N/10$",
-        xy=(0.05, 0.95),
-        xycoords="axes fraction",
-        ha="left",
-        va="top",
-        fontsize=8.5,
-        color="#333333",
-    )
+        axis.tick_params(labelsize=tick_fs)
+    ax.set_ylabel("Computational\noverhead (ms/round)", fontsize=label_fs, fontweight="normal")
+    ax2.set_ylabel(r"Work ($\times$ vs. $N{=}20$)", fontsize=label_fs, fontweight="normal")
+    ax.set_ylim(0, float(np.nanmax(mean_ms + ci95)) + 5)
+    ax2.set_yscale("log")
+    ax2.set_ylim(0.8, float(work_rel.max()) * 1.5)
+    ax2.set_yticks([1, 2, 5, 10, 20, 50])
+    ax2.set_yticklabels(["1", "2", "5", "10", "20", "50"], fontsize=tick_fs)
+    ax.set_title(f"({letters[0]}) Measured time", fontsize=title_fs, fontweight="normal")
+    ax2.set_title(f"({letters[1]}) Analytical work", fontsize=title_fs, fontweight="normal")
+    ax.text(0.96, 0.93, r"flat $\approx$20--26 ms", transform=ax.transAxes, ha="right", va="top",
+            fontsize=tick_fs, color=line_color)
+    if stacked:
+        # Both panels keep their own x-tick numbers; only the bottom one is labelled.
+        ax2.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
+    else:
+        ax.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
+        ax2.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
+
+
+def build_scaling_boxed(scaling_csv: Path, output_dir: Path) -> None:
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(3.48, 1.95), gridspec_kw={"width_ratios": [1.1, 1.0]})
+    _draw_scaling(ax, ax2, scaling_csv, label_fs=9.0, tick_fs=8.0, title_fs=9.5, letters=("a", "b"))
     fig.tight_layout(pad=0.35, w_pad=1.15)
     save_boxed(fig, output_dir, "fig_scaling_maml_only")
+
+
+def build_combined_boxed(runs: pd.DataFrame, scaling_csv: Path, output_dir: Path) -> None:
+    """Merged single-column figure.
+
+    Panel (a) uses the full left-side height so the efficiency--accuracy plot
+    does not look compressed. Its method and dataset legends are placed below
+    the axis, outside the data region, to avoid covering points. Panels (b) and
+    (c) retain the compact stacked selector-scaling view on the right.
+    """
+    fig = plt.figure(figsize=(3.5, 3.25))
+    outer = fig.add_gridspec(
+        1,
+        2,
+        width_ratios=[1.34, 1.0],
+        wspace=0.52,
+        left=0.105,
+        right=0.975,
+        top=0.945,
+        bottom=0.365,
+    )
+    ax_a = fig.add_subplot(outer[0, 0])
+    gr = outer[0, 1].subgridspec(2, 1, hspace=0.66)
+    ax_b = fig.add_subplot(gr[0])
+    ax_c = fig.add_subplot(gr[1])
+
+    mh, dh = bfp._draw_tradeoff(
+        ax_a,
+        table2_tradeoff_frame(),
+        label_fs=6.1,
+        tick_fs=5.5,
+        legend_fs=5.0,
+        draw_legends=False,
+    )
+    ax_a.yaxis.labelpad = 1.2
+    ax_a.xaxis.labelpad = 1.0
+    ax_a.set_title("(a) Efficiency--accuracy trade-off", fontsize=6.9, fontweight="normal", pad=2.0)
+
+    _draw_scaling(ax_b, ax_c, scaling_csv, label_fs=6.2, tick_fs=5.6, title_fs=7.0,
+                  letters=("b", "c"), stacked=True)
+
+    # Legends are inside panel (a), placed in its bottom-right open region.
+    # The method legend uses colour; the dataset legend uses marker shape.
+    method_leg = ax_a.legend(
+        handles=mh,
+        loc="lower right",
+        bbox_to_anchor=(0.998, 0.035),
+        bbox_transform=ax_a.transAxes,
+        ncol=2,
+        fontsize=3.75,
+        frameon=True,
+        facecolor="white",
+        edgecolor="#CCCCCC",
+        framealpha=0.97,
+        handletextpad=0.52,
+        columnspacing=1.25,
+        labelspacing=0.42,
+        handlelength=1.15,
+        borderpad=0.40,
+        markerscale=0.72,
+    )
+    method_leg.get_frame().set_linewidth(0.4)
+    ax_a.add_artist(method_leg)
+    dataset_leg = ax_a.legend(
+        handles=dh,
+        loc="lower right",
+        bbox_to_anchor=(0.998, 0.485),
+        bbox_transform=ax_a.transAxes,
+        ncol=1,
+        fontsize=3.9,
+        frameon=True,
+        facecolor="white",
+        edgecolor="#CCCCCC",
+        framealpha=0.97,
+        handletextpad=0.55,
+        columnspacing=0.48,
+        labelspacing=0.42,
+        handlelength=1.05,
+        borderpad=0.38,
+        markerscale=0.70,
+    )
+    dataset_leg.get_frame().set_linewidth(0.4)
+    save_boxed(fig, output_dir, "fig_efficiency_scaling")
 
 
 def parse_args() -> argparse.Namespace:
@@ -219,6 +354,7 @@ def main() -> None:
     bfp.fig_convergence(c100_rounds, args.output_dir)
     bfp.fig_tradeoff(runs, args.output_dir)
     build_scaling_boxed(args.scaling_csv, args.output_dir)
+    build_combined_boxed(runs, args.scaling_csv, args.output_dir)
     build_lambda_boxed(lambda_summary, args.output_dir)
     build_feature_ablation_boxed(ablation_summary, args.output_dir)
     print(f"Wrote boxed-axis figures to {args.output_dir}")

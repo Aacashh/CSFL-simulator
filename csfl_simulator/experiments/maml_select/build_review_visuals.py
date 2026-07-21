@@ -99,11 +99,14 @@ HATCHES = {
 def configure_style() -> None:
     plt.rcParams.update(
         {
-            "font.family": "DejaVu Sans",
+            # Times New Roman serif to match the IEEEtran body font; no bold.
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+            "mathtext.fontset": "stix",
             "font.size": 9.5,
-            "axes.labelsize": 10,
-            "axes.titlesize": 10.5,
-            "axes.titleweight": "bold",
+            "axes.labelsize": 9.5,
+            "axes.titlesize": 9.5,
+            "axes.titleweight": "normal",
             "legend.fontsize": 8,
             "xtick.labelsize": 8.5,
             "ytick.labelsize": 8.5,

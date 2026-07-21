@@ -126,7 +126,9 @@ def main() -> None:
     axa.set_title("(a) Inner-step descent")
     _boxed(axa)
     if ok_fracs:
-        axa.text(0.96, 0.06, f"$\\leq 0$ in {100*min(ok_fracs):.0f}--{100*max(ok_fracs):.0f}\\% of rounds",
+        lo, hi = 100 * min(ok_fracs), 100 * max(ok_fracs)
+        frac_txt = f"{lo:.0f}%" if abs(hi - lo) < 0.5 else f"{lo:.0f}-{hi:.0f}%"
+        axa.text(0.96, 0.06, f"$\\leq 0$ in {frac_txt} of rounds",
                  transform=axa.transAxes, ha="right", va="bottom", fontsize=7.6, fontweight="bold",
                  bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#CCCCCC", lw=0.5))
 
@@ -139,7 +141,7 @@ def main() -> None:
             continue
         axb.plot(np.arange(1, q.size + 1), q / q[0], color=col, lw=1.8, label=lbl)
     axb.set_xlabel("Communication round")
-    axb.set_ylabel(r"Query loss (rel.\ round 1)")
+    axb.set_ylabel("Query loss (rel. round 1)")
     axb.set_title("(b) Outer-loop convergence")
     _boxed(axb)
 
@@ -152,7 +154,7 @@ def main() -> None:
             continue
         axc.plot(np.arange(1, dphi.size + 1), dphi, color=col, lw=1.8, label=lbl)
     axc.set_xlabel("Communication round")
-    axc.set_ylabel(r"$\lVert\phi_{t+1}-\phi_t\rVert_2$")
+    axc.set_ylabel(r"$|\phi_{t+1}-\phi_t|_2$")
     axc.set_title("(c) Policy stabilization")
     _boxed(axc)
 

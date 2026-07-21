@@ -1,209 +1,187 @@
-\documentclass[11pt]{article}
+\documentclass[10pt,psfig]{article}
 
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{enumitem}
-\usepackage{parskip}
+\usepackage{array}
+\usepackage{booktabs}
 \usepackage[hidelinks]{hyperref}
 
-\newcommand{\comment}[1]{\textbf{Comment:} \textit{#1}}
-\newcommand{\response}[1]{\textbf{Response:} #1}
-\newcommand{\change}[1]{\textbf{Changes in the manuscript:} \textcolor{blue}{#1}}
+\oddsidemargin -0.04cm
+\evensidemargin -0.04cm
+\textwidth 16.59cm
+\textheight 21.94cm
+\topmargin -0.25cm
+\renewcommand{\baselinestretch}{1.35}
+
+\newcommand{\paperTitle}{MAML-Select: An Online Adaptive Client Selection Method for Federated Learning via Meta-Learning}
+\long\def\ReviewerHeading#1{%
+    \vspace{2em}
+    \begin{center}
+    {\bfseries\Large Response to Comments of #1}
+    \end{center}
+    \vspace{0.5em}
+}
+\long\def\ReviewerComment#1#2{%
+    \par\noindent\hspace{-0.65cm}{\bfseries #1:} {\itshape #2}\par\vspace{0.55em}
+}
+\long\def\ReviewerReply#1#2{%
+    \par\noindent\hspace{-0.65cm}{\bfseries #1:} {\normalfont #2}\par\vspace{0.45em}
+}
+\long\def\ManuscriptChange#1{%
+    \par\noindent\hspace{-0.65cm}{\bfseries Changes incorporated in the revised manuscript:}
+    {\color{blue} #1}\par\vspace{1.1em}
+}
 
 \begin{document}
 
+\title{\small Response to Reviewers' Comments and Changes Incorporated in the Revised Manuscript\\[1.5em]
+{\Large \bfseries \paperTitle}\\[0.75em]
+(\textbf{Original Manuscript ID: TAI-2026-Mar-L-00619 (REX-PROD-2-93FE7680-3CDE-4B0D-B867-877CC519FD0C-D439D5C3-D340-44E2-AD85-F9F4390D1993-38188)})}
+\date{}
+\maketitle
+\vspace{-1.5em}
+
+We sincerely thank the Editor, Associate Editor, and the anonymous Reviewers for their valuable time and effort in evaluating our manuscript. We have carefully addressed all comments and suggestions in the revised version. The manuscript has been revised for clarity, technical completeness, experimental evidence, and presentation quality. {\color{blue}All textual additions and revisions made in response to the Reviewers' comments are highlighted in blue in the marked manuscript.} A separate clean black-and-white manuscript is also provided for normal reading. Please note that the Reviewers' comments are \textit{italicized}, followed by our replies in normal font.
+
+\vspace{1.5em}
 \begin{center}
-    {\Large \textbf{Response to Reviewers}}\\[0.5em]
-    \textbf{Manuscript: MAML-Select: An Online Adaptive Client Selection Method for Federated Learning via Meta-Learning}
+{\bfseries\Large Summary of Major Revisions}
 \end{center}
 
-We thank the reviewers for their careful and constructive comments. We revised the manuscript substantially while keeping the claims conservative. All textual additions in the manuscript are marked in blue. We also added a separate supplementary file, \texttt{Supplementary\_Material.tex}, containing extended evidence and numeric details.
-
-\section*{Summary of Major Revisions}
-
-\begin{itemize}[leftmargin=*]
-    \item We clarified the novelty: MAML-Select meta-learns and rapidly adapts the client-selection policy, rather than personalizing client models or learning a long-horizon RL controller.
+\begin{itemize}[leftmargin=*,itemsep=0.35em]
+    \item We clarified the novelty: MAML-Select meta-learns and rapidly adapts the client-selection policy, rather than personalizing client models or learning a long-horizon reinforcement-learning controller.
     \item We added a direct comparison table for prior work and baselines.
-    \item We expanded the evaluation to Fashion-MNIST, CIFAR-10, and CIFAR-100 under non-IID Dirichlet $\alpha=0.5$ with $N=100$, $K=10$, $E=5$, batch size 32, and seeds $42$, $123$, and $2026$ where complete.
+    \item We expanded the evaluation to Fashion-MNIST, CIFAR-10, and CIFAR-100 under non-IID Dirichlet $\alpha=0.5$ with $N=100$, $K=10$, $E=5$, batch size 32, and the seed protocol reported in the revised manuscript.
     \item We added FedGCS and CriticalFL to the revised comparison framework.
-    \item We now report mean $\pm$ standard deviation, paired tests, $\lambda$ sensitivity, state-feature ablation, fairness/coverage, modelled energy/carbon, and selector-overhead scaling.
-    \item We clarified the energy/carbon language. The manuscript reports TFLOPs together with model-based energy/carbon estimates derived from stated client-tier power and grid-intensity assumptions.
+    \item We now report mean $\pm$ standard deviation, paired tests, $\lambda$ sensitivity, state-feature ablation, fairness and coverage, modelled energy and carbon, and selector-overhead scaling.
+    \item We clarified the resource-accounting scope. The manuscript reports TFLOPs together with model-based energy/carbon estimates derived from stated client-tier power and grid-intensity assumptions.
 \end{itemize}
 
-\section*{Reviewer 1}
+\ReviewerHeading{Reviewer 1}
 
-\comment{Simplify long and complex sentences, especially in the Introduction and Related Work.}
+\ReviewerComment{Comment 1}{Simplify long and complex sentences, especially in the Introduction and Related Work.}
+\ReviewerReply{Reply 1}{We agree with the Reviewer. We revised the full manuscript for shorter sentence structure and clearer narrative flow. The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were all edited.}
+\ManuscriptChange{Long sentences were divided and the central motivation is now stated directly: client utility changes during FL training, so a fixed selection rule can become stale.}
 
-\response{We agree. We revised the full manuscript for shorter sentence structure and clearer narrative flow. The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were all edited.}
+\ReviewerComment{Comment 2}{Provide more implementation details, including optimizer type, learning rates, schedules, exact meta-policy architecture, initialization, random seeds, and code or detailed pseudocode.}
+\ReviewerReply{Reply 2}{We thank the Reviewer for this important suggestion. We added the requested implementation details. The policy is a $6$-$64$-$64$-$1$ MLP with ReLU activations and 4,673 trainable parameters. The local models use PyTorch default initialization and SGD with learning rate $0.01$, momentum $0.9$, weight decay $10^{-4}$, and a constant scheduler. The MAML policy uses one inner step with $\beta=0.01$ and Adam for the outer update with $\eta=0.001$. Seeds are $42$, $123$, and $2026$, and the selector seed is fixed to 2026.}
+\ManuscriptChange{The Methodology now includes Algorithm~1 with explicit support adaptation, candidate scoring, top-$K$ selection, local-loss feedback routing, and first-order meta-update. The Evaluation section now reports optimizer, learning-rate, scheduler, initialization, seed, and meta-policy settings.}
 
-\change{Long sentences were divided and the central motivation is now stated directly: client utility changes during FL training, so a fixed selection rule can become stale.}
+\ReviewerComment{Comment 3}{The accuracy gains are modest. Please justify why they are meaningful and identify scenarios where efficiency is prioritized.}
+\ReviewerReply{Reply 3}{We appreciate this comment and have reframed the contribution as an efficiency--accuracy trade-off, not as universal accuracy dominance. Across shared FedAvg seeds, MAML-Select changes accuracy by $-0.11$, $-3.81$, and $-1.51$ percentage points on Fashion-MNIST, CIFAR-10, and CIFAR-100, respectively, while reducing TFLOPs by $12.8\%$, $21.5\%$, and $1.7\%$, and modelled energy/carbon by $16.4\%$, $24.7\%$, and $4.7\%$. This is meaningful in edge settings with device limits, intermittent connectivity, and strict round deadlines.}
+\ManuscriptChange{The Abstract, Introduction, Evaluation, and Conclusion now describe MAML-Select as a resource-efficient selector with competitive accuracy and explicitly note the accuracy trade-off on CIFAR-10.}
 
-\comment{Provide more implementation details, including optimizer type, learning rates, schedules, exact meta-policy architecture, initialization, random seeds, and code or detailed pseudocode.}
+\ReviewerHeading{Reviewer 2}
 
-\response{We added these details. The policy is a $6$-$64$-$64$-$1$ MLP with ReLU activations and 4,673 trainable parameters. The local models use PyTorch default initialization and SGD with learning rate $0.01$, momentum $0.9$, weight decay $10^{-4}$, and a constant scheduler. The MAML policy uses one inner step with $\beta=0.01$ and Adam for the outer update with $\eta=0.001$. Seeds are $42$, $123$, and $2026$, and the selector seed is fixed to 2026.}
+\ReviewerComment{Comment 1}{Clarify the exact novelty compared with RL-based approaches, contextual bandits, and meta-learning-based personalization frameworks. Add a dedicated comparison table.}
+\ReviewerReply{Reply 1}{We thank the Reviewer for this suggestion. We clarified the distinction. RL and bandit approaches learn or estimate selection rewards through interaction. Personalization methods use meta-learning to adapt model parameters for each client. MAML-Select instead meta-learns the initialization of the client-ranking policy itself and performs a gradient-based adaptation step from recent FL feedback before each selection decision.}
+\ManuscriptChange{The Introduction, Related Work, and Table~I now compare FedAvg, FedCS, Oort, TiFL, FedCor, CriticalFL, FedGCS, personalization-based meta-learning, and MAML-Select across objective, adaptation mechanism, dominant operation, and optimization strategy.}
 
-\change{The Methodology now includes Algorithm~1 with explicit support adaptation, candidate scoring, top-$K$ selection, local-loss feedback routing, and first-order meta-update. The Evaluation section now reports optimizer, learning-rate, scheduler, initialization, seed, and meta-policy settings.}
+\ReviewerComment{Comment 2}{The manuscript has empirical evaluation only. There is no convergence proof or theoretical justification for non-stationary adaptation.}
+\ReviewerReply{Reply 2}{We agree that a theoretical justification is useful. We added a limited theoretical statement. It is intentionally local: under an $L$-smooth support loss and a standard step-size condition, the inner update decreases the support objective. We do not claim a full global FL convergence theorem.}
+\ManuscriptChange{A descent statement and interpretation now appear immediately after the inner-loop equation. The text explicitly says this is a local adaptation justification, not a complete FL convergence proof.}
 
-\comment{The accuracy gains are modest. Please justify why they are meaningful and identify scenarios where efficiency is prioritized.}
+\ReviewerComment{Comment 3}{Explain the manually chosen trade-off parameter $\lambda$ and evaluate sensitivity.}
+\ReviewerReply{Reply 3}{We added both explanation and evidence. The manuscript states that $\lambda$ controls the latency--utility trade-off. Larger $\lambda$ emphasizes latency and resource efficiency. The new sensitivity analysis sweeps $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST. Accuracy remains stable, while compute, energy, carbon, and fairness vary with $\lambda$.}
+\ManuscriptChange{The System Model explains $\lambda$. The manuscript now reports the $\lambda$ sweep next to the corresponding sensitivity text, and the supplementary material gives the extended numeric sweep.}
 
-\response{We reframed the contribution as an efficiency--accuracy trade-off, not as universal accuracy dominance. Across shared FedAvg seeds, MAML-Select changes accuracy by $-0.11$, $-3.81$, and $-1.51$ percentage points on Fashion-MNIST, CIFAR-10, and CIFAR-100, while reducing TFLOPs by $12.8\%$, $21.5\%$, and $1.7\%$, and modelled energy/carbon by $16.4\%$, $24.7\%$, and $4.7\%$. This is meaningful in edge settings with device limits, intermittent connectivity, or strict round deadlines.}
+\ReviewerComment{Comment 4}{The experimental validation is limited to small-scale datasets. Add larger or more realistic FL benchmarks.}
+\ReviewerReply{Reply 4}{We expanded the evaluation from two datasets to three by adding CIFAR-100 with ResNet18. CIFAR-100 is analyzed at 150 rounds to match the hardest benchmark window used in the revised evidence. We also added a selector-overhead scaling probe.}
+\ManuscriptChange{The Evaluation now includes Fashion-MNIST, CIFAR-10, and CIFAR-100. The main manuscript now includes the selector time-complexity proof and a selector-overhead scaling plot; the supplementary material retains the full scaling view.}
 
-\change{The Abstract, Introduction, Evaluation, and Conclusion now describe MAML-Select as a resource-efficient selector with competitive accuracy and explicitly note the accuracy trade-off on CIFAR-10.}
+\ReviewerComment{Comment 5}{Include standard deviation across multiple runs and statistical significance analysis.}
+\ReviewerReply{Reply 5}{We agree. The main benchmark table now reports mean $\pm$ standard deviation for the repeated-run comparisons. We also computed paired tests over shared seeds. Against FedAvg, MAML-Select resource reductions are statistically significant in the paired tests for TFLOPs and modelled energy/carbon across all three datasets.}
+\ManuscriptChange{Table~II now reports accuracy, weighted precision, recall, F1, TFLOPs, modelled energy/carbon, Jain fairness, and coverage, with standard deviations. The supplementary material reports paired tests for MAML-Select against FedAvg.}
 
-\section*{Reviewer 2}
+\ReviewerComment{Comment 6}{Evaluate fairness across heterogeneous clients using participation fairness, client coverage, or tier-level selection rates.}
+\ReviewerReply{Reply 6}{We added fairness and coverage metrics. MAML-Select reaches $100\%$ client coverage on all three datasets. Its Jain index is between $0.61$ and $0.78$, below FedAvg and FedGCS. We therefore report fairness transparently and do not claim fairness superiority.}
+\ManuscriptChange{Table~II reports Jain fairness and coverage. The Evaluation text explicitly states that MAML-Select is not the fairest method. The supplementary material gives the tier-coverage view.}
 
-\comment{Clarify the exact novelty compared with RL-based approaches, contextual bandits, and meta-learning-based personalization frameworks. Add a dedicated comparison table.}
+\ReviewerComment{Comment 7}{The claims regarding energy efficiency and Green AI are indirect. Moderate the wording or provide stronger evidence.}
+\ReviewerReply{Reply 7}{We clarified the measurement model while preserving the efficiency evidence. The revised paper reports TFLOPs and model-based energy/carbon estimates derived from the stated client-tier power and grid-intensity assumptions. This makes the evaluation scope clear while keeping the resource-efficiency contribution explicit.}
+\ManuscriptChange{The Impact Statement states the energy/carbon estimation scope once. The Evaluation and figure captions define how the modelled energy/carbon values are computed.}
 
-\response{We clarified this distinction. RL and bandit approaches learn or estimate selection rewards through interaction. Personalization methods use meta-learning to adapt model parameters for each client. MAML-Select instead meta-learns the initialization of the client-ranking policy itself and performs a gradient-based adaptation step from recent FL feedback before each selection decision.}
+\ReviewerComment{Comment 8}{Justify the six state features and provide an ablation study.}
+\ReviewerReply{Reply 8}{We added a feature rationale and an ablation study. Loss and gradient norm represent statistical utility. Latency and battery represent system constraints. Selection frequency and staleness expose participation imbalance. Removing any one feature changes final Fashion-MNIST accuracy only marginally, which suggests that the state vector is stable and no single feature dominates.}
+\ManuscriptChange{The State Space paragraph explains the role of each feature. The manuscript now places the feature-ablation plot and Table~III next to the ablation discussion; the supplementary material gives the extended visual and numeric version.}
 
-\change{The Introduction, Related Work, and Table~I now compare FedAvg, FedCS, Oort, TiFL, FedCor, CriticalFL, FedGCS, personalization-based meta-learning, and MAML-Select across objective, adaptation mechanism, dominant operation, and optimization strategy.}
+\ReviewerComment{Comment 9}{Fig. 2 has small font sizes and unclear axis scaling.}
+\ReviewerReply{Reply 9}{We regenerated the figures with larger fonts and cleaner axes. The main manuscript now uses compact evidence figures for convergence, efficiency--accuracy trade-off, $\lambda$ sensitivity, feature ablation, and selector-overhead scaling. The supplementary material retains the broader fairness and full scaling views.}
+\ManuscriptChange{The earlier figure package is replaced by compact main evidence figures plus separate $\lambda$-sensitivity and feature-ablation figures, with publication-quality source graphics retained in the package.}
 
-\comment{The manuscript has empirical evaluation only. There is no convergence proof or theoretical justification for non-stationary adaptation.}
+\ReviewerComment{Comment 10}{The definition of ``Time (Units)'' is unclear.}
+\ReviewerReply{Reply 10}{We removed the ambiguous phrase from the main evidence table. The revised table now reports compute, modelled energy, modelled carbon, Jain fairness, and coverage.}
+\ManuscriptChange{The Evaluation defines TFLOPs and modelled energy/carbon directly. The ambiguous time-unit row has been removed from the main table.}
 
-\response{We added a limited theoretical statement. It is intentionally local: under an $L$-smooth support loss and a standard step-size condition, the inner update decreases the support objective. We do not claim a full global FL convergence theorem.}
+\ReviewerComment{Comment 11}{Include recent baselines such as CriticalFL and FedGCS.}
+\ReviewerReply{Reply 11}{We added both methods. FedGCS and CriticalFL are now part of the revised benchmark table, related-work discussion, and supplementary comparison material.}
+\ManuscriptChange{Related Work, Table~I, Table~II, the main evidence figures, and the supplementary material now include FedGCS and CriticalFL.}
 
-\change{A descent statement and interpretation now appear immediately after the inner-loop equation. The text explicitly says this is a local adaptation justification, not a complete FL convergence proof.}
+\ReviewerComment{Comment 12}{Proofread the manuscript for grammar, punctuation, and sentence structure.}
+\ReviewerReply{Reply 12}{We completed a full prose pass and shortened the narrative.}
+\ManuscriptChange{The revised manuscript uses shorter sentences and removes unsupported claims.}
 
-\comment{Explain the manually chosen trade-off parameter $\lambda$ and evaluate sensitivity.}
+\ReviewerHeading{Reviewer 3}
 
-\response{We added both explanation and evidence. The manuscript states that $\lambda$ controls the latency--utility trade-off. Larger $\lambda$ emphasizes latency and resource efficiency. The new sensitivity analysis sweeps $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST. Accuracy remains stable, while compute, energy, carbon, and fairness vary with $\lambda$.}
+\ReviewerComment{Comment 1}{The motivation is not clear.}
+\ReviewerReply{Reply 1}{We thank the Reviewer for this comment. We sharpened the motivation. The central issue is that client utility is non-stationary: a client useful in one round may be less useful later because the global model, local loss, latency, and participation history change. MAML-Select addresses this by adapting the selection policy from recent feedback before the next decision.}
+\ManuscriptChange{The Abstract and Introduction now state the non-stationary client-utility problem directly.}
 
-\change{The System Model explains $\lambda$. The manuscript now reports the $\lambda$ sweep next to the corresponding sensitivity text, and Supplementary Fig.~S4/Table~S3 give the extended numeric sweep.}
+\ReviewerComment{Comment 2}{Highlight the novelty and main contribution.}
+\ReviewerReply{Reply 2}{We now state the contribution more narrowly and clearly. MAML-Select is not a personalization method and not a long-horizon RL selector. It is a first-order meta-learning method for online adaptation of a client-ranking policy.}
+\ManuscriptChange{The Introduction, Related Work, and Table~I now highlight this distinction.}
 
-\comment{The experimental validation is limited to small-scale datasets. Add larger or more realistic FL benchmarks.}
+\ReviewerComment{Comment 3}{Add appropriate constraints to the problem formulation.}
+\ReviewerReply{Reply 3}{We added the available-client set, binary decision variables, cohort-size constraint, and availability constraint.}
+\ManuscriptChange{The Problem Formulation now enforces $a_{i,t}\in\{0,1\}$, $\sum_i a_{i,t}=K$, and $a_{i,t}=0$ for unavailable clients.}
 
-\response{We expanded the evaluation from two datasets to three by adding CIFAR-100 with ResNet18. CIFAR-100 is analyzed at 150 rounds so that CriticalFL can be included without imputing missing data. We also added a selector-overhead scaling probe.}
+\ReviewerComment{Comment 4}{Why is only one method considered as a baseline? Consider at least two more baselines.}
+\ReviewerReply{Reply 4}{The revised evaluation includes seven baselines: FedAvg, FedCS, Oort, TiFL, FedCor, FedGCS, and CriticalFL.}
+\ManuscriptChange{The Evaluation and Table~II now compare MAML-Select with the expanded baseline set.}
 
-\change{The Evaluation now includes Fashion-MNIST, CIFAR-10, and CIFAR-100. The main manuscript now includes the selector time-complexity proof and a selector-overhead scaling plot; Supplementary Fig.~S5/Table~S5 retain the full scaling view.}
+\ReviewerComment{Comment 5}{Provide more simulation results to ensure effectiveness.}
+\ReviewerReply{Reply 5}{We added three datasets, multiple seeds, standard deviations, paired tests, fairness/coverage metrics, $\lambda$ sensitivity, feature ablations, and selector-overhead scaling.}
+\ManuscriptChange{The main paper includes the compact convergence/trade-off evidence, separate sensitivity and ablation figures, and the selector-overhead scaling plot; the full extended evidence appears in \texttt{Supplementary\_Material.tex}.}
 
-\comment{Include standard deviation across multiple runs and statistical significance analysis.}
+\ReviewerComment{Comment 6}{Remove references from the conclusion and write the conclusion as a concise single paragraph.}
+\ReviewerReply{Reply 6}{We followed this suggestion.}
+\ManuscriptChange{The Conclusion is now a single concise paragraph with no citations and one future-work sentence.}
 
-\response{We agree. The main benchmark table now reports mean $\pm$ standard deviation where multiple completed seeds are available. We also computed paired tests over shared seeds. Against FedAvg, MAML-Select resource reductions are statistically significant in the paired tests for TFLOPs and modelled energy/carbon across all three datasets.}
+\ReviewerHeading{Reviewer 4}
 
-\change{Table~II now reports accuracy, weighted precision, recall, F1, TFLOPs, modelled energy/carbon, Jain fairness, and coverage, with standard deviations where available. Supplementary Table S2 reports paired tests for MAML-Select against FedAvg and documents seed availability.}
+\ReviewerComment{Comment 1}{Correct the Impact Statement wording for heterogeneous environments and industrial Internet of Things.}
+\ReviewerReply{Reply 1}{We adopted the suggested wording and also moderated the impact claims.}
+\ManuscriptChange{The Impact Statement now uses ``heterogeneous environments'' and ``industrial Internet of Things,'' and explains that energy/carbon estimates follow the stated device-tier and grid-intensity assumptions.}
 
-\comment{Evaluate fairness across heterogeneous clients using participation fairness, client coverage, or tier-level selection rates.}
+\ReviewerComment{Comment 2}{Improve long sentences, grammar, and proofreading throughout the manuscript.}
+\ReviewerReply{Reply 2}{We revised the manuscript for shorter, clearer prose.}
+\ManuscriptChange{The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were edited for clarity.}
 
-\response{We added fairness and coverage metrics. MAML-Select reaches $100\%$ client coverage on all three datasets. Its Jain index is between $0.61$ and $0.78$, below FedAvg and FedGCS. We therefore report fairness transparently and do not claim fairness superiority.}
-
-\change{Table~II reports Jain fairness and coverage. The Evaluation text explicitly states that MAML-Select is not the fairest method. Supplementary Fig.~S5 gives the tier-coverage view.}
-
-\comment{The claims regarding energy efficiency and Green AI are indirect. Moderate the wording or provide stronger evidence.}
-
-\response{We clarified the measurement model while preserving the efficiency evidence. The revised paper reports TFLOPs and model-based energy/carbon estimates derived from the stated client-tier power and grid-intensity assumptions. This makes the evaluation scope clear while keeping the resource-efficiency contribution explicit.}
-
-\change{The Impact Statement now states the energy/carbon estimation scope once. The Evaluation and figure captions define how the modelled energy/carbon values are computed.}
-
-\comment{Justify the six state features and provide an ablation study.}
-
-\response{We added a feature rationale and an ablation study. Loss and gradient norm represent statistical utility. Latency and battery represent system constraints. Selection frequency and staleness expose participation imbalance. Removing any one feature changes final Fashion-MNIST accuracy only marginally, which suggests that the state vector is stable and no single feature dominates.}
-
-\change{The State Space paragraph explains the role of each feature. The manuscript now places the feature-ablation plot and Table~III next to the ablation discussion; Supplementary Fig.~S4/Table~S4 give the extended visual and numeric version.}
-
-\comment{Fig. 2 has small font sizes and unclear axis scaling.}
-
-\response{We regenerated the figures with larger fonts and cleaner axes. The main manuscript now uses compact evidence figures for convergence, efficiency--accuracy trade-off, $\lambda$ sensitivity, feature ablation, and selector-overhead scaling. The supplementary material retains the broader fairness and full scaling views.}
-
-\change{The earlier figure package is replaced by a compact main evidence figure plus separate $\lambda$-sensitivity and feature-ablation figures, with EPS and PNG versions retained for the supplementary visual package.}
-
-\comment{The definition of ``Time (Units)'' is unclear.}
-
-\response{We removed the ambiguous phrase from the main evidence table. The revised table now reports compute, modelled energy, modelled carbon, Jain fairness, and coverage.}
-
-\change{The Evaluation defines TFLOPs and modelled energy/carbon directly. The ambiguous time-unit row has been removed from the main table.}
-
-\comment{Include recent baselines such as CriticalFL and FedGCS.}
-
-\response{We added both methods. FedGCS and CriticalFL are now part of the revised benchmark table, related-work discussion, and supplementary comparison material.}
-
-\change{Related Work, Table~I, Table~II, the main evidence figures, and the Supplement now include FedGCS and CriticalFL.}
-
-\comment{Proofread the manuscript for grammar, punctuation, and sentence structure.}
-
-\response{We completed a full prose pass and shortened the narrative.}
-
-\change{The revised manuscript uses shorter sentences and removes unsupported claims.}
-
-\section*{Reviewer 3}
-
-\comment{The motivation is not clear.}
-
-\response{We sharpened the motivation. The central issue is that client utility is non-stationary: a client useful in one round may be less useful later because the global model, local loss, latency, and participation history change. MAML-Select addresses this by adapting the selection policy from recent feedback before the next decision.}
-
-\change{The Abstract and Introduction now state the non-stationary client-utility problem directly.}
-
-\comment{Highlight the novelty and main contribution.}
-
-\response{We now state the contribution more narrowly and clearly. MAML-Select is not a personalization method and not a long-horizon RL selector. It is a first-order meta-learning method for online adaptation of a client-ranking policy.}
-
-\change{The Introduction, Related Work, and Table~I now highlight this distinction.}
-
-\comment{Add appropriate constraints to the problem formulation.}
-
-\response{We added the available-client set, binary decision variables, cohort-size constraint, and availability constraint.}
-
-\change{The Problem Formulation now enforces $a_{i,t}\in\{0,1\}$, $\sum_i a_{i,t}=K$, and $a_{i,t}=0$ for unavailable clients.}
-
-\comment{Why is only one method considered as a baseline? Consider at least two more baselines.}
-
-\response{The revised evaluation includes seven baselines: FedAvg, FedCS, Oort, TiFL, FedCor, FedGCS, and CriticalFL where complete.}
-
-\change{The Evaluation and Table~II now compare MAML-Select with the expanded baseline set.}
-
-\comment{Provide more simulation results to ensure effectiveness.}
-
-\response{We added three datasets, multiple seeds, standard deviations, paired tests, fairness/coverage metrics, $\lambda$ sensitivity, feature ablations, and selector-overhead scaling.}
-
-\change{The main paper includes the compact convergence/trade-off evidence, separate sensitivity and ablation figures, and the selector-overhead scaling plot; the full extended evidence appears in \texttt{Supplementary\_Material.tex}.}
-
-\comment{Remove references from the conclusion and write the conclusion as a concise single paragraph.}
-
-\response{We followed this suggestion.}
-
-\change{The Conclusion is now a single concise paragraph with no citations and one future-work sentence.}
-
-\section*{Reviewer 4}
-
-\comment{Correct the Impact Statement wording for heterogeneous environments and industrial Internet of Things.}
-
-\response{We adopted the suggested wording and also moderated the impact claims.}
-
-\change{The Impact Statement now uses ``heterogeneous environments'' and ``industrial Internet of Things,'' and explains that energy/carbon estimates follow the stated device-tier and grid-intensity assumptions.}
-
-\comment{Improve long sentences, grammar, and proofreading throughout the manuscript.}
-
-\response{We revised the manuscript for shorter, clearer prose.}
-
-\change{The Abstract, Impact Statement, Introduction, Related Work, Methodology, Evaluation, and Conclusion were edited for clarity.}
-
-\comment{Update the literature review with recent and related papers.}
-
-\response{We updated the Related Work and focused the bibliography. The revised paper retains the original algorithm references for all compared methods and adds recent work relevant to robust selection, adaptive straggler handling, inclusive participation, asynchronous heterogeneity, and non-IID FL.}
-
-\change{Related Work now includes recent IEEE TAI-relevant literature and a focused bibliography.}
-
-\comment{Include a comparison table with previous state-of-the-art works.}
-
-\response{We added the requested comparison table.}
-
-\change{Table~I compares representative client-selection and meta-learning approaches against MAML-Select.}
-
-\comment{Make the Conclusion and Future Work section accurate and concise. Avoid too many citations.}
-
-\response{We agree and revised it accordingly.}
-
-\change{The Conclusion is one paragraph, has no citations, and ends with one concise future-work sentence.}
-
-\comment{Fig. 2 requires clarification, justification, and a clearer comparison with other schemes.}
-
-\response{The original figure has been replaced. The main manuscript now presents convergence, trade-off, $\lambda$-sensitivity, feature-ablation, and selector-overhead scaling evidence with clearer axes and captions. The supplementary figures provide the broader fairness and full scaling views.}
-
-\change{The main evidence, $\lambda$-sensitivity, and feature-ablation figures and captions were regenerated and rewritten. Supplementary figures provide the broader visual evidence.}
-
-\section*{Measurement Scope}
-
-We keep the energy/carbon scope explicit without weakening the efficiency contribution: the reported values are model-based estimates tied to the stated client-tier power and grid-intensity assumptions. Hardware-level energy validation is identified as future work.
+\ReviewerComment{Comment 3}{Update the literature review with recent and related papers.}
+\ReviewerReply{Reply 3}{We updated the Related Work and focused the bibliography. The revised paper retains the original algorithm references for all compared methods and adds recent work relevant to robust selection, adaptive straggler handling, inclusive participation, asynchronous heterogeneity, and non-IID FL.}
+\ManuscriptChange{Related Work now includes recent IEEE TAI-relevant literature and a focused bibliography.}
+
+\ReviewerComment{Comment 4}{Include a comparison table with previous state-of-the-art works.}
+\ReviewerReply{Reply 4}{We added the requested comparison table.}
+\ManuscriptChange{Table~I compares representative client-selection and meta-learning approaches against MAML-Select.}
+
+\ReviewerComment{Comment 5}{Make the Conclusion and Future Work section accurate and concise. Avoid too many citations.}
+\ReviewerReply{Reply 5}{We agree and revised it accordingly.}
+\ManuscriptChange{The Conclusion is one paragraph, has no citations, and ends with one concise future-work sentence.}
+
+\ReviewerComment{Comment 6}{Fig. 2 requires clarification, justification, and a clearer comparison with other schemes.}
+\ReviewerReply{Reply 6}{The original figure has been replaced and the presentation has been clarified. The main manuscript now presents convergence, trade-off, $\lambda$-sensitivity, feature-ablation, and selector-overhead scaling evidence with clearer axes and captions. The supplementary figures provide the broader fairness and full scaling views.}
+\ManuscriptChange{The main evidence, $\lambda$-sensitivity, feature-ablation, and selector-scaling figures and captions were regenerated and rewritten. Supplementary figures provide the broader visual evidence.}
+
+\vspace{1em}
+\begin{center}
+{\bfseries\Large Measurement Scope}
+\end{center}
+
+We keep the energy/carbon scope explicit without weakening the efficiency contribution. The reported values are model-based estimates tied to the stated client-tier power and grid-intensity assumptions. Hardware-level energy validation is identified as future work.
 
 \end{document}

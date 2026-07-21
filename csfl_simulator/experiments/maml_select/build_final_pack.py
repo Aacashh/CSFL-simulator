@@ -132,56 +132,89 @@ def method_legend_handles(methods=METHOD_ORDER):
 
 
 # ── Figure 1: CIFAR-100 convergence across four metrics (2x2 grid) ─────────────
-def fig_convergence(c100: pd.DataFrame, plots_dir: Path) -> None:
-    # (metric, title, y-label, scale, legend-corner). Recall is omitted: weighted recall is
-    # mathematically identical to accuracy for single-label classification. Test loss is added
-    # as a genuinely distinct convergence signal.
+CONV_RUNS = REPO_ROOT / "csfl_simulator" / "Paper Corrections" / "maml_select_convergence"
+
+
+def _load_dphi(conv_dir: Path, tag: str = "cifar100", max_round: int = 150):
+    """Per-round meta-update magnitude ||phi_{t+1}-phi_t|| from the selector log."""
+    import json
+    path = conv_dir / f"selector_convergence_{tag}.jsonl"
+    if not path.exists():
+        return None, None
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    if not rows:
+        return None, None
+    rows.sort(key=lambda r: int(r["round"]))
+    rnd = np.array([int(r["round"]) for r in rows])
+    dphi = np.array([float(r.get("dphi_norm", np.nan)) for r in rows])
+    keep = (rnd <= max_round) & ~np.isnan(dphi)
+    return rnd[keep], dphi[keep]
+
+
+def fig_convergence(c100: pd.DataFrame, plots_dir: Path, conv_dir: Path = CONV_RUNS) -> None:
+    # Original 2x2 layout with per-panel inset legends and a suptitle; the only content change
+    # is panel (b): the selector meta-update magnitude ||phi_{t+1}-phi_t|| (Corollary 1) replaces
+    # the precision panel. Recall is omitted (identical to accuracy for single-label tasks).
     metrics = [
         ("accuracy", "(a) Accuracy", "Test accuracy (%)", 100.0, "lower right"),
-        ("precision", "(b) Precision", "Precision (%)", 100.0, "lower right"),
-        ("cum_modelled_carbon_g", "(c) Carbon footprint", r"Cumulative carbon (gCO$_2$e)", 1.0, "lower right"),
+        ("__dphi__", "(b) Policy stabilization", r"$\|\phi_{t+1}-\phi_t\|_2$", 1.0, None),
+        ("cum_modelled_energy_wh", "(c) Energy", r"Cumulative energy (Wh)", 1.0, "upper left"),
         ("loss", "(d) Test loss", "Test loss", 1.0, "center right"),
     ]
     present = [m for m in METHOD_ORDER if m in set(c100["method_key"].astype(str))]
     fig, axes = plt.subplots(2, 2, figsize=(7.16, 4.2))
     for ax, (metric, title, ylab, scale, legloc) in zip(axes.flat, metrics):
-        for idx, method in enumerate(METHOD_ORDER):
-            group = c100[c100["method_key"].astype(str) == method]
-            if group.empty:
-                continue
-            summ = (
-                group.groupby("round", as_index=False)
-                .agg(val=(metric, "mean"), std=(metric, "std"), n=("seed", "nunique"))
-                .sort_values("round")
-            )
-            color = COLORS.get(method, "#333333")
-            is_ours = method == OURS
-            step = max(10, len(summ) // 5)
-            win = max(5, len(summ) // 7)  # light moving-average smoothing
-            x = summ["round"].to_numpy()
-            y = _smooth(scale * summ["val"].to_numpy(), win)
-            ax.plot(
-                x, y, color=color, linewidth=1.9 if is_ours else 1.0,
-                marker=MARKERS.get(method, "o"), markersize=6.5 if is_ours else 3.4,
-                markevery=(idx % step, step),
-                markeredgecolor="white" if not is_ours else MAML_EDGE, markeredgewidth=0.4,
-                zorder=6 if is_ours else 2 + idx * 0.1,
-                solid_capstyle="round", solid_joinstyle="round",
-            )
-            # Shaded ±1 s.d. band for MAML-Select only.
-            if is_ours and (summ["n"] >= 2).any():
-                band = _smooth(scale * summ["std"].fillna(0.0).to_numpy(), win)
-                ax.fill_between(x, y - band, y + band, color=_lighten(color, 0.82),
-                                linewidth=0.0, zorder=1)
+        if metric == "__dphi__":
+            rnd, dphi = _load_dphi(conv_dir)
+            if rnd is not None:
+                y = _smooth(dphi, max(5, len(dphi) // 7))
+                ax.plot(rnd, y, color=COLORS[OURS], linewidth=1.9,
+                        marker=MARKERS.get(OURS, "o"), markersize=6.5, markevery=max(1, len(rnd) // 8),
+                        markeredgecolor=MAML_EDGE, markeredgewidth=0.4, zorder=6,
+                        solid_capstyle="round")
+                ax.set_ylim(bottom=0.0)
+                dleg = ax.legend(handles=method_legend_handles([OURS]), loc="upper right",
+                                 fontsize=8.5, frameon=True, facecolor="white", edgecolor="#CCCCCC",
+                                 framealpha=0.9, handlelength=1.4, borderpad=0.35, handletextpad=0.35)
+                dleg.get_frame().set_linewidth(0.45)
+        else:
+            for idx, method in enumerate(METHOD_ORDER):
+                group = c100[c100["method_key"].astype(str) == method]
+                if group.empty:
+                    continue
+                summ = (
+                    group.groupby("round", as_index=False)
+                    .agg(val=(metric, "mean"), std=(metric, "std"), n=("seed", "nunique"))
+                    .sort_values("round")
+                )
+                color = COLORS.get(method, "#333333")
+                is_ours = method == OURS
+                step = max(10, len(summ) // 5)
+                win = max(5, len(summ) // 7)  # light moving-average smoothing
+                x = summ["round"].to_numpy()
+                y = _smooth(scale * summ["val"].to_numpy(), win)
+                ax.plot(
+                    x, y, color=color, linewidth=1.9 if is_ours else 1.0,
+                    marker=MARKERS.get(method, "o"), markersize=6.5 if is_ours else 3.4,
+                    markevery=(idx % step, step),
+                    markeredgecolor="white" if not is_ours else MAML_EDGE, markeredgewidth=0.4,
+                    zorder=6 if is_ours else 2 + idx * 0.1,
+                    solid_capstyle="round", solid_joinstyle="round",
+                )
+                if is_ours and (summ["n"] >= 2).any():
+                    band = _smooth(scale * summ["std"].fillna(0.0).to_numpy(), win)
+                    ax.fill_between(x, y - band, y + band, color=_lighten(color, 0.82),
+                                    linewidth=0.0, zorder=1)
         _clean_axes(ax)
         ax.set_xlim(0, 150)
-        ax.set_title(title, fontsize=12, fontweight="bold")
-        ax.set_ylabel(ylab, fontsize=11, fontweight="bold")
-        _inset_legend(ax, loc=legloc, ncol=2, methods=present)
+        ax.set_title(title, fontsize=12, fontweight="normal")
+        ax.set_ylabel(ylab, fontsize=11, fontweight="normal")
+        if legloc is not None:
+            _inset_legend(ax, loc=legloc, ncol=2, methods=present)
     for ax in axes[1]:
-        ax.set_xlabel("Communication round", fontsize=11, fontweight="bold")
+        ax.set_xlabel("Communication round", fontsize=11, fontweight="normal")
     fig.tight_layout(rect=(0, 0, 1, 0.965))
-    fig.suptitle(r"CIFAR-100 (non-IID, $\alpha{=}0.5$)", fontsize=13, fontweight="bold", y=0.992)
+    fig.suptitle(r"CIFAR-100 (non-IID, $\alpha{=}0.5$)", fontsize=13, fontweight="normal", y=0.992)
     save_figure(fig, plots_dir, "fig_convergence")
 
 
@@ -190,20 +223,22 @@ DATASET_MARK = {"fashion_main": "o", "cifar10_main": "s", "cifar100_main": "^"}
 
 
 # ── Figure 2: normalized accuracy-vs-cost trade-off (single unified panel) ──────
-def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
+def _draw_tradeoff(ax, runs: pd.DataFrame, *, label_fs: float = 9.0, tick_fs: float = 8.0,
+                   legend_fs: float = 7.0, draw_legends: bool = True):
+    """Draw the efficiency--accuracy scatter onto a given axis (no fig/save).
+
+    Returns (method_handles, ds_handles) so a caller can build a shared legend."""
     agg = (
         runs.groupby(["scenario_name", "method_key"], observed=True)
         .agg(acc=("final_accuracy", "mean"), tflops=("cum_training_tflops", "mean"))
         .reset_index()
     )
-    fig, ax = plt.subplots(figsize=(3.5, 3.25))
     plotted_methods = []
     for scenario in DATASET_ORDER:
         d = agg[agg["scenario_name"] == scenario]
         fa = d[d["method_key"].astype(str) == "baseline.fedavg"]
         if fa.empty:
             continue
-        fa_acc = float(fa["acc"].iloc[0])
         fa_tf = float(fa["tflops"].iloc[0])
         for method in METHOD_ORDER:
             row = d[d["method_key"].astype(str) == method]
@@ -222,10 +257,11 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
             plotted_methods.append(method)
 
     _clean_axes(ax)
+    ax.tick_params(labelsize=tick_fs)
     xlo, xhi = 0.45, 3.05
     ax.set_xscale("log")
     ax.set_xlim(xlo, xhi)
-    ax.set_ylim(24, 94)
+    ax.set_ylim(20, 100)
     # evenly log-spaced ticks (powers of sqrt(2)) so the axis reads uniformly
     ax.set_xticks([0.5, 0.707, 1.0, 1.414, 2.0, 2.828])
     ax.set_xticklabels(["0.5", "0.7", "1", "1.4", "2", "2.8"])
@@ -234,13 +270,12 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
     ax.axvspan(xlo, 1.0, color="#E7F3E9", zorder=0)
     ax.axvspan(1.0, xhi, color="#FBEBEB", zorder=0)
     ax.axvline(1.0, color="#999999", lw=0.9, ls="--", zorder=1)
-    ax.text(0.47, 92.0, "cheaper", fontsize=9.5, color="#2E7D32", style="italic", fontweight="bold", va="center")
-    ax.text(2.95, 92.0, "costlier", fontsize=9.5, color="#C0392B", style="italic", fontweight="bold", va="center", ha="right")
-    ax.set_xlabel(r"Training compute relative to FedAvg ($\times$, log)", fontsize=11, fontweight="bold")
-    ax.set_ylabel("Final accuracy (%)", fontsize=11, fontweight="bold")
+    ax.text(0.47, 97.5, "cheaper", fontsize=label_fs, color="#2E7D32", style="italic", va="center")
+    ax.text(2.95, 97.5, "costlier", fontsize=label_fs, color="#C0392B", style="italic", va="center", ha="right")
+    ax.set_xlabel("Training computational cost\nrelative to FedAvg ($\\times$, log)", fontsize=label_fs, fontweight="normal")
+    ax.set_ylabel("Final accuracy (%)", fontsize=label_fs, fontweight="normal")
 
-    # Legend kept out of the dense scatter for tidiness: two grouped rows below the axes.
-    # Colour encodes method; marker shape encodes dataset.
+    # Two grouped legends: colour encodes method, marker shape encodes dataset.
     method_keys = [m for m in METHOD_ORDER if m in set(plotted_methods)]
     method_handles = [
         plt.Line2D([0], [0], marker="o", linestyle="", markersize=6,
@@ -254,17 +289,24 @@ def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
                    label=DATASET_LABELS[s])
         for s in DATASET_ORDER
     ]
-    leg1 = ax.legend(handles=method_handles, loc="lower right", bbox_to_anchor=(0.995, 0.02),
-                     ncol=2, fontsize=7.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
-                     framealpha=0.95, handletextpad=0.25, columnspacing=0.7, labelspacing=0.28,
-                     borderpad=0.35, markerscale=0.85)
-    leg1.get_frame().set_linewidth(0.5)
-    ax.add_artist(leg1)
-    leg2 = ax.legend(handles=ds_handles, loc="lower right", bbox_to_anchor=(0.995, 0.30),
-                     ncol=1, fontsize=7.4, frameon=True, facecolor="white", edgecolor="#CCCCCC",
-                     framealpha=0.95, handletextpad=0.25, labelspacing=0.28, borderpad=0.35,
-                     markerscale=0.85, title="Dataset", title_fontsize=7.4)
-    leg2.get_frame().set_linewidth(0.5)
+    if draw_legends:
+        leg1 = ax.legend(handles=method_handles, loc="lower right", bbox_to_anchor=(0.995, 0.02),
+                         ncol=2, fontsize=legend_fs, frameon=True, facecolor="white", edgecolor="#CCCCCC",
+                         framealpha=0.95, handletextpad=0.25, columnspacing=0.7, labelspacing=0.28,
+                         borderpad=0.35, markerscale=0.85)
+        leg1.get_frame().set_linewidth(0.5)
+        ax.add_artist(leg1)
+        leg2 = ax.legend(handles=ds_handles, loc="lower right", bbox_to_anchor=(0.995, 0.44),
+                         ncol=1, fontsize=legend_fs, frameon=True, facecolor="white", edgecolor="#CCCCCC",
+                         framealpha=0.95, handletextpad=0.25, labelspacing=0.28, borderpad=0.35,
+                         markerscale=0.85, title="Dataset", title_fontsize=legend_fs)
+        leg2.get_frame().set_linewidth(0.5)
+    return method_handles, ds_handles
+
+
+def fig_tradeoff(runs: pd.DataFrame, plots_dir: Path) -> None:
+    fig, ax = plt.subplots(figsize=(4.05, 3.25))
+    _draw_tradeoff(ax, runs)
     fig.tight_layout()
     save_figure(fig, plots_dir, "fig_tradeoff")
 

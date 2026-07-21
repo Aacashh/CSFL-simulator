@@ -1,23 +1,19 @@
 \relax 
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces All-dataset convergence summary used to check consistency before curating the main-letter figures. The main paper reports the final CIFAR-100 four-panel version because it is the hardest setting and includes CriticalFL.}}{1}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Shared experimental configuration.}}{1}{}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:supp_convergence_all}{{1}{1}{}{figure.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces MAML-Select relative to FedAvg over shared seeds. Positive reductions indicate lower resource use for MAML-Select; $\Delta $Acc. is signed.}}{1}{}\protected@file@percent }
-\newlabel{tab:supp_maml_vs_fedavg}{{1}{1}{}{table.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Expanded accuracy/resource grid across datasets and methods. This plot is retained as supplementary evidence because the main letter reports the same information more compactly through the benchmark table and trade-off figure.}}{2}{}\protected@file@percent }
-\newlabel{fig:supp_resource_grid}{{2}{2}{}{figure.2}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Accuracy--energy trade-off view used as a cross-check for the final normalized trade-off plot. The main paper uses the normalized compute view because communication is identical across selectors and the TFLOP axis is easier to compare across datasets.}}{2}{}\protected@file@percent }
-\newlabel{fig:supp_accuracy_energy}{{3}{2}{}{figure.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Paired tests for MAML-Select against FedAvg over shared seeds ($n=3$). Negative signed differences mean MAML-Select is lower than FedAvg.}}{2}{}\protected@file@percent }
-\newlabel{tab:supp_paired_fedavg}{{2}{2}{}{table.2}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Design-analysis plots on Fashion-MNIST. The selected operating point is $\lambda =0.5$. Accuracy remains stable over the sweep, while larger $\lambda $ reduces compute, energy, and carbon at the cost of participation fairness.}}{3}{}\protected@file@percent }
-\newlabel{fig:supp_lambda_ablation_side}{{4}{3}{}{figure.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Reviewer-requested fairness and scalability checks. MAML-Select reaches full client coverage in the main runs, but its Jain index is below FedAvg and FedGCS; therefore the revised paper reports fairness transparently and does not claim fairness superiority. Selection overhead remains negligible relative to local training.}}{3}{}\protected@file@percent }
-\newlabel{fig:supp_fairness_scaling_side}{{5}{3}{}{figure.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces $\lambda $ sensitivity on Fashion-MNIST ($n=3$). Accuracy is reported as mean $\pm $ s.d.; remaining columns are means.}}{3}{}\protected@file@percent }
-\newlabel{tab:supp_lambda}{{3}{3}{}{table.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces State-feature ablation on Fashion-MNIST ($n=3$). Each row removes one feature from the six-dimensional MAML-Select state vector.}}{3}{}\protected@file@percent }
-\newlabel{tab:supp_ablation}{{4}{3}{}{table.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Mean client-selection overhead in seconds for the scaling probe (10 rounds per setting).}}{4}{}\protected@file@percent }
-\newlabel{tab:supp_scaling}{{5}{4}{}{table.5}{}}
-\gdef \@abspage@last{4}
+\newlabel{tab:supp_config}{{1}{1}{}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces MAML-Select resource profile relative to FedAvg over shared seeds. Positive reductions indicate lower resource use for MAML-Select.}}{1}{}\protected@file@percent }
+\newlabel{tab:supp_reductions}{{2}{1}{}{table.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Paired statistical support for MAML-Select resource reductions versus FedAvg. Reported $p$ values are two-sided paired $t$-tests over shared seeds; $|d_z|$ is the standardized paired effect size.}}{2}{}\protected@file@percent }
+\newlabel{tab:supp_stats}{{3}{2}{}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Round-wise cumulative compute, energy, and carbon trajectories. The MAML-Select curve remains resource-efficient throughout training, showing that the reported savings are accumulated over the whole FL process rather than appearing only at the final round.}}{2}{}\protected@file@percent }
+\newlabel{fig:supp_resource}{{1}{2}{}{figure.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Fashion-MNIST sensitivity and ablation summaries.}}{2}{}\protected@file@percent }
+\newlabel{tab:supp_design}{{4}{2}{}{table.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Design evidence for MAML-Select. The $\lambda $ sweep shows the accuracy--resource trade-off, and the ablation plot shows that the policy remains stable under single-feature removals.}}{3}{}\protected@file@percent }
+\newlabel{fig:supp_lambda_ablation}{{2}{3}{}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces MAML-Select client-selection overhead as the pool size increases.}}{3}{}\protected@file@percent }
+\newlabel{fig:supp_scaling}{{3}{3}{}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Mean MAML-Select selection overhead in seconds.}}{3}{}\protected@file@percent }
+\newlabel{tab:supp_scaling}{{5}{3}{}{table.5}{}}
+\gdef \@abspage@last{3}

@@ -1,0 +1,11 @@
+{
+  "created_utc": "2026-06-10T12:43:50.305183+00:00",
+  "profile": "convergence",
+  "statuses": [
+    {
+      "run_label": "conv_cifar100_cifar100_main_maml_select_s42",
+      "status": "completed",
+      "result_path": "C:\\Users\\rickt\\CSFL-simulator\\csfl_simulator\\runs\\maml_select_convergence\\conv_cifar100_cifar100_main_maml_select_s42\\result.json"
+    }
+  ]
+}

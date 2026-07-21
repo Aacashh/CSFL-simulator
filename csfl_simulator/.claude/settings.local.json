@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/advaitpathak/anaconda3/envs/csfl-env/bin/python - __TRACKED_VAR__/result.json)",
+      "Bash(grep -rl \"ignatov\" .)",
+      "Bash(git add *)"
+    ]
+  }
+}

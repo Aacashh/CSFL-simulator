@@ -6,6 +6,7 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{bm}
 \usepackage{array}
 \usepackage{caption}
 \usepackage{algorithm}
@@ -28,6 +29,10 @@
 {\large \textbf{MAML-Select: An Online Adaptive Client Selection Method for Federated Learning via Meta-Learning}}\\[0.25em]
 {\normalsize \textit{Concise revision supplement}}
 \end{center}
+
+\section*{Impact Statement}
+
+Federated learning is increasingly used in edge-AI settings where devices differ in speed, energy availability, and data value. In such systems, client selection affects not only accuracy but also training cost, battery use, participation coverage, and practical deployability. This supplement strengthens the evidence for MAML-Select by documenting the experimental protocol, resource accounting, statistical tests, sensitivity studies, feature ablations, tier-level participation, and selector-scaling behaviour. These details matter because they show that the proposed method is not only accurate, but also resource-aware, reproducible, and inclusive across heterogeneous clients. The additional analysis supports the broader goal of making federated learning more practical for mobile, industrial Internet of Things, and resource-constrained AI deployments, where efficient model updates and transparent evaluation are essential.
 
 \section*{S1. Experimental Protocol}
 
@@ -55,24 +60,24 @@ Seeds & $42$, $123$, $2026$ \\
 \end{tabular}
 \end{table}
 
-The heterogeneous-client model uses three device tiers with fixed seeded assignment: low-end clients ($20\%$), mid-range clients ($50\%$), and high-end clients ($30\%$).  Per-round wall-clock time is straggler-bound by the slowest selected client.  Energy is accumulated from the selected clients' tier power and modeled training time, and carbon is obtained from the declared grid intensity of $475$~g\,CO$_2$/kWh.  Since all methods select $K=10$ clients per round, MAML-Select's resource improvements come from adaptive client choice rather than from reducing the number of participating clients.
+The heterogeneous-client model uses three device tiers with fixed seeded assignment: low-end clients ($20\%$), mid-range clients ($50\%$), and high-end clients ($30\%$).  Per-round wall-clock time is straggler-bound by the slowest selected client.  Energy is accumulated from the selected clients' tier power and modeled training time.  Since all methods select $K=10$ clients per round, MAML-Select's resource improvements come from adaptive client choice rather than from reducing the number of participating clients.
 
 \section*{S2. Resource and Statistical Evidence}
 
-Table~\ref{tab:supp_reductions} summarizes MAML-Select relative to FedAvg on the shared seeds.  Across all three datasets, MAML-Select keeps full participation coverage while reducing cumulative training compute, energy, and carbon.  The savings are largest on Fashion-MNIST and CIFAR-10, and remain measurable on CIFAR-100 despite the harder model and evaluation setting.
+Table~\ref{tab:supp_reductions} summarizes MAML-Select relative to FedAvg on the shared seeds.  Across all three datasets, MAML-Select keeps full participation coverage while reducing cumulative training compute and energy.  The savings are largest on Fashion-MNIST and CIFAR-10, and remain measurable on CIFAR-100 despite the harder model and evaluation setting.
 
 \begin{table}[!ht]
 \centering
 \caption{MAML-Select resource profile relative to FedAvg over shared seeds.  Positive reductions indicate lower resource use for MAML-Select.}
 \label{tab:supp_reductions}
 \small
-\begin{tabular}{@{}lrrrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Dataset & Acc. (\%) & TFLOPs $\downarrow$ & Energy $\downarrow$ & Carbon $\downarrow$ & Coverage \\
+Dataset & Acc. (\%) & TFLOPs $\downarrow$ & Energy $\downarrow$ & Coverage \\
 \midrule
-Fashion-MNIST & $90.11 \pm 0.47$ & $12.8\%$ & $16.4\%$ & $16.4\%$ & $100\%$ \\
-CIFAR-10 & $75.63 \pm 1.43$ & $21.5\%$ & $24.7\%$ & $24.7\%$ & $100\%$ \\
-CIFAR-100 & $58.15 \pm 0.51$ & $1.7\%$ & $4.7\%$ & $4.7\%$ & $100\%$ \\
+Fashion-MNIST & $90.11 \pm 0.47$ & $12.8\%$ & $16.4\%$ & $100\%$ \\
+CIFAR-10 & $75.63 \pm 1.43$ & $21.5\%$ & $24.7\%$ & $100\%$ \\
+CIFAR-100 & $58.15 \pm 0.51$ & $1.7\%$ & $4.7\%$ & $100\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -88,25 +93,27 @@ Dataset & Metric & Mean reduction & $|d_z|$ & $p$ \\
 \midrule
 Fashion-MNIST & TFLOPs & $17.93$ & $5.93$ & $0.009$ \\
  & Energy (Wh) & $943.58$ & $6.74$ & $0.007$ \\
- & Carbon (g) & $448.20$ & $6.74$ & $0.007$ \\
 \midrule
 CIFAR-10 & TFLOPs & $1792.16$ & $12.68$ & $0.002$ \\
  & Energy (Wh) & $1187.44$ & $18.11$ & $0.001$ \\
- & Carbon (g) & $564.04$ & $18.11$ & $0.001$ \\
 \midrule
 CIFAR-100 & TFLOPs & $107.80$ & $5.15$ & $0.012$ \\
  & Energy (Wh) & $169.65$ & $10.89$ & $0.003$ \\
- & Carbon (g) & $80.58$ & $10.89$ & $0.003$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[!ht]
-\centering
-\includegraphics[width=0.92\textwidth]{supp_resource_trajectories}
-\caption{Round-wise cumulative compute, energy, and carbon trajectories.  The MAML-Select curve remains resource-efficient throughout training, showing that the reported savings are accumulated over the whole FL process rather than appearing only at the final round.}
-\label{fig:supp_resource}
-\end{figure}
+% NOTE: the cumulative-trajectories figure is temporarily disabled. The shipped
+% image (supp_resource_trajectories) still contains a third "carbon" column and
+% must be regenerated as a compute+energy-only figure before re-enabling. Rebuild
+% with build_supplement_plots.py (carbon metric already removed from the script),
+% then uncomment the block below.
+% \begin{figure}[!ht]
+% \centering
+% \includegraphics[width=0.92\textwidth]{supp_resource_trajectories}
+% \caption{Round-wise cumulative compute and energy trajectories.  The MAML-Select curve remains resource-efficient throughout training, showing that the reported savings are accumulated over the whole FL process rather than appearing only at the final round.}
+% \label{fig:supp_resource}
+% \end{figure}
 
 \noindent\textbf{Tier-level participation.}\quad
 Table~\ref{tab:supp_tier} reports, for each method, the fraction of selections that fall in each device tier, together with client coverage.  The device pool is $20\%$ Tier~1 (slow, $1.0\times$), $50\%$ Tier~2 (medium, $2.0\times$), and $30\%$ Tier~3 (fast, $4.0\times$), so a tier-proportional selector reads $0.20/0.50/0.30$.  Two patterns stand out.  The purely system-aware selectors concentrate on the fast tier and abandon the slow tier: FedCS selects \emph{no} Tier~1 client ($0.00$) and sends $80$ to $83\%$ of its selections to Tier~3, at only $10\%$ coverage.  MAML-Select instead shifts selection toward faster tiers to lower latency and energy (Tier~3 rises to $0.44$ to $0.49$), yet it keeps the slow tier represented ($0.09$) and reaches $100\%$ coverage.  This is the tier-level view of the Jain index and coverage results: MAML-Select is cost-aware but never permanently excludes a tier, unlike the deadline- or utility-constrained baselines.
@@ -146,7 +153,7 @@ FedGCS & 0.22 & 0.47 & 0.31 & 100 \\
 
 \section*{S3. Sensitivity and State-Feature Ablation}
 
-The sensitivity study evaluates the cost trade-off weight $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST.  The selected value $\lambda=0.5$ gives a balanced operating point: accuracy remains close to the best observed value while compute, energy, and carbon are reduced relative to the low-penalty setting.  The ablation study verifies that the six-dimensional state vector gives stable behaviour; removing one feature at a time changes accuracy only modestly, which indicates that the learned selector is not dependent on a single fragile signal.
+The sensitivity study evaluates the cost trade-off weight $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST.  The selected value $\lambda=0.5$ gives a balanced operating point: accuracy remains close to the best observed value while compute and energy are reduced relative to the low-penalty setting.  The ablation study verifies that the six-dimensional state vector gives stable behaviour; removing one feature at a time changes accuracy only modestly, which indicates that the learned selector is not dependent on a single fragile signal.
 
 \begin{figure}[!ht]
 \centering
@@ -223,25 +230,26 @@ The revised paper adds two further ablations on the selector itself.  The inner-
 
 \section*{S4. Selector Scaling}
 
-The selector-scaling probe runs MAML-Select for $50$ rounds while increasing $N=\{20,40,80,100\}$ and keeping $K/N=0.1$.  The measured per-round selection overhead stays in the millisecond range and is small compared with local training time.  This supports the complexity argument in the main paper: scoring all available clients with a fixed-size MLP is linear in the client pool, $O(Nd)$, and selecting the top-$K$ clients adds only the ranking step.
+The selector-scaling probe runs MAML-Select for $10$ rounds while increasing $N=\{20,40,80,100,200,500,1000\}$ and keeping $K/N=0.1$.  The measured per-round selection overhead stays nearly flat, between about $20$ and $26$~ms, even as $N$ grows fifty-fold to $1000$, and is small compared with local training time.  This supports the complexity argument in the main paper: scoring all available clients with a fixed-size MLP is linear in the client pool, and at these pool sizes that $O(NP)$ cost is dominated by fixed per-round overhead, so the measured time barely changes.
 
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=0.63\textwidth]{fig_scaling_maml_only_boxed}
-\caption{MAML-Select client-selection overhead as the pool size increases.}
+\caption{MAML-Select client-selection overhead as the pool size increases, with the selection rate held at $10\%$ ($K/N=0.1$). Panel (b) plots the analytical operation count $C(N,K)=NP+N\log K+2KP$ ($P=4{,}673$), normalized to its value at $N=20$.}
 \label{fig:supp_scaling}
 \end{figure}
 
 \begin{table}[!ht]
 \centering
-\caption{Mean MAML-Select selection overhead in seconds.}
+\caption{Mean MAML-Select selection overhead in seconds, measured over 10 rounds, for client-pool sizes up to $N=1000$ with the selection rate held at $K/N=0.1$.}
 \label{tab:supp_scaling}
 \small
-\begin{tabular}{@{}lrrrr@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
-Method & $N=20$ & $N=40$ & $N=80$ & $N=100$ \\
+Method & $N=20$ & $N=40$ & $N=80$ & $N=100$ & $N=200$ & $N=500$ & $N=1000$ \\
 \midrule
-MAML-Select & 0.012689 & 0.011160 & 0.011907 & 0.011871 \\
+MAML-Select & 0.02190 & 0.02189 & 0.01957 & 0.01969 & 0.02493 & 0.02227 & 0.02580 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -289,26 +297,26 @@ Algorithm~\ref{alg:ext} gives the full MAML-Select procedure, expanding Algorith
 
 \section*{S6. Selector Convergence}
 
-Statements~1 and~2 of the main paper give the inner and outer updates a one-step descent property.  Here we draw the standard consequence for the meta-iterates and then verify both properties empirically over training.
+Lemmas~1 and~2 of the main paper give the inner and outer updates a one-step descent property.  Here we draw the standard consequence for the meta-iterates and then verify both properties empirically over training.
 
 \noindent\textbf{Corollary (approximate stationarity).}\quad
-Suppose the query objective is shared across rounds, $q_t\equiv q$ with $q$ bounded below by $q^\star$, and Statement~2 holds with step size $0<\eta\le 1/L_q$.  Summing the per-round descent over $t=1,\dots,T$ and telescoping gives
+Suppose the query objective is shared across rounds, $q_t\equiv q$ with $q$ bounded below by $q^\star$, and Lemma~2 holds with step size $0<\eta\le 1/L_q$.  Summing the per-round descent over $t=1,\dots,T$ and telescoping gives
 \[
 \min_{1\le t\le T}\lVert\nabla q(\phi_t)\rVert_2^2 \;\le\; \frac{2\,\bigl(q(\phi_1)-q^\star\bigr)}{\eta\,T} \;+\; \frac{1}{T}\sum_{t=1}^{T}\delta_t^2 .
 \]
 The meta-policy therefore reaches an $\mathcal{O}(\beta^2)$-approximate stationary point at rate $\mathcal{O}(1/(\eta T))$, where the floor is the first-order error $\delta_t^2\le L_q^2\beta^2\lVert\nabla g_t(\phi_t)\rVert_2^2$.  In MAML-Select the query objective is mildly non-stationary because client utility drifts, so the bound describes the slowly-varying regime; we report the empirical behaviour in the general case next.
 
-Fig.~\ref{fig:supp_convergence} verifies the two descent properties during a full training run on each dataset.  Panel~(a) plots the inner-step change $g_t(\phi'_t)-g_t(\phi_t)$; it stays at or below zero in essentially every round, confirming Statement~1.  Panel~(b) plots the query objective relative to its first-round value; it decreases and then stabilizes, which is the empirical signature of outer-loop convergence under the non-stationary target.  Panel~(c) plots the meta-update magnitude $\lVert\phi_{t+1}-\phi_t\rVert_2$; it shrinks and settles, showing that the policy stops moving as it tracks the utility signal.  Together with the global accuracy and loss curves of the main paper, these confirm that the adaptive selector and the federated model both converge in practice, even though a closed-form global guarantee under fully adaptive partial participation remains open.
+Fig.~\ref{fig:supp_convergence} verifies the two descent properties during a full training run on each dataset.  Panel~(a) plots the inner-step change $g_t(\phi'_t)-g_t(\phi_t)$; it stays at or below zero in every round ($100\%$ of adapted rounds on all three datasets), confirming Lemma~1.  Panel~(b) plots the query objective relative to its first-round value; it decreases and then stabilizes, which is the empirical signature of outer-loop convergence under the non-stationary target.  Panel~(c) plots the meta-update magnitude $\lVert\phi_{t+1}-\phi_t\rVert_2$; it shrinks and settles, showing that the policy stops moving as it tracks the utility signal.  Together with the global accuracy and loss curves of the main paper, these confirm that the adaptive selector and the federated model both converge in practice, even though a closed-form global guarantee under fully adaptive partial participation remains open.
 
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=0.98\textwidth]{fig_convergence_verification_boxed}
-\caption{Selector-convergence verification over a full training run.  (a)~Inner-step support descent $g_t(\phi'_t)-g_t(\phi_t)\le 0$ (Statement~1).  (b)~Query objective relative to round~1, decreasing and stabilizing (outer-loop convergence, Statement~2).  (c)~Meta-update magnitude $\lVert\phi_{t+1}-\phi_t\rVert_2$ shrinking as the policy stabilizes.}
+\caption{Selector-convergence verification over a full training run.  (a)~Inner-step support descent $g_t(\phi'_t)-g_t(\phi_t)\le 0$ (Lemma~1).  (b)~Query objective relative to round~1, decreasing and stabilizing (outer-loop convergence, Lemma~2).  (c)~Meta-update magnitude $\lVert\phi_{t+1}-\phi_t\rVert_2$ shrinking as the policy stabilizes.}
 \label{fig:supp_convergence}
 \end{figure}
 
 \section*{S7. Summary}
 
-The supplementary evidence strengthens the revised manuscript in five ways.  First, the experimental settings and resource model are fully specified.  Second, MAML-Select shows consistent reductions in modeled compute, energy, and carbon while retaining full client coverage.  Third, the resource reductions are supported by paired statistical tests over the shared seeds.  Fourth, the sensitivity, ablation, and scaling studies show that the learned selector is tunable, stable under state-feature perturbations, and inexpensive to execute.  Fifth, the tier-level participation analysis shows that MAML-Select keeps every device tier represented while remaining cost-aware, and the convergence study confirms that the inner and outer updates satisfy the proven descent properties and that the selector and global model both converge during training.
+The supplementary evidence strengthens the revised manuscript in five ways.  First, the experimental settings and resource model are fully specified.  Second, MAML-Select shows consistent reductions in modeled compute and energy while retaining full client coverage.  Third, the resource reductions are supported by paired statistical tests over the shared seeds.  Fourth, the sensitivity, ablation, and scaling studies show that the learned selector is tunable, stable under state-feature perturbations, and inexpensive to execute.  Fifth, the tier-level participation analysis shows that MAML-Select keeps every device tier represented while remaining cost-aware, and the convergence study confirms that the inner and outer updates satisfy the proven descent properties and that the selector and global model both converge during training.
 
 \end{document}
