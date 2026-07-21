@@ -74,6 +74,21 @@ families:
       - system_aware.oort
     seeds: [11, 22, 33, 44, 55]
 
+  # Same ported baselines, swept across K/N — BL-1 explicitly asks for DivFL/
+  # SubTrunc/UnionFL to be evaluated "at the same headline/K-sweep configs as
+  # SCOPE-FD and random," not only at the single default config above.
+  literature_baselines_k_sweep:
+    methods:
+      - heuristic.random
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+      - fd_native.unionfl_fd
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      clients_per_round: [1, 3, 5, 10]
+    seeds: [11, 22, 33]
+
   dirichlet_severity:
     methods:
       - heuristic.random

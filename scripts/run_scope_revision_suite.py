@@ -10,6 +10,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, Iterable
@@ -18,7 +19,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SPEC = ROOT / "configs" / "scope_revision_sweeps.yaml"
-DEFAULT_OUTPUT = ROOT / "artifacts" / "scope_revision"
+DEFAULT_OUTPUT = ROOT / "runs_scope_revised"
 
 NEGATED_FLAGS = {
     "use_amp": "--no-amp",
@@ -156,6 +157,28 @@ def _preflight_parallel_clients(config: Dict[str, Any]) -> Dict[str, Any]:
     return adjusted
 
 
+def _job_label(job: Dict[str, Any]) -> str:
+    config = job["config"]
+    bits = [f"seed={job['seed']}"]
+    for key in ("clients_per_round", "dirichlet_alpha", "dl_snr_db", "dataset",
+                "scope_au", "scope_ad", "dropout_prob", "staleness_window",
+                "public_dataset", "total_clients"):
+        if key in config and config[key] is not None:
+            bits.append(f"{key}={config[key]}")
+    return f"{job['family']} ({', '.join(bits)})"
+
+
+def _stream_pipe_to_both(pipe, live_stream, log_file) -> None:
+    try:
+        for line in iter(pipe.readline, ""):
+            live_stream.write(line)
+            live_stream.flush()
+            log_file.write(line)
+            log_file.flush()
+    finally:
+        pipe.close()
+
+
 def run_one(job: Dict[str, Any], output_root: Path, dry_run: bool, monitor_interval: float):
     identity = {
         "family": job["family"],
@@ -202,17 +225,28 @@ def run_one(job: Dict[str, Any], output_root: Path, dry_run: bool, monitor_inter
     monitor = GPUMonitor(run_dir / "gpu_usage.csv", monitor_interval)
     monitor.start()
     try:
-        with (run_dir / "stdout.log").open("w", encoding="utf-8") as stdout, (
+        with (run_dir / "stdout.log").open("w", encoding="utf-8") as stdout_log, (
             run_dir / "stderr.log"
-        ).open("w", encoding="utf-8") as stderr:
-            proc = subprocess.run(
+        ).open("w", encoding="utf-8") as stderr_log:
+            proc = subprocess.Popen(
                 command,
                 cwd=ROOT,
-                stdout=stdout,
-                stderr=stderr,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                check=False,
+                bufsize=1,
             )
+            stdout_thread = threading.Thread(
+                target=_stream_pipe_to_both, args=(proc.stdout, sys.stdout, stdout_log)
+            )
+            stderr_thread = threading.Thread(
+                target=_stream_pipe_to_both, args=(proc.stderr, sys.stderr, stderr_log)
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            proc.wait()
+            stdout_thread.join()
+            stderr_thread.join()
     finally:
         monitor.stop()
         gc.collect()
@@ -228,6 +262,17 @@ def run_one(job: Dict[str, Any], output_root: Path, dry_run: bool, monitor_inter
         json.dumps(manifest, indent=2), encoding="utf-8"
     )
     return manifest["status"], run_dir
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
 
 
 def main():
@@ -258,29 +303,62 @@ def main():
             workers = 1
 
     results = []
+    total = len(jobs)
+    completed_durations: list[float] = []
+    suite_start = time.time()
+
+    def _progress_prefix(idx: int) -> str:
+        if completed_durations:
+            avg = sum(completed_durations) / len(completed_durations)
+            eta = _format_duration(avg * (total - idx + 1))
+            elapsed = _format_duration(time.time() - suite_start)
+            return f"[{idx}/{total}] elapsed={elapsed} eta={eta}"
+        return f"[{idx}/{total}]"
+
     if workers == 1:
-        for job in jobs:
+        for idx, job in enumerate(jobs, start=1):
+            print(f"\n=== {_progress_prefix(idx)} :: {_job_label(job)} ===")
+            job_start = time.time()
             status, run_dir = run_one(
                 job, args.output_root, args.dry_run, args.gpu_monitor_interval
             )
-            print(f"[{status}] {run_dir}")
+            if status not in ("skipped", "dry-run"):
+                completed_durations.append(time.time() - job_start)
+            print(f"[{idx}/{total}] [{status}] {run_dir}")
             results.append(status)
     else:
+        print(
+            "[note] --parallel-seeds 2: two jobs' live output may interleave on "
+            "screen; each run's own stdout.log/stderr.log stays complete and readable."
+        )
+        counter_lock = threading.Lock()
+        counter = {"done": 0}
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [
+            futures = {
                 pool.submit(
                     run_one, job, args.output_root, args.dry_run, args.gpu_monitor_interval
-                )
+                ): job
                 for job in jobs
-            ]
+            }
             for future in as_completed(futures):
                 status, run_dir = future.result()
-                print(f"[{status}] {run_dir}")
+                with counter_lock:
+                    counter["done"] += 1
+                    idx = counter["done"]
+                print(f"[{idx}/{total}] [{status}] {run_dir}")
                 results.append(status)
 
-    failures = sum(status == "failed" for status in results)
-    if failures:
-        raise SystemExit(f"{failures} run(s) failed; inspect per-run stderr.log")
+    total_elapsed = _format_duration(time.time() - suite_start)
+    completed = sum(1 for s in results if s == "complete")
+    skipped = sum(1 for s in results if s == "skipped")
+    failed = sum(1 for s in results if s == "failed")
+    print(
+        f"\nSuite finished in {total_elapsed}: "
+        f"{completed} completed, {skipped} skipped (already done), {failed} failed."
+    )
+
+    if failed:
+        raise SystemExit(f"{failed} run(s) failed; inspect per-run stderr.log")
 
 
 if __name__ == "__main__":

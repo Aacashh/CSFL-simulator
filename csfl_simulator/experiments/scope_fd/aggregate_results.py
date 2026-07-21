@@ -221,7 +221,7 @@ def _latex_table(aggregated: dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("runs", nargs="+", type=Path)
-    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/scope_revision/aggregated"))
+    parser.add_argument("--output-dir", type=Path, default=Path("runs_scope_revised/aggregated"))
     parser.add_argument("--reference-method", default="fd_native.scope_fd")
     args = parser.parse_args()
 

@@ -34,6 +34,7 @@
 # Family names match the keys under `families:` in
 # configs/scope_revision_sweeps.yaml (ablation_headline, ablation_k_sweep,
 # ablation_channel_sweep, coefficient_grid, literature_baselines,
+# literature_baselines_k_sweep,
 # dirichlet_severity, iid_sanity, scale_and_nondivisible, dropout,
 # bounded_staleness, histogram_privacy, channel_energy,
 # public_dataset_sensitivity, audio_fsdd).
@@ -44,8 +45,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 SPEC="configs/scope_revision_sweeps.yaml"
-OUTPUT_ROOT="artifacts/scope_revision"
-AGGREGATE_DIR="artifacts/scope_revision/aggregated"
+OUTPUT_ROOT="runs_scope_revised"
+AGGREGATE_DIR="runs_scope_revised/aggregated"
 REFERENCE_METHOD="fd_native.scope_fd"
 PARALLEL_SEEDS=1
 GPU_MONITOR_INTERVAL=15
