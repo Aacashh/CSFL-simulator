@@ -19,3 +19,4 @@ thop
 numexpr>=2.10
 bottleneck>=1.4
 psutil>=5.9
+pytest
