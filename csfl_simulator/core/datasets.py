@@ -135,6 +135,93 @@ class EMNISTSubsampled(datasets.EMNIST):
                 else type(self.targets)([self.targets[i] for i in keep_idx.tolist()])
 
 
+class FSDDSpectrogram(torch.utils.data.Dataset):
+    """Free Spoken Digit Dataset rendered as fixed 64x64 log-spectrograms.
+
+    The standard filename index split is used: recordings 0-4 are test samples
+    and 5-49 are training samples for every speaker/digit pair.
+    """
+
+    URL = (
+        "https://github.com/Jakobovski/free-spoken-digit-dataset/"
+        "archive/refs/heads/master.zip"
+    )
+
+    def __init__(self, root: Path, train: bool = True, download: bool = True):
+        self.base = Path(root) / "FSDD"
+        candidates = [
+            self.base / "recordings",
+            self.base / "free-spoken-digit-dataset-master" / "recordings",
+        ]
+        recordings = next((path for path in candidates if path.is_dir()), None)
+        if recordings is None and download:
+            from torchvision.datasets.utils import download_and_extract_archive
+            self.base.mkdir(parents=True, exist_ok=True)
+            download_and_extract_archive(
+                self.URL,
+                download_root=str(self.base),
+                filename="fsdd.zip",
+                remove_finished=True,
+            )
+            recordings = next((path for path in candidates if path.is_dir()), None)
+        if recordings is None:
+            raise RuntimeError(
+                "FSDD recordings were not found. Place the repository's recordings/ "
+                f"folder under {self.base} or allow dataset download."
+            )
+
+        items = []
+        for path in sorted(recordings.glob("*.wav")):
+            parts = path.stem.split("_")
+            if len(parts) < 3:
+                continue
+            digit, recording_index = int(parts[0]), int(parts[-1])
+            is_test = recording_index < 5
+            if train != is_test:
+                items.append((path, digit))
+        if not items:
+            raise RuntimeError(f"No {'training' if train else 'test'} FSDD recordings found")
+        self.items = items
+        self.targets = [label for _, label in items]
+        self.classes = [str(i) for i in range(10)]
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index):
+        from scipy.io import wavfile
+        from scipy.signal import resample_poly
+        import torch.nn.functional as functional
+
+        path, label = self.items[index]
+        sample_rate, waveform = wavfile.read(path)
+        waveform = np.asarray(waveform, dtype=np.float32)
+        if waveform.ndim > 1:
+            waveform = waveform.mean(axis=1)
+        scale = float(np.max(np.abs(waveform)))
+        if scale > 0:
+            waveform = waveform / scale
+        if sample_rate != 8000:
+            divisor = int(np.gcd(sample_rate, 8000))
+            waveform = resample_poly(waveform, 8000 // divisor, sample_rate // divisor)
+        waveform = torch.as_tensor(waveform[:8000], dtype=torch.float32)
+        if waveform.numel() < 8000:
+            waveform = functional.pad(waveform, (0, 8000 - waveform.numel()))
+
+        spectrum = torch.stft(
+            waveform,
+            n_fft=256,
+            hop_length=128,
+            win_length=256,
+            window=torch.hann_window(256),
+            return_complex=True,
+        ).abs().square()
+        spectrum = torch.log1p(spectrum).unsqueeze(0).unsqueeze(0)
+        spectrum = functional.interpolate(
+            spectrum, size=(64, 64), mode="bilinear", align_corners=False
+        ).squeeze(0)
+        spectrum = (spectrum - spectrum.mean()) / spectrum.std().clamp_min(1e-6)
+        return spectrum, label
 def get_dataset(name: str, train: bool = True, root: Path | None = None, download: bool = True):
     root = root or DATA_ROOT
     name_l = name.lower()
@@ -178,6 +265,8 @@ def get_dataset(name: str, train: bool = True, root: Path | None = None, downloa
     if name_l in ("stl-10", "stl10"):
         split = "train" if train else "test"
         return datasets.STL10(root, split=split, download=download, transform=get_transforms("stl10", train))
+    if name_l in ("fsdd", "audio-fsdd", "audio_fsdd"):
+        return FSDDSpectrogram(root, train=train, download=download)
     raise ValueError(f"Unknown dataset {name}")
 
 
@@ -318,6 +407,9 @@ def get_public_dataset(
 
     # Generic fallback: try loading as test split
     ds = get_dataset(name, train=False, root=root)
+    if hasattr(ds, "transform"):
+        # Match channels/spatial size to the private model for domain-mismatch sweeps.
+        ds.transform = _public_transform_for_training_dataset(training_dataset)
     indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
     return Subset(ds, indices)
 

@@ -147,6 +147,14 @@ RUN_MAP = {
     "csweep_dl-10":   "scope_fmnist_N50_K5_noise_dl-10_20260425-035125",
     "csweep_dl-20":   "scope_fmnist_N50_K5_noise_dl-20_20260425-035818",
     "csweep_dl-30":   "scope_fmnist_N50_K5_noise_dl-30_20260425-040506",
+    # Pre-submission Exp 1 — coefficient ablation at FMNIST N=50, K=5 (5 (αu, αd) pairs)
+    "coef_0_00_0_00": "scope_fmnist_N50_K5_coef_0_00_0_00_20260429-002645",
+    "coef_0_10_0_10": "scope_fmnist_N50_K5_coef_0_10_0_10_20260429-003948",
+    "coef_0_30_0_10": "scope_fmnist_N50_K5_coef_0_30_0_10_20260429-005237",
+    "coef_0_50_0_40": "scope_fmnist_N50_K5_coef_0_50_0_40_20260429-010512",
+    "coef_0_70_0_40": "scope_fmnist_N50_K5_coef_0_70_0_40_20260429-011846",
+    # Pre-submission Exp 2 — EMNIST/digits cross-domain replication at N=50, K=5
+    "emnist_paired":  "scope_emnist_N50_K5_20260429-040337",
 }
 
 
@@ -820,6 +828,318 @@ def fig_channel_robustness_k5():
 
 
 # ---------------------------------------------------------------------------
+# Figure 16 — Joint K × DL-SNR robustness (L-shape sweep through the 2D
+# operating region).
+#
+# The K-sweep (varying K at fixed DL SNR=−20 dB) and the SNR-sweep (varying
+# DL SNR at fixed K=5) intersect at exactly one point: K=5, SNR=−20. Drawing
+# both sweeps as orthogonal cross-sections through this shared point lets a
+# single figure absorb the entire §8.6 channel-robustness table while ALSO
+# showing the K-axis dependence — joint robustness, not just one-axis
+# robustness.
+#
+# Layout: 2 rows × 2 cols.
+#   Top row    = rounds-to-80%-of-final (the convergence-speed metric)
+#   Bottom row = participation Gini    (the fairness metric)
+#   Left col   = K-sweep   (x-axis: K/N ratio, log-spaced)
+#   Right col  = SNR-sweep (x-axis: DL SNR, ordinal)
+#   Y-axes are NOT shared across columns (different metric ranges along K
+#   vs SNR), but ARE shared row-wise visually because both columns plot the
+#   same metric.
+#
+# The shared K=5/SNR=−20 dB point is marked with a vertical dotted line in
+# every panel and labelled "shared op. point". Reading the figure from
+# left-to-right within a row says: "this is what happens when you walk one
+# step in K-space, and this is what happens when you walk one step in
+# SNR-space, both starting from the same point."
+# ---------------------------------------------------------------------------
+def fig_joint_k_snr_robustness():
+    # --- K-sweep data (FMNIST, N=50, varying K, fixed DL SNR=-20 dB) ---
+    ks = [1, 5, 10, 15, 25, 35, 50]
+    ratios = np.array([k / 50.0 for k in ks])
+    k_r_r80, k_s_r80, k_r_g, k_s_g, k_r_acc, k_s_acc = [], [], [], [], [], []
+    for k in ks:
+        d = load(RUN_MAP[f"ksweep_k{k}"])
+        rnd_final = final(d, RANDOM, "accuracy")
+        scp_final = final(d, SCOPE,  "accuracy")
+        target = 0.80 * max(rnd_final, scp_final)
+        rr = rounds_to_target(d, RANDOM, target)
+        rs = rounds_to_target(d, SCOPE,  target)
+        # K=50 -> trivial selection, SCOPE == Random; rounds-to-80% can be
+        # 0/1 or unreached; cap at 100 for plotting.
+        k_r_r80.append(rr if rr is not None else 100)
+        k_s_r80.append(rs if rs is not None else 100)
+        k_r_g.append(final(d, RANDOM, "fairness_gini"))
+        k_s_g.append(final(d, SCOPE,  "fairness_gini"))
+        k_r_acc.append(rnd_final)
+        k_s_acc.append(scp_final)
+
+    # --- SNR-sweep data (FMNIST, N=50, K=5, varying DL SNR) ---
+    snr_labels = ["err-free", "0", "−10", "−20", "−30"]
+    snr_tags = ["errfree", "dl0", "dl-10", "dl-20", "dl-30"]
+    s_r_r80, s_s_r80, s_r_g, s_s_g, s_r_acc, s_s_acc = [], [], [], [], [], []
+    for t in snr_tags:
+        d = load(RUN_MAP[f"csweep_{t}"])
+        rnd_final = final(d, RANDOM, "accuracy")
+        scp_final = final(d, SCOPE,  "accuracy")
+        target = 0.80 * max(rnd_final, scp_final)
+        rr = rounds_to_target(d, RANDOM, target)
+        rs = rounds_to_target(d, SCOPE,  target)
+        s_r_r80.append(rr if rr is not None else 100)
+        s_s_r80.append(rs if rs is not None else 100)
+        s_r_g.append(final(d, RANDOM, "fairness_gini"))
+        s_s_g.append(final(d, SCOPE,  "fairness_gini"))
+        s_r_acc.append(rnd_final)
+        s_s_acc.append(scp_final)
+
+    # The SNR-sweep "shared point" is the SNR=-20 column — its tick index
+    # within snr_labels.
+    snr_shared_idx = snr_labels.index("−20")
+    # The K-sweep "shared point" is K=5 — its tick index within ks.
+    k_shared_idx = ks.index(5)
+
+    fig, axes = plt.subplots(2, 2, figsize=(7.16, 5.0))
+    (a1, a2), (a3, a4) = axes
+
+    # Common formatting: K-axis labels thinned to {1, 5, 10, 25, 50} so the
+    # log-scale tick text doesn't collide; the data is still plotted at all
+    # 7 K values, just unlabelled at K=15 and K=35.
+    K_TICK_VALS  = [1, 5, 10, 25, 50]
+    K_TICK_RATIOS = np.array([k / 50.0 for k in K_TICK_VALS])
+    K_TICK_LABELS = [f"{k}/50" for k in K_TICK_VALS]
+
+    # --------------- Row 1: rounds-to-80% (convergence speed) ---------------
+    # (a) vs K
+    a1.plot(ratios, k_r_r80, **STYLE_RANDOM())
+    a1.plot(ratios, k_s_r80, **STYLE_SCOPE())
+    a1.fill_between(ratios, k_s_r80, k_r_r80, where=np.array(k_r_r80) > np.array(k_s_r80),
+                    color=SCOPE_COLOR, alpha=0.10, linewidth=0,
+                    label="SCOPE advantage")
+    a1.axvline(x=ratios[k_shared_idx], color="#444", linestyle=":", linewidth=1.0, alpha=0.75)
+    a1.set_xscale("log")
+    a1.set_xticks(K_TICK_RATIOS)
+    a1.set_xticklabels(K_TICK_LABELS, fontsize=7)
+    a1.set_xlabel("Participation ratio $K/N$  (SNR$_{DL}$ = −20 dB fixed)")
+    a1.set_ylabel("Rounds to 80% of final acc")
+    a1.set_title("(a) Convergence vs K-axis")
+    a1.set_ylim(0, 110)
+    # Place "shared op. pt." marker text inside the data area, near the top
+    # of the panel but below the title — both panels (a) and (b) use the
+    # same y-position so they align visually.
+    a1.text(ratios[k_shared_idx], 102, "shared\nop. pt.",
+            fontsize=6, color="#444", ha="center", va="top",
+            fontstyle="italic")
+    a1.legend(loc="upper right", fontsize=6)
+
+    # (b) vs DL SNR
+    x = np.arange(len(snr_labels))
+    a2.plot(x, s_r_r80, **STYLE_RANDOM())
+    a2.plot(x, s_s_r80, **STYLE_SCOPE())
+    a2.fill_between(x, s_s_r80, s_r_r80, where=np.array(s_r_r80) > np.array(s_s_r80),
+                    color=SCOPE_COLOR, alpha=0.10, linewidth=0,
+                    label="SCOPE advantage")
+    a2.axvline(x=snr_shared_idx, color="#444", linestyle=":", linewidth=1.0, alpha=0.75)
+    a2.set_xticks(x); a2.set_xticklabels(snr_labels, fontsize=7)
+    a2.set_xlabel("SNR$_{DL}$ (dB)  ($K=5$ fixed)")
+    a2.set_ylabel("Rounds to 80% of final acc")
+    a2.set_title("(b) Convergence vs SNR-axis")
+    a2.set_ylim(0, 110)
+    a2.text(snr_shared_idx, 102, "shared\nop. pt.",
+            fontsize=6, color="#444", ha="center", va="top",
+            fontstyle="italic")
+    # Annotate the constant 3× speedup that holds across the SNR-axis.
+    a2.annotate("3$\\times$ faster\n at every SNR", xy=(2, 30),
+                xytext=(2, 70), ha="center", fontsize=6.5,
+                color="#2ca02c", fontweight="bold", style="italic",
+                arrowprops=dict(arrowstyle="-", color="#2ca02c",
+                                linewidth=0.7, alpha=0.7))
+    a2.legend(loc="upper right", fontsize=6)
+
+    # --------------- Row 2: participation Gini (fairness) ---------------
+    g_y_max = max(max(k_r_g), max(s_r_g)) * 1.20
+
+    # (c) Gini vs K
+    a3.plot(ratios, k_r_g, **STYLE_RANDOM())
+    a3.plot(ratios, k_s_g, **STYLE_SCOPE())
+    a3.axvline(x=ratios[k_shared_idx], color="#444", linestyle=":", linewidth=1.0, alpha=0.75)
+    # Annotate Random's K-axis Gini values — they vary meaningfully (0.43 →
+    # 0 as K/N → 1), so the Random curve is the interesting one here.
+    for r, v in zip(ratios, k_r_g):
+        a3.annotate(f"{v:.3f}", xy=(r, v), xytext=(0, 5),
+                    textcoords="offset points", ha="center",
+                    fontsize=5.5, color=RANDOM_COLOR)
+    a3.set_xscale("log")
+    a3.set_xticks(K_TICK_RATIOS)
+    a3.set_xticklabels(K_TICK_LABELS, fontsize=7)
+    a3.set_xlabel("Participation ratio $K/N$  (SNR$_{DL}$ = −20 dB fixed)")
+    a3.set_ylabel("Final Gini")
+    a3.set_title("(c) Fairness vs K-axis (SCOPE = 0 throughout)")
+    a3.set_ylim(-0.02, g_y_max)
+    a3.legend(loc="upper right", fontsize=7)
+
+    # (d) Gini vs SNR
+    a4.plot(x, s_r_g, **STYLE_RANDOM())
+    a4.plot(x, s_s_g, **STYLE_SCOPE())
+    a4.axvline(x=snr_shared_idx, color="#444", linestyle=":", linewidth=1.0, alpha=0.75)
+    for xi, v in zip(x, s_r_g):
+        a4.annotate(f"{v:.3f}", xy=(xi, v), xytext=(0, 5),
+                    textcoords="offset points", ha="center",
+                    fontsize=5.5, color=RANDOM_COLOR)
+    a4.set_xticks(x); a4.set_xticklabels(snr_labels, fontsize=7)
+    a4.set_xlabel("SNR$_{DL}$ (dB)  ($K=5$ fixed)")
+    a4.set_ylabel("Final Gini")
+    a4.set_title("(d) Fairness vs SNR-axis (SCOPE = 0 throughout)")
+    a4.set_ylim(-0.02, g_y_max)
+    a4.legend(loc="upper right", fontsize=7)
+
+    plt.tight_layout()
+    save(fig, "fig16_joint_k_snr_robustness")
+
+
+# ---------------------------------------------------------------------------
+# Figure 14 — Coefficient ablation (5 (αu, αd) pairs at FMNIST N=50, K=5).
+# Defends Section IV-E's claim that (αu, αd) is a placement inside the
+# admissible region αu+αd<1, not a tuned hyperparameter. The 5 pairs span
+# pure round-robin, interior, default, near-boundary, and a deliberately
+# violating point — the constraint αu+αd<1 is empirically conservative on
+# this regime: every pair produces Gini=0 with accuracy in a 0.5pp band.
+# ---------------------------------------------------------------------------
+def fig_coef_ablation():
+    pairs = [
+        ("0_00_0_00", 0.00, 0.00, "(0, 0)\nRR-only"),
+        ("0_10_0_10", 0.10, 0.10, "(0.1, 0.1)\ninterior"),
+        ("0_30_0_10", 0.30, 0.10, "(0.3, 0.1)\ndefault"),
+        ("0_50_0_40", 0.50, 0.40, "(0.5, 0.4)\nnear-bdy"),
+        ("0_70_0_40", 0.70, 0.40, "(0.7, 0.4)\nVIOLATES"),
+    ]
+    # Color gradient: pure RR cool blue → default red → violating dark red
+    palette = ["#1f77b4", "#9467bd", "#d62728", "#e377c2", "#8b0000"]
+
+    accs, ginis_final, ginis_avg, curves = [], [], [], []
+    for tag, _, _, _ in pairs:
+        d = load(RUN_MAP[f"coef_{tag}"])
+        accs.append(final(d, SCOPE, "accuracy"))
+        ginis_final.append(final(d, SCOPE, "fairness_gini"))
+        rows = [m for m in d["results"][SCOPE]["metrics"]
+                if isinstance(m.get("round", -1), (int, float)) and m.get("round", -1) >= 0]
+        ginis_avg.append(float(np.mean([m.get("fairness_gini", 0.0) or 0.0 for m in rows])))
+        xs, ys = series(d, SCOPE, "accuracy")
+        curves.append((xs, ys))
+
+    fig, axes = plt.subplots(1, 3, figsize=(9.0, 2.9))
+    a1, a2, a3 = axes
+
+    # (a) Learning curves overlay — 5 nearly-identical trajectories (the story)
+    for (tag, au, ad, lbl), color, (xs, ys) in zip(pairs, palette, curves):
+        emph = (au + ad >= 1.0)
+        a1.plot(xs, ys, color=color, linewidth=1.6 if emph or tag == "0_30_0_10" else 1.1,
+                label=f"$\\alpha_u={au}, \\alpha_d={ad}$" + (" (viol.)" if emph else ""),
+                linestyle="--" if emph else "-",
+                alpha=0.95)
+    a1.set_xlabel("Round")
+    a1.set_ylabel("Test accuracy")
+    a1.set_title("(a) Learning curves — insensitive to $(\\alpha_u, \\alpha_d)$")
+    a1.legend(loc="lower right", fontsize=6, ncol=1, handlelength=1.4)
+
+    # (b) Final accuracy bars — annotate with Δ from default
+    x = np.arange(len(pairs))
+    a2.bar(x, accs, 0.62, color=palette, edgecolor="white", linewidth=0.6)
+    default_idx = 2
+    for i, v in enumerate(accs):
+        delta = (v - accs[default_idx]) * 100
+        delta_str = f"{delta:+.2f}pp" if i != default_idx else "ref."
+        a2.text(i, v + 0.005, f"{v:.4f}\n{delta_str}",
+                ha="center", va="bottom", fontsize=6,
+                fontweight="bold" if i == default_idx else "normal")
+    a2.set_xticks(x)
+    a2.set_xticklabels([p[3] for p in pairs], fontsize=6)
+    a2.set_ylabel("Final accuracy")
+    a2.set_title("(b) Accuracy: 0.5pp band across all 5")
+    a2.set_ylim(0, max(accs) * 1.18)
+
+    # (c) Gini final + avg-over-training (final is 0 for all; avg shows the
+    # within-cycle non-zero plateau the debt term enforces — same value 0.083
+    # for every coefficient choice, the floor of a 10-round cycle).
+    w = 0.36
+    a3.bar(x - w/2, ginis_final, w, color="#444", edgecolor="white", linewidth=0.6,
+           label="Final Gini (R=100)")
+    a3.bar(x + w/2, ginis_avg, w, color="#cccccc", edgecolor="white", linewidth=0.6,
+           label="Avg Gini over training")
+    for i, v in enumerate(ginis_final):
+        a3.text(i - w/2, v + 0.003, f"{v:.3f}", ha="center", va="bottom", fontsize=6)
+    for i, v in enumerate(ginis_avg):
+        a3.text(i + w/2, v + 0.003, f"{v:.3f}", ha="center", va="bottom", fontsize=6)
+    a3.axhline(y=0, color="#666", linewidth=0.6)
+    a3.set_xticks(x)
+    a3.set_xticklabels([p[3] for p in pairs], fontsize=6)
+    a3.set_ylabel("Participation Gini")
+    a3.set_title("(c) Fairness: Gini=0 even at violating row")
+    a3.set_ylim(0, max(ginis_avg) * 1.30 + 0.01)
+    a3.legend(loc="upper right", fontsize=6)
+
+    plt.tight_layout()
+    save(fig, "fig14_coef_ablation")
+
+
+# ---------------------------------------------------------------------------
+# Figure 15 — EMNIST/digits cross-domain replication (N=50, K=5, R=100).
+# Refutes the "FMNIST artifact" reviewer concern: Random vs SCOPE-FD on
+# handwritten Latin digits (NIST SD 19, subsampled 60k/10k to scale-match
+# FMNIST). Story: same Gini collapse, same rapid early convergence (SCOPE
+# reaches 80% of final at round 10 vs random's 25), final accuracy tied.
+# ---------------------------------------------------------------------------
+def fig_emnist_replication():
+    """Single-panel EMNIST/digits accuracy curve. Tie at final accuracy
+    and Gini collapse are reported in the §8.10 caption text instead of
+    a 3-panel figure — the convergence-speed story is the carrier."""
+    d = load(RUN_MAP["emnist_paired"])
+    fig, ax = plt.subplots(figsize=(3.6, 2.7))
+
+    xr, yr = series(d, RANDOM, "accuracy")
+    xs, ys = series(d, SCOPE, "accuracy")
+    ax.plot(xr, yr, color=RANDOM_COLOR, label="Random", linewidth=1.6,
+            marker="o", markevery=10, markersize=5,
+            markerfacecolor=RANDOM_COLOR, markeredgecolor="white",
+            markeredgewidth=0.5, alpha=0.95)
+    ax.plot(xs, ys, color=SCOPE_COLOR, label="SCOPE-FD", linewidth=1.6,
+            marker="s", markevery=10, markersize=5,
+            markerfacecolor=SCOPE_COLOR, markeredgecolor="white",
+            markeredgewidth=0.5, alpha=0.95)
+    final_r = float(yr[-1])
+    final_s = float(ys[-1])
+    target = 0.80 * max(final_r, final_s)
+    ax.axhline(y=target, color="grey", linestyle=":", linewidth=0.8,
+               label=f"80% of final = {target:.2f}")
+    rr = next((int(x) for x, y in zip(xr, yr) if y >= target), int(xr[-1]))
+    rs = next((int(x) for x, y in zip(xs, ys) if y >= target), int(xs[-1]))
+    ax.axvline(x=rr, color=RANDOM_COLOR, linestyle="--", linewidth=0.7, alpha=0.6)
+    ax.axvline(x=rs, color=SCOPE_COLOR, linestyle="--", linewidth=0.7, alpha=0.6)
+    # Round-crossing labels placed at the bottom of the plot so they do not
+    # collide with the steep climb of the accuracy curves through the
+    # threshold — the lower band has empty space because both curves start
+    # at ~0.10 and the threshold sits at ~0.62.
+    ax.annotate(f"r={rs}", xy=(rs, 0.12), xytext=(rs - 4, 0.10),
+                fontsize=7, color=SCOPE_COLOR, fontweight="bold")
+    ax.annotate(f"r={rr}", xy=(rr, 0.12), xytext=(rr - 4, 0.10),
+                fontsize=7, color=RANDOM_COLOR, fontweight="bold")
+    # Speedup callout in the open region under the threshold line.
+    speedup = rr / max(rs, 1)
+    ax.annotate(f"{speedup:.1f}$\\times$ faster\nto 80% of final",
+                xy=((rr + rs) / 2, target - 0.04),
+                xytext=((rr + rs) / 2, 0.30),
+                ha="center", fontsize=7, color="#2ca02c",
+                fontweight="bold", style="italic")
+    ax.set_xlabel("Round")
+    ax.set_ylabel("Test accuracy")
+    ax.set_title("EMNIST/digits — N=50, K=5, R=100")
+    ax.legend(loc="lower right", fontsize=7)
+    ax.set_ylim(0.05, max(max(yr), max(ys)) * 1.05)
+
+    plt.tight_layout()
+    save(fig, "fig15_emnist_replication")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
@@ -836,6 +1156,11 @@ def main():
                fig_convergence_speed, fig_k1_spotlight,
                fig_fl_baseline_comparison, fig_per_client_participation,
                fig_system_diagram, fig_channel_robustness_k5,
+               # Pre-submission additions: cross-domain replication +
+               # joint K×SNR robustness (replaces channel-robustness table).
+               # fig_coef_ablation kept generated for supplementary use.
+               fig_emnist_replication, fig_joint_k_snr_robustness,
+               fig_coef_ablation,
                # Kept generated (not linked from narrative) for optional use:
                fig_noise_robustness, fig_noniid_severity, fig_ablation):
         try:

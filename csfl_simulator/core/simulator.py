@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Any, Tuple, Optional
 import random
+import os
 import time
 
 import torch
@@ -56,6 +57,10 @@ class SimConfig:
     # Set to 0 to force sequential execution (legacy).
     # Set to N>0 to force exactly N parallel streams.
     parallel_clients: int = -1
+    num_workers: int = max(0, min(4, os.cpu_count() or 1))
+    grad_accum_steps: int = 1
+    dropout_prob: float = 0.0
+    staleness_window: int = 0
     name: Optional[str] = None  # Named run (used as folder name under artifacts/runs/)
     # Paradigm selection: "fl" (Federated Learning) or "fd" (Federated Distillation)
     paradigm: str = "fl"
@@ -63,6 +68,7 @@ class SimConfig:
     # Public dataset for logit exchange
     public_dataset: str = "same"         # "same" = sample from test split; or dataset name e.g. "STL-10"
     public_dataset_size: int = 2000      # Number of public samples
+    public_label_noise: float = 0.0      # Fraction of public labels replaced (sensitivity study)
     # Distillation hyperparameters
     distillation_epochs: int = 2         # S distillation steps per round (paper: 2)
     distillation_batch_size: int = 500   # Batch size for distillation (paper: 500)

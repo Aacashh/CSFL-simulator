@@ -241,10 +241,42 @@ class ShuffleNetV2FD(nn.Module):
         return self.model(x)
 
 
+class AudioCNN(nn.Module):
+    """Compact CNN for 64x64 FSDD log-spectrograms."""
+
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 64):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 16, kernel_size=3, padding=1),
+            nn.GroupNorm(4, 16),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.GroupNorm(8, 32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.GroupNorm(8, 64),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((4, 4)),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 4 * 4, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.features[0].in_channels)
+        return self.classifier(self.features(x))
 def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
     if d in ("mnist", "fashion-mnist", "fashionmnist", "kmnist", "emnist"):
         return 1, 28
+    if d in ("fsdd", "audio-fsdd", "audio_fsdd"):
+        return 1, 64
     if d in ("cifar10", "cifar-10", "cifar100", "cifar-100"):
         return 3, 32
     if d in ("stl-10", "stl10"):
@@ -262,6 +294,8 @@ def get_model(name: str, dataset: str, num_classes: int, device: str = "cpu", pr
         model = CNNMnistFedAvg(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("lightcnn", "light-cifar"):
         model = LightCIFAR(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
+    elif name_l in ("audiocnn", "audio-cnn", "audio_cnn"):
+        model = AudioCNN(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("fd-cnn1", "fd_cnn1", "fdcnn1"):
         model = FDCNN1(num_classes=num_classes, in_channels=in_ch, image_size=img_sz)
     elif name_l in ("fd-cnn2", "fd_cnn2", "fdcnn2"):

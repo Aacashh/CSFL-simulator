@@ -1,0 +1,193 @@
+# Declarative Phase-A experiment suite for FD_review_exp_plan.md.
+# Use --family to run one family; the full file is intentionally research-scale.
+defaults:
+  paradigm: fd
+  dataset: Fashion-MNIST
+  partition: dirichlet
+  dirichlet_alpha: 0.5
+  total_clients: 30
+  clients_per_round: 5
+  rounds: 100
+  local_epochs: 1
+  batch_size: 64
+  lr: 0.001
+  model: FD-CNN2
+  model_heterogeneous: true
+  model_pool: FD-CNN1,FD-CNN2,FD-CNN3
+  public_dataset: same
+  public_dataset_size: 2000
+  distillation_epochs: 2
+  distillation_batch_size: 500
+  eval_every: 5
+  use_amp: true
+  performance_mode: true
+  parallel_clients: -1
+  num_workers: 4
+
+families:
+  ablation_headline:
+    methods:
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd_no_diversity
+      - fd_native.scope_fd_no_server
+      - fd_native.scope_fd
+    seeds: [11, 22, 33, 44, 55]
+
+  ablation_k_sweep:
+    methods:
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd_no_diversity
+      - fd_native.scope_fd_no_server
+      - fd_native.scope_fd
+    axes:
+      clients_per_round: [1, 3, 5, 10]
+    seeds: [11, 22, 33]
+
+  ablation_channel_sweep:
+    methods:
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd_no_diversity
+      - fd_native.scope_fd_no_server
+      - fd_native.scope_fd
+    base:
+      channel_noise: true
+      ul_snr_db: -8
+    axes:
+      dl_snr_db: [-30, -25, -20, -15, -10]
+    seeds: [11, 22, 33]
+
+  coefficient_grid:
+    methods: [fd_native.scope_fd]
+    axes:
+      scope_au: [0.0, 0.1, 0.2, 0.3, 0.5, 0.8]
+      scope_ad: [0.0, 0.05, 0.1, 0.2, 0.4]
+    seeds: [11, 22, 33]
+
+  literature_baselines:
+    methods:
+      - heuristic.random
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+      - fd_native.unionfl_fd
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - system_aware.oort
+    seeds: [11, 22, 33, 44, 55]
+
+  dirichlet_severity:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    axes:
+      dirichlet_alpha: [0.01, 0.05, 0.1, 0.3, 0.5, 1.0, 5.0]
+    seeds: [11, 22, 33, 44, 55]
+
+  iid_sanity:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    base:
+      partition: iid
+    seeds: [11, 22, 33, 44, 55]
+
+  scale_and_nondivisible:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    cases:
+      - {total_clients: 47, clients_per_round: 6}
+      - {total_clients: 53, clients_per_round: 7}
+      - {total_clients: 50, clients_per_round: 3}
+      - {total_clients: 50, clients_per_round: 5}
+      - {total_clients: 50, clients_per_round: 10}
+      - {total_clients: 100, clients_per_round: 5}
+      - {total_clients: 100, clients_per_round: 10}
+      - {total_clients: 100, clients_per_round: 20}
+      - {total_clients: 200, clients_per_round: 10}
+      - {total_clients: 200, clients_per_round: 20}
+      - {total_clients: 200, clients_per_round: 40}
+      - {total_clients: 500, clients_per_round: 25}
+      - {total_clients: 500, clients_per_round: 50}
+      - {total_clients: 500, clients_per_round: 100}
+    base:
+      eval_every: 20
+    seeds: [11, 22, 33, 44, 55]
+
+  dropout:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      dropout_prob: [0.0, 0.1, 0.2, 0.3]
+    seeds: [11, 22, 33, 44, 55]
+
+  bounded_staleness:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      staleness_window: [0, 1, 2]
+    seeds: [11, 22, 33, 44, 55]
+
+  histogram_privacy:
+    methods:
+      - fd_native.scope_fd
+      - fd_native.scope_fd_hist_dp_eps0_1
+      - fd_native.scope_fd_hist_dp_eps0_5
+      - fd_native.scope_fd_hist_dp_eps1
+      - fd_native.scope_fd_hist_dp_eps2
+      - fd_native.scope_fd_hist_dp_eps5
+      - fd_native.scope_fd_surrogate_hist
+    seeds: [11, 22, 33, 44, 55]
+
+  channel_energy:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.scope_fd_channel_aware
+    base:
+      channel_noise: true
+      energy_budget: 8000
+    axes:
+      dl_snr_db: [-30, -20, -10]
+    seeds: [11, 22, 33, 44, 55]
+
+  public_dataset_sensitivity:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.subtrunc_fd
+    axes:
+      public_dataset: [same, MNIST, EMNIST, CIFAR-10]
+      public_dataset_size: [100, 500, 2000]
+      public_label_noise: [0.0, 0.1, 0.3]
+    seeds: [11, 22, 33]
+
+  audio_fsdd:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    base:
+      dataset: FSDD
+      model: AudioCNN
+      model_heterogeneous: false
+      model_pool: ""
+      public_dataset: same
+      public_dataset_size: 300
+      batch_size: 32
+      distillation_batch_size: 150
+      total_clients: 30
+      clients_per_round: 5
+    seeds: [11, 22, 33, 44, 55]
