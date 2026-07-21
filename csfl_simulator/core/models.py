@@ -268,6 +268,36 @@ class ShuffleNetV2FD(nn.Module):
         return self.model(x)
 
 
+class AudioCNN(nn.Module):
+    """Compact CNN for 64x64 FSDD log-spectrograms."""
+
+    def __init__(self, num_classes: int = 10, in_channels: int = 1, image_size: int = 64):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 16, kernel_size=3, padding=1),
+            nn.GroupNorm(4, 16),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.GroupNorm(8, 32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.GroupNorm(8, 64),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((4, 4)),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 4 * 4, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _match_channels(x, self.features[0].in_channels)
+        return self.classifier(self.features(x))
 def _dataset_image_spec(dataset: str) -> tuple[int, int]:
     d = (dataset or "").lower()
     if d in ("mnist", "fashion-mnist", "fashionmnist", "kmnist", "emnist"):

@@ -105,3 +105,54 @@ def eval_fd_clients(
         "client_accuracy_std": acc_std,
         "num_clients_evaluated": len(ids_to_eval),
     }
+
+
+def participation_gini(counts) -> float:
+    """Gini coefficient for non-negative client participation counts."""
+    values = [max(0.0, float(v)) for v in counts]
+    n = len(values)
+    total = sum(values)
+    if n == 0 or total <= 0:
+        return 0.0
+    pair_sum = sum(
+        abs(values[i] - values[j])
+        for i in range(n)
+        for j in range(i + 1, n)
+    )
+    return pair_sum / (n * total)
+
+
+def rolling_window_participation_gini(
+    selected_history,
+    total_clients: int,
+    window: int,
+) -> float:
+    """Participation Gini over the last ``window`` response sets."""
+    if total_clients <= 0 or window <= 0:
+        return 0.0
+    counts = [0] * total_clients
+    for round_ids in list(selected_history)[-window:]:
+        for cid in round_ids:
+            cid = int(cid)
+            if 0 <= cid < total_clients:
+                counts[cid] += 1
+    return participation_gini(counts)
+
+
+def rounds_to_absolute_accuracy(metrics, thresholds=(0.6, 0.7, 0.8)) -> dict:
+    """Return one-based rounds/time needed to reach fixed accuracy targets."""
+    rows = [m for m in metrics if int(m.get("round", -1)) >= 0]
+    out = {}
+    for threshold in thresholds:
+        pct = int(round(float(threshold) * 100))
+        hit = next(
+            (m for m in rows if float(m.get("accuracy", 0.0) or 0.0) >= threshold),
+            None,
+        )
+        out[f"rounds_to_abs_{pct}"] = (
+            int(hit.get("round", -1)) + 1 if hit is not None else None
+        )
+        out[f"time_to_abs_{pct}"] = (
+            float(hit.get("wall_clock", 0.0)) if hit is not None else None
+        )
+    return out

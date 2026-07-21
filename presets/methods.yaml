@@ -533,6 +533,83 @@ methods:
     params: {disable_diversity_penalty: true}
     type: fd_native
     trainable: false
+  - key: fd_native.scope_fd_debt_only
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (debt only)"
+    origin: ablation
+    params: {alpha_uncertainty: 0.0, alpha_diversity: 0.0, disable_server_signal: true, disable_diversity_penalty: true}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_channel_aware
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (channel/energy aware)"
+    origin: proposed
+    params: {alpha_uncertainty: 0.3, alpha_diversity: 0.1, alpha_channel: 0.2, channel_energy_mix: 0.5, enforce_energy_budget: true}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_surrogate_hist
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (server-side surrogate histogram)"
+    origin: privacy
+    params: {use_surrogate_histogram: true}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_hist_dp_eps0_1
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (histogram DP, eps=0.1)"
+    origin: privacy
+    params: {histogram_epsilon: 0.1}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_hist_dp_eps0_5
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (histogram DP, eps=0.5)"
+    origin: privacy
+    params: {histogram_epsilon: 0.5}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_hist_dp_eps1
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (histogram DP, eps=1)"
+    origin: privacy
+    params: {histogram_epsilon: 1.0}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_hist_dp_eps2
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (histogram DP, eps=2)"
+    origin: privacy
+    params: {histogram_epsilon: 2.0}
+    type: fd_native
+    trainable: false
+  - key: fd_native.scope_fd_hist_dp_eps5
+    module: csfl_simulator.selection.fd_native.scope_fd
+    display_name: "SCOPE-FD (histogram DP, eps=5)"
+    origin: privacy
+    params: {histogram_epsilon: 5.0}
+    type: fd_native
+    trainable: false
+  - key: fd_native.divfl_fd
+    module: csfl_simulator.selection.fd_native.divfl_fd
+    display_name: "DivFL-FD (public-logit facility location)"
+    origin: paper-port
+    params: {}
+    type: fd_native
+    trainable: false
+  - key: fd_native.subtrunc_fd
+    module: csfl_simulator.selection.fd_native.subtrunc_fd
+    display_name: "SubTrunc-FD (public-loss truncated submodular)"
+    origin: paper-port
+    params: {lambda_loss: 0.25, truncation_b: 1.0}
+    type: fd_native
+    trainable: false
+  - key: fd_native.unionfl_fd
+    module: csfl_simulator.selection.fd_native.unionfl_fd
+    display_name: "UnionFL-FD (recent-union diversified)"
+    origin: paper-port
+    params: {overlap_penalty: 0.1, history_window: 5}
+    type: fd_native
+    trainable: false
   - key: wrapper.quota_safety
     module: csfl_simulator.selection.wrappers.quota_safety
     display_name: "QuotaSafety (wrapper)"

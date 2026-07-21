@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import asdict
@@ -59,6 +60,15 @@ def _add_sim_args(p: argparse.ArgumentParser):
     p.add_argument("--track-grad-norm", action="store_true", default=False, help="Track gradient norms")
     p.add_argument("--parallel-clients", type=int, default=-1,
                     help="Parallel client training (-1=auto [default], 0=off, N>0=fixed)")
+    p.add_argument("--num-workers", type=int, default=max(0, min(4, os.cpu_count() or 1)),
+                    help="DataLoader workers (auto up to 4; forced to 0 on Windows)")
+    p.add_argument("--grad-accum-steps", type=int, default=1,
+                    help="Micro-batches per logical FD training batch (default: 1)")
+    p.add_argument("--dropout-prob", type=float, default=0.0,
+                    help="Probability that a selected FD client does not respond")
+    p.add_argument("--staleness-window", type=int, default=0,
+                    help="Maximum simulated FD logit delay in rounds (0=synchronous)")
+
     p.add_argument("--output", "-o", default=None, help="Output JSON path (auto-generated if not specified)")
     p.add_argument("--dp-sigma", type=float, default=0.0, help="DP Gaussian noise sigma")
     p.add_argument("--dp-epsilon-per-round", type=float, default=0.0, help="DP epsilon budget per round")
@@ -70,6 +80,8 @@ def _add_sim_args(p: argparse.ArgumentParser):
                     help="Public dataset for FD logit exchange (same=test split, STL-10, FMNIST)")
     p.add_argument("--public-dataset-size", type=int, default=2000,
                     help="Number of public samples for FD (paper: 2000)")
+    p.add_argument("--public-label-noise", type=float, default=0.0,
+                    help="Fraction of public labels replaced for sensitivity studies (0-1)")
     p.add_argument("--distillation-epochs", type=int, default=2,
                     help="Distillation steps per round (paper: 2)")
     p.add_argument("--distillation-batch-size", type=int, default=500,
@@ -161,6 +173,10 @@ def _args_to_config(args) -> SimConfig:
         energy_budget=args.energy_budget,
         bytes_budget=args.bytes_budget,
         track_grad_norm=args.track_grad_norm,
+        num_workers=getattr(args, "num_workers", max(0, min(4, os.cpu_count() or 1))),
+        grad_accum_steps=max(1, getattr(args, "grad_accum_steps", 1)),
+        dropout_prob=getattr(args, "dropout_prob", 0.0),
+        staleness_window=max(0, getattr(args, "staleness_window", 0)),
         parallel_clients=args.parallel_clients,
         dp_sigma=args.dp_sigma,
         dp_epsilon_per_round=args.dp_epsilon_per_round,
@@ -169,6 +185,7 @@ def _args_to_config(args) -> SimConfig:
         paradigm=getattr(args, "paradigm", "fl"),
         public_dataset=getattr(args, "public_dataset", "same"),
         public_dataset_size=getattr(args, "public_dataset_size", 2000),
+        public_label_noise=getattr(args, "public_label_noise", 0.0),
         distillation_epochs=getattr(args, "distillation_epochs", 2),
         distillation_batch_size=getattr(args, "distillation_batch_size", 500),
         temperature=getattr(args, "temperature", 1.0),

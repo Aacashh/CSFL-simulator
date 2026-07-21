@@ -464,6 +464,9 @@ def get_public_dataset(
 
     # Generic fallback: try loading as test split
     ds = get_dataset(name, train=False, root=root)
+    if hasattr(ds, "transform"):
+        # Match channels/spatial size to the private model for domain-mismatch sweeps.
+        ds.transform = _public_transform_for_training_dataset(training_dataset)
     indices = rng.choice(len(ds), size=min(size, len(ds)), replace=False).tolist()
     return Subset(ds, indices)
 

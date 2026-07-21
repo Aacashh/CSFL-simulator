@@ -14,3 +14,5 @@ models:
     datasets: [MNIST, Fashion-MNIST, KMNIST, EMNIST, CIFAR-10, CIFAR-100, STL-10]
   - name: FD-CNN3
     datasets: [MNIST, Fashion-MNIST, KMNIST, EMNIST, CIFAR-10, CIFAR-100, STL-10]
+  - name: AudioCNN
+    datasets: [FSDD]

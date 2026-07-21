@@ -42,7 +42,12 @@ from .models import get_model, _dataset_image_spec
 from .client import ClientInfo
 from .channel import MIMOChannel
 from .fd_aggregation import logit_avg, logit_avg_grouped
-from .metrics import eval_model
+from .metrics import (
+    eval_model,
+    participation_gini,
+    rolling_window_participation_gini,
+    rounds_to_absolute_accuracy,
+)
 from .utils import new_run_dir, save_json, set_seed, autodetect_device, cleanup_memory, check_memory_critical
 from ..selection.registry import MethodRegistry
 from .system import init_system_state, simulate_round_env
@@ -58,6 +63,28 @@ def _unwrap_compiled(m: nn.Module) -> nn.Module:
     Returns the argument unchanged for plain modules.
     """
     return getattr(m, "_orig_mod", m)
+
+
+def _apply_public_label_noise(
+    labels: torch.Tensor,
+    probability: float,
+    num_classes: int,
+    seed: int,
+) -> torch.Tensor:
+    """Deterministically replace a fraction of public labels with wrong labels."""
+    probability = float(probability)
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("public_label_noise must be between 0 and 1")
+    noisy = labels.clone()
+    if probability == 0.0 or noisy.numel() == 0 or num_classes <= 1:
+        return noisy
+    generator = torch.Generator(device=noisy.device).manual_seed(int(seed) + 104729)
+    mask = torch.rand(noisy.shape, generator=generator, device=noisy.device) < probability
+    offsets = torch.randint(
+        1, num_classes, noisy.shape, generator=generator, device=noisy.device
+    )
+    noisy[mask] = (noisy[mask].long() + offsets[mask].long()) % num_classes
+    return noisy
 
 
 class FDSimulator:
@@ -124,9 +151,12 @@ class FDSimulator:
         self.num_classes = num_classes
 
         # --- Test loader ---
-        self.test_loader = dset.make_loader(test_ds, batch_size=128, shuffle=False)
+        self.test_loader = dset.make_loader(
+            test_ds, batch_size=128, shuffle=False, num_workers=cfg.num_workers)
 
         # --- Public dataset for logit exchange ---
+        if not 0.0 <= float(cfg.public_label_noise) <= 1.0:
+            raise ValueError("public_label_noise must be between 0 and 1")
         self.public_ds = dset.get_public_dataset(
             name=cfg.public_dataset,
             size=cfg.public_dataset_size,
@@ -135,6 +165,7 @@ class FDSimulator:
         )
         self.public_loader = dset.make_loader(
             self.public_ds, batch_size=cfg.distillation_batch_size, shuffle=False,
+            num_workers=cfg.num_workers,
         )
 
         # --- Model pool for heterogeneity ---
@@ -150,12 +181,14 @@ class FDSimulator:
         for cid in range(cfg.total_clients):
             idxs = mapping[cid]
             self.client_loaders[cid] = dset.make_loaders_from_indices(
-                train_ds, idxs, batch_size=cfg.batch_size,
+                train_ds, idxs, batch_size=cfg.batch_size, num_workers=cfg.num_workers,
             )
             # Label histogram
             hist = None
             try:
-                targets = getattr(train_ds, 'targets', None) or getattr(train_ds, 'labels', None)
+                targets = getattr(train_ds, 'targets', None)
+                if targets is None:
+                    targets = getattr(train_ds, 'labels', None)
                 if targets is not None:
                     ys = [int(targets[i]) for i in idxs]
                 else:
@@ -231,9 +264,19 @@ class FDSimulator:
 
         # --- Performance: cache public data on GPU ---
         self._public_x_cache: Optional[torch.Tensor] = None
+        self._public_y_cache: Optional[torch.Tensor] = None
         try:
-            xs = [x for x, *_ in self.public_loader]
+            xs, ys = [], []
+            for x, y, *_ in self.public_loader:
+                xs.append(x)
+                ys.append(y)
             self._public_x_cache = torch.cat(xs, dim=0).to(self.device)
+            self._public_y_cache = _apply_public_label_noise(
+                torch.cat(ys, dim=0).to(self.device),
+                cfg.public_label_noise,
+                self.num_classes,
+                cfg.seed,
+            )
         except Exception:
             pass  # fallback to loader-based iteration
 
@@ -614,7 +657,6 @@ class FDSimulator:
         cfg = self.cfg
         model = self.client_models[cid]
         model.train()
-        criterion = nn.CrossEntropyLoss()
         opt = self._get_train_opt(cid)
 
         grad_norm = 0.0
@@ -637,6 +679,45 @@ class FDSimulator:
             if torch.rand((), device=x.device).item() < 0.5:
                 x = torch.flip(x, dims=[-1])
             return x
+        def _train_logical_batch(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+            """Backpropagate one logical batch through bounded micro-batches."""
+            nonlocal grad_norm
+            total = int(y.size(0))
+            micro_batches = max(1, min(int(cfg.grad_accum_steps), total))
+            micro_size = max(1, math.ceil(total / micro_batches))
+            opt.zero_grad(set_to_none=True)
+            batch_loss = torch.zeros((), device=x.device)
+            for start in range(0, total, micro_size):
+                x_micro = x[start:start + micro_size]
+                y_micro = y[start:start + micro_size]
+                with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
+                    out = model(x_micro)
+                    # Sum/total preserves the exact logical-batch mean gradient.
+                    micro_loss = F.cross_entropy(out, y_micro, reduction="sum") / total
+                if scaler is not None:
+                    scaler.scale(micro_loss).backward()
+                else:
+                    micro_loss.backward()
+                batch_loss = batch_loss + micro_loss.detach()
+
+            if cfg.track_grad_norm:
+                if scaler is not None:
+                    scaler.unscale_(opt)
+                try:
+                    total_sq = sum(
+                        p.grad.data.norm(2).item() ** 2
+                        for p in model.parameters()
+                        if p.grad is not None
+                    )
+                    grad_norm = total_sq ** 0.5
+                except Exception:
+                    pass
+            if scaler is not None:
+                scaler.step(opt)
+                scaler.update()
+            else:
+                opt.step()
+            return batch_loss
 
         # Fast path: GPU-cached training data (no DataLoader overhead)
         if cid in self._client_data_cache:
@@ -647,31 +728,7 @@ class FDSimulator:
                 idx = (step * bs) % n
                 x = _augment_gpu_batch(x_all[idx:idx + bs])
                 y = y_all[idx:idx + bs]
-                opt.zero_grad(set_to_none=True)
-                with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
-                    out = model(x)
-                    loss = criterion(out, y)
-                if scaler is not None:
-                    scaler.scale(loss).backward()
-                    if cfg.track_grad_norm:
-                        scaler.unscale_(opt)
-                        try:
-                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
-                            grad_norm = total_sq ** 0.5
-                        except Exception:
-                            pass
-                    scaler.step(opt)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    if cfg.track_grad_norm:
-                        try:
-                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
-                            grad_norm = total_sq ** 0.5
-                        except Exception:
-                            pass
-                    opt.step()
-                loss_buffer = loss.detach()
+                loss_buffer = _train_logical_batch(x, y)
                 if cfg.smoke_test_mode and step > 0:
                     last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
                     return last_loss, grad_norm
@@ -683,7 +740,7 @@ class FDSimulator:
             if cid in self._partition_mapping:
                 self.client_loaders[cid] = dset.make_loaders_from_indices(
                     self.train_ds, self._partition_mapping[cid],
-                    batch_size=cfg.batch_size, num_workers=0,
+                    batch_size=cfg.batch_size, num_workers=cfg.num_workers,
                 )
 
         loader = self.client_loaders[cid]
@@ -693,31 +750,7 @@ class FDSimulator:
                 if step >= num_steps:
                     break
                 x, y = x.to(self.device), y.to(self.device)
-                opt.zero_grad(set_to_none=True)
-                with torch.amp.autocast("cuda", enabled=use_amp, dtype=self._amp_dtype):
-                    out = model(x)
-                    loss = criterion(out, y)
-                if scaler is not None:
-                    scaler.scale(loss).backward()
-                    if cfg.track_grad_norm:
-                        scaler.unscale_(opt)
-                        try:
-                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
-                            grad_norm = total_sq ** 0.5
-                        except Exception:
-                            pass
-                    scaler.step(opt)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    if cfg.track_grad_norm:
-                        try:
-                            total_sq = sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None)
-                            grad_norm = total_sq ** 0.5
-                        except Exception:
-                            pass
-                    opt.step()
-                loss_buffer = loss.detach()
+                loss_buffer = _train_logical_batch(x, y)
                 step += 1
                 if cfg.smoke_test_mode and step > 1:
                     last_loss = float(loss_buffer.item()) if loss_buffer is not None else 0.0
@@ -919,6 +952,31 @@ class FDSimulator:
             return 0.0
         return float(loss_sum.item() / n_batches)
 
+    def _record_fd_client_signal(self, cid: int, logits: torch.Tensor, round_idx: int) -> None:
+        """Persist selector-visible signals only after logits reach the server."""
+        server_logits = logits.detach().float().to(self.device)
+        with torch.inference_mode():
+            surrogate = F.softmax(server_logits, dim=-1).mean(dim=0).cpu().tolist()
+            public_loss = None
+            labels = self._public_y_cache
+            if labels is not None and labels.numel() == server_logits.size(0):
+                valid = bool(
+                    labels.numel()
+                    and labels.min().item() >= 0
+                    and labels.max().item() < server_logits.size(-1)
+                )
+                if valid:
+                    public_loss = float(
+                        F.cross_entropy(server_logits, labels.long(), reduction="mean").item()
+                    )
+
+        signals = self.history["state"].setdefault("fd_client_signals", {})
+        signals[cid] = {
+            "logit_representation": server_logits.reshape(-1).cpu().contiguous(),
+            "surrogate_histogram": surrogate,
+            "public_loss": public_loss,
+            "last_update_round": int(round_idx),
+        }
     # ------------------------------------------------------------------
     # Main FD training loop (Algorithm 1 / 2)
     # ------------------------------------------------------------------
@@ -933,6 +991,11 @@ class FDSimulator:
             self.setup()
 
         cfg = self.cfg
+
+        if not 0.0 <= float(cfg.dropout_prob) <= 1.0:
+            raise ValueError("dropout_prob must be between 0 and 1")
+        if int(cfg.staleness_window) < 0:
+            raise ValueError("staleness_window must be non-negative")
 
         # --- Guardrail: warn if smoke_test_mode is left on for non-trivial runs ---
         if cfg.smoke_test_mode and cfg.rounds > 20:
@@ -951,7 +1014,8 @@ class FDSimulator:
                 _unwrap_compiled(self.client_models[cid]).load_state_dict(sd)
         if hasattr(self, '_initial_server_state'):
             _unwrap_compiled(self.server_model).load_state_dict(self._initial_server_state)
-        self.history = {"state": {}, "selected": []}
+        self.history = {"state": {}, "selected": [], "responded": [], "delivered": []}
+        stale_buffer: List[Dict[str, Any]] = []
         for c in self.clients:
             c.last_loss = 0.0
             c.grad_norm = 0.0
@@ -1011,10 +1075,19 @@ class FDSimulator:
             )
             selection_time = time.perf_counter() - sel_start
 
+            ids = list(dict.fromkeys(int(cid) for cid in ids))
+            dropout_ids = [
+                cid for cid in ids
+                if random.Random(f"{cfg.seed}:{rnd}:{cid}:fd-dropout").random()
+                < float(cfg.dropout_prob)
+            ]
+            dropout_set = set(dropout_ids)
+            active_ids = [cid for cid in ids if cid not in dropout_set]
             self.history["selected"].append(ids)
+            self.history["responded"].append(active_ids)
             if state:
                 self.history["state"].update(state)
-            for cid in ids:
+            for cid in active_ids:
                 self.clients[cid].last_selected_round = rnd
 
             # Phase 2-4: Per-client distillation + training + inference
@@ -1054,8 +1127,8 @@ class FDSimulator:
 
             # Run clients in parallel batches using CUDA streams
             is_cuda = self.device.startswith("cuda")
-            for batch_start in range(0, len(ids), self._max_parallel):
-                batch_ids = ids[batch_start:batch_start + self._max_parallel]
+            for batch_start in range(0, len(active_ids), self._max_parallel):
+                batch_ids = active_ids[batch_start:batch_start + self._max_parallel]
 
                 if is_cuda and len(batch_ids) > 1:
                     if self._client_streams and len(self._client_streams) >= len(batch_ids):
@@ -1086,23 +1159,23 @@ class FDSimulator:
             logit_entropy_vals = []
             logit_entropy_var_vals = []
             if client_logits and len(client_logits) > 1:
-                all_logit_tensors = [client_logits[cid] for cid in ids]
+                all_logit_tensors = [client_logits[cid] for cid in active_ids]
                 stacked = torch.stack(all_logit_tensors)  # (K, N_pub, C)
                 mean_logits = stacked.mean(dim=0)  # (N_pub, C)
                 # Pairwise cosine distances for diversity
-                flat_vecs = stacked.view(len(ids), -1)  # (K, N_pub*C)
+                flat_vecs = stacked.view(len(active_ids), -1)  # (K, N_pub*C)
                 norms = flat_vecs.norm(dim=1, keepdim=True).clamp(min=1e-8)
                 normed = flat_vecs / norms
                 cos_sim_matrix = normed @ normed.t()  # (K, K)
                 # Mean pairwise cosine distance (1 - sim, excluding diagonal)
-                K_sel = len(ids)
+                K_sel = len(active_ids)
                 if K_sel > 1:
                     mask = 1.0 - torch.eye(K_sel, device=cos_sim_matrix.device)
                     logit_cosine_div = ((1.0 - cos_sim_matrix) * mask).sum().item() / (K_sel * (K_sel - 1))
                 else:
                     logit_cosine_div = 0.0
 
-                for cid in ids:
+                for cid in active_ids:
                     cl = client_logits[cid]
                     # Cosine similarity to mean
                     cos_sim = F.cosine_similarity(
@@ -1120,7 +1193,7 @@ class FDSimulator:
                         "entropy_mean": entropy_mean,
                         "entropy_var": entropy_var,
                     }
-                data_sizes = {cid: self.clients[cid].data_size for cid in ids}
+                data_sizes = {cid: self.clients[cid].data_size for cid in active_ids}
                 total_data = sum(data_sizes.values())
                 self.history["state"]["fd_logit_stats"] = fd_logit_stats
                 self.history["state"]["fd_logit_rewards"] = {
@@ -1130,34 +1203,68 @@ class FDSimulator:
             else:
                 logit_cosine_div = 0.0
 
-            # Phase 5: Server aggregation
+            # Schedule current responses and release entries whose bounded delay expired.
+            deliveries = [entry for entry in stale_buffer if entry["deliver_round"] <= rnd]
+            stale_buffer = [entry for entry in stale_buffer if entry["deliver_round"] > rnd]
+            if active_ids:
+                durations = [float(self.clients[cid].estimated_duration) for cid in active_ids]
+                d_min, d_max = min(durations), max(durations)
+                d_span = d_max - d_min
+                for cid in active_ids:
+                    delay = 0
+                    if cfg.staleness_window > 0 and d_span > 1e-12:
+                        fraction = (float(self.clients[cid].estimated_duration) - d_min) / d_span
+                        delay = int(round(cfg.staleness_window * fraction))
+                    entry = {
+                        "cid": cid,
+                        "origin_round": rnd,
+                        "deliver_round": rnd + delay,
+                        "base_weight": float(self.clients[cid].data_size),
+                        "logits": client_logits[cid],
+                    }
+                    if delay > 0:
+                        entry["logits"] = entry["logits"].detach().cpu()
+                        stale_buffer.append(entry)
+                    else:
+                        deliveries.append(entry)
+
+            delivered_ids = [int(entry["cid"]) for entry in deliveries]
+            self.history["delivered"].append(delivered_ids)
+            for entry in deliveries:
+                self._record_fd_client_signal(
+                    int(entry["cid"]), entry["logits"], int(entry["origin_round"])
+                )
+
+            # Phase 5: staleness-discounted server aggregation.
             t_server_start = time.perf_counter()
-            weights = [float(self.clients[cid].data_size) for cid in ids]
-            logit_list = [client_logits[cid] for cid in ids]
+            logit_list = [entry["logits"].to(self.device) for entry in deliveries]
+            weights = [
+                float(entry["base_weight"]) / (1.0 + max(0, rnd - int(entry["origin_round"])))
+                for entry in deliveries
+            ]
+            server_kl = 0.0
+            if logit_list:
+                if cfg.group_based:
+                    group_labels = [
+                        self.clients[int(entry["cid"])].meta.get("channel_group", "good")
+                        for entry in deliveries
+                    ]
+                    aggregated_logits = logit_avg_grouped(logit_list, weights, group_labels)
+                else:
+                    aggregated_logits = logit_avg(logit_list, weights)
 
-            if cfg.group_based:
-                group_labels = [
-                    self.clients[cid].meta.get("channel_group", "good")
-                    for cid in ids
-                ]
-                aggregated_logits = logit_avg_grouped(logit_list, weights, group_labels)
-            else:
-                aggregated_logits = logit_avg(logit_list, weights)
-
-            # Phase 6: Server-side distillation.
-            # Paper Eq. 18 introduces omega_D ~ N(0, sigma_D^2 * I) as a small-variance
-            # Gaussian perturbation on the server's aggregated logits (representing the
-            # residual distillation uncertainty after aggregation). We model it as an
-            # additive noise term before server distillation. Set cfg.server_distill_sigma
-            # to 0 to disable.
-            server_target = aggregated_logits
-            if self.channel is not None and cfg.server_distill_sigma > 0:
-                server_target = server_target + torch.randn_like(server_target) * cfg.server_distill_sigma
-            # Warmup: extra server-distill epochs in the first few rounds to escape the
-            # near-uniform-logit fixed point that otherwise wastes 20-30 rounds.
-            sd_epochs = (cfg.server_warmup_epochs if rnd < cfg.server_warmup_rounds
-                         else cfg.distillation_epochs)
-            server_kl = self._server_distill(server_target, sd_epochs)
+                server_target = aggregated_logits
+                if self.channel is not None and cfg.server_distill_sigma > 0:
+                    server_target = (
+                        server_target
+                        + torch.randn_like(server_target) * cfg.server_distill_sigma
+                    )
+                sd_epochs = (
+                    cfg.server_warmup_epochs
+                    if rnd < cfg.server_warmup_rounds
+                    else cfg.distillation_epochs
+                )
+                server_kl = self._server_distill(server_target, sd_epochs)
 
             # Server predicts on public dataset → logits for next round's downlink.
             # Chunked by cfg.distillation_batch_size to match _generate_logits and keep
@@ -1205,22 +1312,22 @@ class FDSimulator:
 
             # Phase 7: Evaluation
             compute_time = max(
-                (self.clients[cid].estimated_duration for cid in ids),
+                (self.clients[cid].estimated_duration for cid in active_ids),
                 default=0.0,
             )
 
             # Communication metrics (FD overhead)
-            K_r_current = self._compute_dynamic_steps(rnd, max((self.clients[cid].data_size for cid in ids), default=1))
+            K_r_current = self._compute_dynamic_steps(rnd, max((self.clients[cid].data_size for cid in active_ids), default=1))
             n_pub = len(self.public_ds)
             C = self.num_classes
             quant_bytes = cfg.quantization_bits / 8.0
             # Uplink: K clients send logits; Downlink: server broadcasts logits
-            logit_comm_kb = (len(ids) * n_pub * C * quant_bytes + n_pub * C * quant_bytes) / 1024.0
+            logit_comm_kb = (len(active_ids) * n_pub * C * quant_bytes + n_pub * C * quant_bytes) / 1024.0
             # FL equivalent: 2 * K * model_size_bytes.
             # Paper Fig. 10 reports FL with 16-bit quantization (2 bytes/param), not fp32.
             # Using 4 bytes/param here would inflate FL comm by 2x, overstating FD's savings.
             fl_model_bytes = self.model_params_count * 2.0  # 16-bit quantization per paper Fig. 10
-            fl_equiv_comm_mb = 2.0 * len(ids) * fl_model_bytes / (1024.0 * 1024.0)
+            fl_equiv_comm_mb = 2.0 * len(active_ids) * fl_model_bytes / (1024.0 * 1024.0)
             comm_reduction = logit_comm_kb / 1024.0 / max(fl_equiv_comm_mb, 1e-10)
 
             cum_comm_kb += logit_comm_kb
@@ -1229,7 +1336,7 @@ class FDSimulator:
             eff_noise_var = 0.0
             if self.channel is not None:
                 logit_var = aggregated_logits.var().item() if aggregated_logits is not None else 0.0
-                eff_noise_var = self.channel.effective_noise_variance(len(ids), logit_var)
+                eff_noise_var = self.channel.effective_noise_variance(len(deliveries), logit_var)
 
             # Evaluate client models — skip most rounds for speed
             eval_every = max(1, cfg.eval_every)
@@ -1263,12 +1370,15 @@ class FDSimulator:
             counts = [c.participation_count for c in self.clients]
             mean_p = sum(counts) / max(len(counts), 1)
             fairness_var = sum((p - mean_p) ** 2 for p in counts) / max(len(counts), 1)
-            pairs_sum = sum(abs(counts[i] - counts[j]) for i in range(len(counts)) for j in range(i + 1, len(counts)))
-            fairness_gini = pairs_sum / (len(counts) ** 2 * max(mean_p, 1e-10)) if len(counts) > 0 else 0.0
+            fairness_gini = participation_gini(counts)
+            rolling_window = max(1, math.ceil(cfg.total_clients / max(cfg.clients_per_round, 1)) + 1)
+            rolling_gini = rolling_window_participation_gini(
+                self.history["responded"], cfg.total_clients, rolling_window
+            )
 
             # Good/bad channel counts
-            n_good = sum(1 for cid in ids if self.clients[cid].meta.get("channel_group", "good") == "good")
-            n_bad = len(ids) - n_good
+            n_good = sum(1 for cid in active_ids if self.clients[cid].meta.get("channel_group", "good") == "good")
+            n_bad = len(active_ids) - n_good
 
             t_other = max(0.0, rnd_time - selection_time - t_clients_total - t_server_total - t_eval_total)
 
@@ -1304,9 +1414,17 @@ class FDSimulator:
                 "logit_entropy_var": (sum(logit_entropy_var_vals) / len(logit_entropy_var_vals)) if logit_entropy_var_vals else 0.0,
                 "logit_cosine_diversity": logit_cosine_div,
                 "server_client_gap": m.get("server_accuracy", 0.0) - m.get("accuracy", 0.0),
-                "channel_quality_selected_avg": sum(self.clients[cid].channel_quality for cid in ids) / max(len(ids), 1),
-                "label_coverage_ratio": self._label_coverage_ratio(ids),
+                "channel_quality_selected_avg": sum(self.clients[cid].channel_quality for cid in active_ids) / max(len(active_ids), 1),
+                "label_coverage_ratio": self._label_coverage_ratio(active_ids),
                 "participation_gini": fairness_gini,
+                "rolling_window_gini": rolling_gini,
+                "rolling_window_rounds": rolling_window,
+                "num_selected": len(ids),
+                "num_responded": len(active_ids),
+                "num_dropped": len(dropout_ids),
+                "num_delivered": len(deliveries),
+                "staleness_avg": sum(rnd - int(e["origin_round"]) for e in deliveries) / max(len(deliveries), 1),
+                "stale_buffer_size": len(stale_buffer),
             })
 
             # Composite score (same formula as FL for comparability)
@@ -1339,9 +1457,10 @@ class FDSimulator:
                 on_progress(rnd, {"accuracy": m.get("accuracy", 0.0), "metrics": m})
 
             # Memory management (infrequent — small models don't need aggressive cleanup)
-            if rnd % 50 == 0:
+            if rnd % 50 == 0 or cfg.dropout_prob > 0 or cfg.staleness_window > 0:
                 cleanup_memory(force_cuda_empty=True)
-                if check_memory_critical():
+                memory_critical, _ = check_memory_critical()
+                if memory_critical:
                     self._emergency_cleanup()
 
         # --- Convergence summary ---
@@ -1358,7 +1477,11 @@ class FDSimulator:
             "stopped_early": (is_cancelled() if is_cancelled else False),
             "method": method_key,
             "paradigm": "fd",
-            "history": {"selected": self.history["selected"]},
+            "history": {
+                "selected": self.history["selected"],
+                "responded": self.history["responded"],
+                "delivered": self.history["delivered"],
+            },
             "participation_counts": [c.participation_count for c in self.clients],
             "convergence": convergence,
         }
@@ -1644,6 +1767,7 @@ class FDSimulator:
             "total_improvement": improvement,
             "total_rounds": len(rounds),
         }
+        result.update(rounds_to_absolute_accuracy(metrics))
 
         # Time-to-X% of improvement
         for pct in (0.5, 0.8, 0.9):

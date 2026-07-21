@@ -23,3 +23,6 @@ datasets:
   - name: STL-10
     batch_size: 128
     num_classes: 10
+  - name: FSDD
+    batch_size: 64
+    num_classes: 10
