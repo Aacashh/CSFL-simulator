@@ -11,7 +11,13 @@ def iid_partition(labels: list[int], num_clients: int) -> Dict[int, List[int]]:
     return {i: idxs[i::num_clients].tolist() for i in range(num_clients)}
 
 
-def dirichlet_partition(labels: list[int], num_clients: int, alpha: float = 0.5, num_classes: int | None = None) -> Dict[int, List[int]]:
+def dirichlet_partition(
+    labels: list[int],
+    num_clients: int,
+    alpha: float = 0.5,
+    num_classes: int | None = None,
+    min_samples_per_client: int = 1,
+) -> Dict[int, List[int]]:
     y = np.array(labels)
     if num_classes is None:
         num_classes = int(y.max() + 1)
@@ -25,6 +31,17 @@ def dirichlet_partition(labels: list[int], num_clients: int, alpha: float = 0.5,
         split = np.split(cls_idx[c], cuts)
         for i, part in enumerate(split):
             client_bins[i].extend(part.tolist())
+
+    # At extreme alpha (e.g. 0.01), a client can end up with zero samples
+    # across every class, which crashes DataLoader's RandomSampler downstream.
+    # Guarantee a minimum floor by borrowing from the most over-allocated
+    # client(s) — a no-op for every non-pathological alpha/client-count combo.
+    for i in range(num_clients):
+        while len(client_bins[i]) < min_samples_per_client:
+            donor = max(range(num_clients), key=lambda j: len(client_bins[j]))
+            if donor == i or len(client_bins[donor]) <= min_samples_per_client:
+                break
+            client_bins[i].append(client_bins[donor].pop())
     return client_bins
 
 

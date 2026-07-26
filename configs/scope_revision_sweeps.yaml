@@ -206,3 +206,26 @@ families:
       total_clients: 30
       clients_per_round: 5
     seeds: [11, 22, 33, 44, 55]
+
+  # The base audio_fsdd family only tests one fixed K=5 config, so it answers
+  # "does SCOPE beat literature baselines outside images" but not "does the
+  # sparse-participation speedup (the paper's strongest FMNIST result) also
+  # generalize outside images." This closes that gap specifically.
+  audio_fsdd_k_sweep:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      clients_per_round: [1, 3, 5, 10]
+    base:
+      dataset: FSDD
+      model: AudioCNN
+      model_heterogeneous: false
+      model_pool: ""
+      public_dataset: same
+      public_dataset_size: 300
+      batch_size: 32
+      distillation_batch_size: 150
+      total_clients: 30
+    seeds: [11, 22, 33]
