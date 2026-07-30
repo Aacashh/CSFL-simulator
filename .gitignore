@@ -64,7 +64,8 @@ nosetests.xml
 # Project artifacts & data
 ###############################
 artifacts/
-runs_scope_revised/
+runs_scope_revised*/
+runs/runs_scope_revised*/
 data/
 !data/.gitkeep
 

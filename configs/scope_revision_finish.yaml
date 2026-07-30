@@ -1,0 +1,226 @@
+# =============================================================================
+# SCOPE-FD revision — FINISH-LINE spec (time-boxed to ~2 days of GPU).
+#
+# This is a deliberately pruned subset of configs/scope_revision_sweeps.yaml,
+# containing ONLY the work still outstanding after the 227/429 runs already
+# completed in runs_scope_revised/. Every cut below is justified by measured
+# data from those completed runs, not guesswork:
+#
+#   * 5 seeds -> 3 seeds.  Measured across 72 completed method/config cells:
+#     mean |mean(3 seeds) - mean(5 seeds)| = 0.27 pp (max 1.37 pp), and across
+#     53 paired SCOPE-vs-baseline comparisons only 3 changed sign when using 3
+#     seeds instead of 5 -- all 3 at effect sizes <= 0.14 pp, i.e. cells the
+#     paper already reports as "statistically tied". Every substantive gap
+#     (DivFL +1.3pp, SubTrunc +1.8pp, Oort +50pp) is unchanged. 95% CI
+#     half-width widens from 0.0074 to 0.0101, still far below those gaps.
+#     Families ALREADY finished keep their 5 seeds; report n per row.
+#
+#   * Baseline/zero cells dropped where an existing completed run already is
+#     that cell (dropout_prob=0, staleness_window=0, public "same/2000/0.0").
+#
+#   * public_dataset_sensitivity: full 4x3x3 Cartesian grid (108 jobs) replaced
+#     by a one-factor-at-a-time design (7 jobs). R3 asks how sensitive
+#     performance is to public-set "quality or distribution" -- OFAT answers
+#     that; the interaction terms in the full grid were never asked for.
+#
+#   * scale_and_nondivisible: only N=500,K=25 added. N in {47,50,53,100,200}
+#     with K/N at 5/10/20% is already complete at 5 seeds, which answers R1's
+#     "scale too small". The other two N=500 cells (K=50, K=100) were measured
+#     to cost ~67 GPU-hours between them -- more than the entire remaining
+#     budget -- for a third and fourth point on a curve that already has ten.
+#
+#   * dirichlet alpha=0.05 NOT rerun: 3 of its 5 seeds already completed, which
+#     meets the 3-seed bar above. Only alpha=0.01 (0 of 5 completed, all killed
+#     by the zero-sample-client bug now fixed) is rerun.
+#
+# NOT INCLUDED because it needs no GPU time: the Attached Review's request for
+# "different values of R" is answerable post-hoc -- every completed run stores
+# all 101 per-round rows including fairness_gini and rolling_window_gini, so
+# R in {25,50,75,100} is a slice of data already on disk.
+#
+# Family names and (where runs already exist) method lists are kept IDENTICAL
+# to scope_revision_sweeps.yaml so run-directory hashes line up and the
+# aggregator groups old and new results together.
+# =============================================================================
+defaults:
+  paradigm: fd
+  dataset: Fashion-MNIST
+  partition: dirichlet
+  dirichlet_alpha: 0.5
+  total_clients: 30
+  clients_per_round: 5
+  rounds: 100
+  local_epochs: 1
+  batch_size: 64
+  lr: 0.001
+  model: FD-CNN2
+  model_heterogeneous: true
+  model_pool: FD-CNN1,FD-CNN2,FD-CNN3
+  public_dataset: same
+  public_dataset_size: 2000
+  distillation_epochs: 2
+  distillation_batch_size: 500
+  eval_every: 5
+  use_amp: true
+  performance_mode: true
+  parallel_clients: -1
+  num_workers: 4
+
+families:
+
+  # ---- TIER 1 -------------------------------------------------------------
+  # Cheap, and each closes a reviewer question that currently has ZERO data.
+
+  # R3 "more severe non-IID"; R1 "only a single Dirichlet alpha".
+  # alpha=0.01 is the one severity point with no usable result -- all 5 seeds
+  # died on the zero-sample-client partition bug (fixed in ad2aea7).
+  # Methods list kept byte-identical to the original family so the 3 reruns
+  # land in the same run dirs as the failed attempts.
+  dirichlet_severity:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    axes:
+      dirichlet_alpha: [0.01]
+    seeds: [11, 22, 33]
+
+  # R2.2: "either evaluate the Laplace-noise or server-side surrogate variants
+  # mentioned in Section IV-D, or narrow the privacy-related claims."
+  # All 5 epsilon points kept -- they are one job, and a 5-point privacy/utility
+  # curve is far more convincing than a 3-point one.
+  histogram_privacy:
+    methods:
+      - fd_native.scope_fd
+      - fd_native.scope_fd_hist_dp_eps0_1
+      - fd_native.scope_fd_hist_dp_eps0_5
+      - fd_native.scope_fd_hist_dp_eps1
+      - fd_native.scope_fd_hist_dp_eps2
+      - fd_native.scope_fd_hist_dp_eps5
+      - fd_native.scope_fd_surrogate_hist
+    seeds: [11, 22, 33]
+
+  # R2.5: "either add channel/energy-aware experiments or clearly position
+  # SCOPE-FD as a fairness/data-coverage selector."
+  channel_energy:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.scope_fd_channel_aware
+    base:
+      channel_noise: true
+      energy_budget: 8000
+    axes:
+      dl_snr_db: [-30, -20, -10]
+    seeds: [11, 22, 33]
+
+  # R3: "client dropout scenarios". p_drop=0.0 omitted -- that is exactly the
+  # ablation_headline config, already complete at 5 seeds.
+  dropout:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      dropout_prob: [0.1, 0.2, 0.3]
+    seeds: [11, 22, 33]
+
+  # R3: "asynchronous federated learning". staleness_window=0 omitted -- that
+  # is the synchronous headline config, already complete at 5 seeds.
+  bounded_staleness:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      staleness_window: [1, 2]
+    seeds: [11, 22, 33]
+
+  # R1: "applicability of the proposed method to domains other than images is
+  # questionable" -- the only non-image evidence in the whole campaign.
+  audio_fsdd:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    base:
+      dataset: FSDD
+      model: AudioCNN
+      model_heterogeneous: false
+      model_pool: ""
+      public_dataset: same
+      public_dataset_size: 300
+      batch_size: 32
+      distillation_batch_size: 150
+      total_clients: 30
+      clients_per_round: 5
+    seeds: [11, 22, 33]
+
+  # ---- TIER 2 -------------------------------------------------------------
+  # Directly requested, but expensive; scheduled after every question has data.
+
+  # R3: "how sensitive is its performance to the quality or distribution of
+  # that public dataset?" One-factor-at-a-time around the default
+  # (same / 2000 / no noise), which is already covered by literature_baselines
+  # at 5 seeds using this same method set -- so it is not repeated here.
+  # 7 cells instead of the original 108-cell full factorial.
+  public_dataset_sensitivity:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    base:
+      public_dataset: same
+      public_dataset_size: 2000
+      public_label_noise: 0.0
+    cases:
+      - {public_dataset: MNIST}        # distribution shift
+      - {public_dataset: EMNIST}       # distribution shift
+      - {public_dataset: CIFAR-10}     # deliberate domain mismatch
+      - {public_dataset_size: 500}     # size sensitivity
+      - {public_dataset_size: 100}     # size sensitivity (extreme)
+      - {public_label_noise: 0.1}      # quality sensitivity
+      - {public_label_noise: 0.3}      # quality sensitivity (extreme)
+    seeds: [11, 22, 33]
+
+  # R1: "Experiment scale is too small to represent Massive-MIMO systems."
+  # Adds the N=500 headline point at the 5% participation ratio. Method list
+  # and eval_every kept identical to the completed cells so all N values
+  # aggregate into one scaling table.
+  scale_and_nondivisible:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    base:
+      eval_every: 20
+    cases:
+      - {total_clients: 500, clients_per_round: 25}
+    seeds: [11, 22, 33]
+
+  # ---- TIER 3 (optional) --------------------------------------------------
+  # Not a direct reviewer ask. Tests whether the sparse-participation result
+  # (the paper's strongest claim) also holds off-image. Runs last; safe to skip.
+  audio_fsdd_k_sweep:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+    axes:
+      clients_per_round: [1, 5]
+    base:
+      dataset: FSDD
+      model: AudioCNN
+      model_heterogeneous: false
+      model_pool: ""
+      public_dataset: same
+      public_dataset_size: 300
+      batch_size: 32
+      distillation_batch_size: 150
+      total_clients: 30
+    seeds: [11, 22, 33]
