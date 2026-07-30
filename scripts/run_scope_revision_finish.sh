@@ -20,12 +20,14 @@
 #     5. bounded_staleness   w in 1,2       R3        async              ~3.6h
 #     6. audio_fsdd                         R1        non-image domain   ~3.0h
 #
-#   TIER 2  (~20h)  requested, but expensive
-#     7. public_dataset_sensitivity (OFAT)  R3        public-set robust ~12.6h
-#     8. scale_and_nondivisible N=500,K=25  R1        mMIMO scale        ~7.1h
+#   TIER 2  (~26h)  requested, but expensive
+#     7. dataset_generality  MNIST,EMNIST   R1.3/R2.4 multi-seed CIs     ~6.1h
+#     8. public_dataset_sensitivity (OFAT)  R3        public-set robust ~12.6h
+#     9. scale_and_nondivisible N=500,K=25  R1        mMIMO scale        ~7.1h
 #
-#   TIER 3  (~2.6h) optional strengthener, not a direct reviewer ask
-#     9. audio_fsdd_k_sweep                 sparse-K result off-image
+#   TIER 3  (~13h) optional
+#    10. audio_fsdd_k_sweep                 sparse-K result off-image    ~2.6h
+#    11. cifar10_multiseed                  CIFAR tie with error bars     ~10h
 #
 # Estimates come from measured per-method cost on the completed runs
 # (~14.7 min/method-run median, scaling roughly as 3.5 + 1.75*K minutes).
@@ -73,8 +75,8 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/finish_$(date +%Y%m%d_%H%M%S).log"
 
 TIER1=(dirichlet_severity histogram_privacy channel_energy dropout bounded_staleness audio_fsdd)
-TIER2=(public_dataset_sensitivity scale_and_nondivisible)
-TIER3=(audio_fsdd_k_sweep)
+TIER2=(dataset_generality public_dataset_sensitivity scale_and_nondivisible)
+TIER3=(audio_fsdd_k_sweep cifar10_multiseed)
 
 FAMILIES=("${TIER1[@]}")
 [[ $MAX_TIER -ge 2 ]] && FAMILIES+=("${TIER2[@]}")

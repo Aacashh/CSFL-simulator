@@ -164,6 +164,27 @@ families:
   # ---- TIER 2 -------------------------------------------------------------
   # Directly requested, but expensive; scheduled after every question has data.
 
+  # R2.4 "The experiments use a single reported seed and do not show confidence
+  # intervals"; R1.3 "useful to show confidence intervals on the graphs";
+  # R1.2 "only two datasets ... with very similar characteristics".
+  #
+  # WHY THIS EXISTS: the rest of the revision campaign runs Fashion-MNIST only.
+  # Without this family the revision would present FMNIST with multi-seed CIs
+  # while the paper's MNIST and EMNIST tables stayed single-seed -- i.e. R2.4's
+  # complaint would be answered for one dataset and left standing for the
+  # others. MNIST/EMNIST share FMNIST's (1,28) input spec and FD-CNN pool, so
+  # they cost the same ~12 min/method as the already-measured FMNIST runs.
+  dataset_generality:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    axes:
+      dataset: [MNIST, EMNIST]
+    seeds: [11, 22, 33]
+
   # R3: "how sensitive is its performance to the quality or distribution of
   # that public dataset?" One-factor-at-a-time around the default
   # (same / 2000 / no noise), which is already covered by literature_baselines
@@ -204,6 +225,31 @@ families:
     seeds: [11, 22, 33]
 
   # ---- TIER 3 (optional) --------------------------------------------------
+
+  # CIFAR-10 with error bars. The paper currently reports CIFAR-10 as
+  # "informational" off a single seed, where SCOPE ties random. Under R2.4 a
+  # single-seed table sitting beside multi-seed ones is a soft target, and a
+  # tie reported WITH a confidence interval is a stronger, more honest claim
+  # than a bare single-seed tie. Run at the clean headline config (not the
+  # original's DL=-20 dB) so it slots into one apples-to-apples cross-dataset
+  # table with FMNIST/MNIST/EMNIST. Public set is STL-10, matching the paper.
+  # Expensive (ResNet/MobileNet/ShuffleNet pool) -- skip if time is short and
+  # instead label the existing CIFAR-10 result explicitly single-seed.
+  cifar10_multiseed:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd_debt_only
+      - fd_native.scope_fd
+      - fd_native.divfl_fd
+      - fd_native.subtrunc_fd
+    base:
+      dataset: CIFAR-10
+      public_dataset: STL-10
+      model: ResNet18-FD
+      model_heterogeneous: true
+      model_pool: ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD
+    seeds: [11, 22, 33]
+
   # Not a direct reviewer ask. Tests whether the sparse-participation result
   # (the paper's strongest claim) also holds off-image. Runs last; safe to skip.
   audio_fsdd_k_sweep:
