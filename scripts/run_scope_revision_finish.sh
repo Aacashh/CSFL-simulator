@@ -20,14 +20,14 @@
 #     5. bounded_staleness   w in 1,2       R3        async              ~3.6h
 #     6. audio_fsdd                         R1        non-image domain   ~3.0h
 #
-#   TIER 2  (~26h)  requested, but expensive
+#   TIER 2  (~36h)  requested, but expensive
 #     7. dataset_generality  MNIST,EMNIST   R1.3/R2.4 multi-seed CIs     ~6.1h
-#     8. public_dataset_sensitivity (OFAT)  R3        public-set robust ~12.6h
-#     9. scale_and_nondivisible N=500,K=25  R1        mMIMO scale        ~7.1h
+#     8. cifar10_multiseed                  R2.4      CIFAR + error bars  ~10h
+#     9. public_dataset_sensitivity (OFAT)  R3        public-set robust ~12.6h
+#    10. scale_and_nondivisible N=500,K=25  R1        mMIMO scale        ~7.1h
 #
-#   TIER 3  (~13h) optional
-#    10. audio_fsdd_k_sweep                 sparse-K result off-image    ~2.6h
-#    11. cifar10_multiseed                  CIFAR tie with error bars     ~10h
+#   TIER 3  (~2.6h) optional strengthener, not a direct reviewer ask
+#    11. audio_fsdd_k_sweep                 sparse-K result off-image
 #
 # Estimates come from measured per-method cost on the completed runs
 # (~14.7 min/method-run median, scaling roughly as 3.5 + 1.75*K minutes).
@@ -75,8 +75,8 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/finish_$(date +%Y%m%d_%H%M%S).log"
 
 TIER1=(dirichlet_severity histogram_privacy channel_energy dropout bounded_staleness audio_fsdd)
-TIER2=(dataset_generality public_dataset_sensitivity scale_and_nondivisible)
-TIER3=(audio_fsdd_k_sweep cifar10_multiseed)
+TIER2=(dataset_generality cifar10_multiseed public_dataset_sensitivity scale_and_nondivisible)
+TIER3=(audio_fsdd_k_sweep)
 
 FAMILIES=("${TIER1[@]}")
 [[ $MAX_TIER -ge 2 ]] && FAMILIES+=("${TIER2[@]}")
@@ -113,6 +113,27 @@ fi
 if [[ "$SKIP_TESTS" == false ]]; then
     echo "[gate] Running unit tests ..."
     python3 -m pytest tests/test_scope_revision.py -q
+    echo
+
+    # audio_fsdd has never completed a run, and it is the only non-image
+    # evidence in the campaign (R1). Validate the dataset up front -- a broken
+    # download should surface now, not ~28h in when its slot comes up.
+    # Non-fatal: every other family is independent of FSDD.
+    echo "[gate] Verifying FSDD audio dataset (downloads on first use) ..."
+    if python3 - <<'PY'
+from csfl_simulator.core.datasets import get_dataset
+tr = get_dataset("FSDD", train=True, download=True)
+te = get_dataset("FSDD", train=False, download=True)
+x, y = tr[0]
+assert tuple(x.shape) == (1, 64, 64), f"unexpected shape {tuple(x.shape)}"
+print(f"  FSDD OK — train={len(tr)} test={len(te)} shape={tuple(x.shape)}")
+PY
+    then :; else
+        echo
+        echo "  !! FSDD VERIFICATION FAILED — audio_fsdd / audio_fsdd_k_sweep will fail."
+        echo "  !! Every other family is unaffected and will still run."
+        echo
+    fi
     echo
 fi
 
