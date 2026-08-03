@@ -2,7 +2,8 @@
 # =============================================================================
 # Pre-fetch the datasets the SCOPE-FD revision campaign needs.
 #
-#   bash scripts/fetch_datasets.sh
+#   bash scripts/fetch_datasets.sh              fetch, verify, then launch the campaign
+#   bash scripts/fetch_datasets.sh --no-run      fetch and verify only
 #
 # WHY THIS EXISTS
 # Twelve runs in the previous campaign died with
@@ -24,6 +25,15 @@
 #   FSDD       ~10 MB    audio, fetched through the simulator's own loader
 # =============================================================================
 set -uo pipefail
+
+RUN_AFTER=true
+for a in "$@"; do
+    case "$a" in
+        --no-run) RUN_AFTER=false ;;
+        -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+        *) echo "Unknown arg: $a"; exit 1 ;;
+    esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA="${REPO_ROOT}/data"
@@ -138,17 +148,84 @@ PY
 VERIFY=$?
 
 hr
-if [[ ${#FAILED[@]} -eq 0 && $VERIFY -eq 0 ]]; then
-    echo "All datasets present. The campaign can be launched:"
-    echo "    nohup bash run_scope_revision.sh > finish.log 2>&1 &"
-else
+if [[ ${#FAILED[@]} -ne 0 || $VERIFY -ne 0 ]]; then
     [[ ${#FAILED[@]} -gt 0 ]] && echo "Download problems: ${FAILED[*]}"
     [[ $VERIFY -ne 0 ]] && echo "At least one dataset does not load with download=False."
     echo
-    echo "If a mirror is blocked from this network, fetch the archive on another"
-    echo "machine and copy it in, then re-run this script to extract and verify:"
+    echo "The campaign was NOT started. If a mirror is blocked from this network,"
+    echo "fetch the archive on another machine, copy it to the path below, then"
+    echo "re-run this script to verify and extract:"
     echo "    CIFAR-10  -> ${DATA}/cifar-10-python.tar.gz"
     echo "    STL-10    -> ${DATA}/stl10_binary.tar.gz"
     echo "    EMNIST    -> ${DATA}/EMNIST/raw/gzip.zip"
     exit 1
 fi
+
+echo "All datasets present and loadable."
+
+if [[ "$RUN_AFTER" != true ]]; then
+    echo "Launch the campaign when ready:"
+    echo "    nohup bash run_scope_revision.sh > finish.log 2>&1 &"
+    exit 0
+fi
+
+# Refuse to start a second campaign on the same GPU and the same output tree.
+# The previous attempt left several background jobs behind, and two runs writing
+# the same directories would contend for the GPU and interleave their results.
+EXISTING="$(pgrep -f "bash run_scope_revision.sh" || true)"
+if [[ -n "$EXISTING" ]]; then
+    echo
+    echo "!! A campaign already appears to be running (PID: $(echo $EXISTING | tr '\n' ' '))."
+    echo "   Not starting another one. Inspect it with:"
+    echo "       tail -f ${REPO_ROOT}/finish.log"
+    echo "   Or stop it and re-run this script:"
+    echo "       kill $(echo $EXISTING | tr '\n' ' ')"
+    exit 1
+fi
+
+hr
+LOGFILE="${REPO_ROOT}/finish.log"
+echo "Starting the campaign, detached, logging to ${LOGFILE}"
+cd "$REPO_ROOT"
+nohup bash run_scope_revision.sh > "$LOGFILE" 2>&1 &
+CAMPAIGN_PID=$!
+echo "  PID ${CAMPAIGN_PID}"
+echo
+
+# Give the pre-flight gate time to run so a failure is visible before we exit,
+# rather than the user discovering it hours later.
+# The runner pipes its job loop through tee, which block-buffers off a terminal,
+# so the first job line can lag. The gate's own output is unbuffered, so treat
+# either signal as "we got past the part that fails".
+echo "Waiting for the pre-flight gate ..."
+STARTED=false
+for _ in $(seq 1 36); do
+    sleep 5
+    if grep -qE "^\[[0-9]+/[0-9]+\]|FSDD OK" "$LOGFILE" 2>/dev/null; then
+        STARTED=true
+        echo "  gate passed"
+        break
+    fi
+    if ! kill -0 "$CAMPAIGN_PID" 2>/dev/null; then
+        echo "  !! the campaign exited during the gate. Log follows:"
+        hr; tail -30 "$LOGFILE"; hr
+        exit 1
+    fi
+done
+if [[ "$STARTED" != true ]]; then
+    if kill -0 "$CAMPAIGN_PID" 2>/dev/null; then
+        echo "  no gate marker yet, but the process is alive. Continuing."
+    else
+        echo "  !! the campaign is no longer running. Log follows:"
+        hr; tail -30 "$LOGFILE"; hr
+        exit 1
+    fi
+fi
+
+hr
+tail -25 "$LOGFILE"
+hr
+echo "Campaign running as PID ${CAMPAIGN_PID}. It survives this terminal closing."
+echo "  follow it   :  tail -f ${LOGFILE}"
+echo "  count done  :  grep -c '>>> ok' ${LOGFILE}"
+echo "  stop it     :  kill ${CAMPAIGN_PID}"
