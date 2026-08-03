@@ -4,8 +4,15 @@
 #
 #   bash run_scope_revision.sh
 #
-# Completes the revision campaign left at 227/429 runs. 72 jobs, ~66 GPU-hours.
-# Everything is inline here: no YAML, no orchestrator, one file.
+# Completes the revision campaign. Everything is inline here: no YAML, no
+# orchestrator, one file. Finished work is skipped, so on a machine that already
+# holds the 278 completed runs only ~20 jobs actually execute.
+#
+# IF DATASET DOWNLOADS FAIL WITH CERTIFICATE_VERIFY_FAILED (this cost 12 runs
+# in the previous campaign), fix the trust store before launching:
+#     pip install -U certifi
+#     export SSL_CERT_FILE=$(python3 -c "import certifi; print(certifi.where())")
+#     export REQUESTS_CA_BUNDLE=$SSL_CERT_FILE
 #
 # RESUMABLE. Finished jobs are detected and skipped, so if this is interrupted
 # just run the exact same command again.
@@ -28,9 +35,22 @@
 #    R3 asked about sensitivity to public-set quality/distribution; the
 #    interaction terms were never requested and cost ~74h.
 #
-#  * scale: only N=500,K=25 added. N in {47,50,53,100,200} at 5/10/20%
-#    participation is already complete at 5 seeds. The other two N=500 cells
-#    measured at ~67h combined for points 11 and 12 on a 10-point curve.
+#  * scale: N=500 dropped entirely. N in {47,50,53,100,200} at 5/10/20%
+#    participation is already complete at 5 seeds, which is ten points on the
+#    scaling curve; N=500 measured at tens of GPU-hours per cell.
+#
+#  * public-set sweep: the EMNIST public cell was dropped as redundant with the
+#    MNIST public cell (both are 28x28 grayscale digit-like sets). The CIFAR-10
+#    public cell is kept because it is the only genuine domain mismatch.
+#    Note that public LABEL noise is provably inert here: FD distills on public
+#    logits and never reads public labels, so the noise cells returned values
+#    identical to the baseline. They are reported once as a structural null.
+#
+#  * audio strengthened. The first attempt used 3 seeds, one cohort size and one
+#    local epoch, and was still climbing at round 100 at ~44%. It now runs 5
+#    seeds at K=5 plus a sparse sweep at K in {1,3}, with three local epochs to
+#    offset FSDD's ~90 samples per client, and a 150-sample public set so the
+#    distillation set is not the entire held-out split.
 #
 #  * Dirichlet alpha=0.05 not rerun (3 of 5 seeds already complete). Only
 #    alpha=0.01 is rerun -- all 5 seeds died on a zero-sample-client
@@ -65,6 +85,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 OUT="runs_scope_revised"
 SEEDS="11 22 33"
+SEEDS_AUDIO="11 22 33 44 55"   # audio is the only non-image evidence, so 5 seeds
 REF_METHOD="fd_native.scope_fd"
 MAX_TIER=3
 DRY_RUN=false
@@ -103,7 +124,14 @@ COMMON="--paradigm fd --partition dirichlet --dirichlet-alpha 0.5 \
 
 P_IMG="--dataset Fashion-MNIST --model FD-CNN2 --model-heterogeneous --model-pool FD-CNN1,FD-CNN2,FD-CNN3"
 # no --model-heterogeneous for audio: the FSDD study uses one homogeneous model
-P_AUDIO="--dataset FSDD --model AudioCNN --public-dataset-size 300 --batch-size 32 --distillation-batch-size 150"
+# FSDD is small: ~2700 train samples over 30 clients is ~90 samples each, roughly
+# twenty times less per client than FMNIST. At one local epoch that is three
+# mini-batches per round, which left the earlier audio run still climbing at
+# round 100 and only reaching ~44%. Three local epochs restores a comparable
+# amount of local learning per round. The public set is also cut from 300 to
+# 150 because FSDD's held-out split is only 300 samples, so 300 would make the
+# distillation set identical to the evaluation set.
+P_AUDIO="--dataset FSDD --model AudioCNN --public-dataset-size 150 --batch-size 32 --distillation-batch-size 150 --local-epochs 3"
 P_CIFAR="--dataset CIFAR-10 --public-dataset STL-10 --model ResNet18-FD --model-heterogeneous --model-pool ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 
 # ---- build the job list ---------------------------------------------------
@@ -120,7 +148,7 @@ for p in 0.1 0.2 0.3; do for s in $SEEDS; do
     add dropout "p${p}_s$s" "$M3" "$P_IMG --dropout-prob $p --seed $s"; done; done                                        # R3.5
 for w in 1 2; do for s in $SEEDS; do
     add bounded_staleness "w${w}_s$s" "$M3" "$P_IMG --staleness-window $w --seed $s"; done; done                          # R3.5
-for s in $SEEDS; do add audio_fsdd "s$s" "$M5" "$P_AUDIO --seed $s"; done                                                 # R1.2
+for s in $SEEDS_AUDIO; do add audio_fsdd "le3_s$s" "$M5" "$P_AUDIO --seed $s"; done                                       # R1.2
 T1=${#JOBS[@]}
 
 # TIER 2 — requested, expensive (~36h)
@@ -129,21 +157,17 @@ for d in MNIST EMNIST; do for s in $SEEDS; do
 for s in $SEEDS; do add cifar10_multiseed "s$s" "$M5" "$P_CIFAR --seed $s"; done                                          # R2.4
 for s in $SEEDS; do                                                                                                       # R3.6
     add public_dataset_sensitivity "pub-MNIST_s$s"   "$M3" "$P_IMG --public-dataset MNIST --seed $s"
-    add public_dataset_sensitivity "pub-EMNIST_s$s"  "$M3" "$P_IMG --public-dataset EMNIST --seed $s"
     add public_dataset_sensitivity "pub-CIFAR10_s$s" "$M3" "$P_IMG --public-dataset CIFAR-10 --seed $s"
     add public_dataset_sensitivity "size500_s$s"     "$M3" "$P_IMG --public-dataset-size 500 --seed $s"
     add public_dataset_sensitivity "size100_s$s"     "$M3" "$P_IMG --public-dataset-size 100 --seed $s"
     add public_dataset_sensitivity "noise0.1_s$s"    "$M3" "$P_IMG --public-label-noise 0.1 --seed $s"
     add public_dataset_sensitivity "noise0.3_s$s"    "$M3" "$P_IMG --public-label-noise 0.3 --seed $s"
 done
-for s in $SEEDS; do
-    add scale_and_nondivisible "N500_K25_s$s" "$M3" "$P_IMG --total-clients 500 --clients-per-round 25 --eval-every 20 --seed $s"
-done                                                                                                                      # R1.7
 T2=${#JOBS[@]}
 
 # TIER 3 — optional strengthener, not a direct reviewer ask (~2.6h)
-for k in 1 5; do for s in $SEEDS; do
-    add audio_fsdd_k_sweep "K${k}_s$s" "$M3" "$P_AUDIO --clients-per-round $k --seed $s"; done; done
+for k in 1 3; do for s in $SEEDS; do
+    add audio_fsdd_k_sweep "le3_K${k}_s$s" "$M3" "$P_AUDIO --clients-per-round $k --seed $s"; done; done
 T3=${#JOBS[@]}
 
 case $MAX_TIER in 1) N_JOBS=$T1 ;; 2) N_JOBS=$T2 ;; *) N_JOBS=$T3 ;; esac
@@ -186,6 +210,23 @@ if [[ "$SKIP_TESTS" == false && "$DRY_RUN" == false ]]; then
     # audio_fsdd has never completed a run and is the only non-image evidence
     # for R1. Surface a broken download now, not ~28h in. Non-fatal: nothing
     # else depends on FSDD.
+    # Twelve runs failed last campaign with CERTIFICATE_VERIFY_FAILED while
+    # fetching CIFAR-10, STL-10 and EMNIST. Fail loudly here instead of ~20h in.
+    echo "[gate] datasets that require a download ..."
+    python3 - <<'PYEOF' || echo "  !! DATASET DOWNLOAD FAILED — see the SSL note in the header."
+import ssl, sys
+from csfl_simulator.core.datasets import get_dataset
+missing = []
+for d in ("CIFAR-10", "STL-10", "EMNIST"):
+    try:
+        get_dataset(d, train=True, download=True)
+        print(f"  {d} OK")
+    except Exception as e:
+        missing.append(d)
+        print(f"  {d} FAILED: {type(e).__name__}: {str(e)[:110]}")
+sys.exit(1 if missing else 0)
+PYEOF
+
     echo "[gate] FSDD dataset (downloads on first use) ..."
     python3 - <<'PY' || echo "  !! FSDD FAILED — audio families will fail; all others unaffected."
 from csfl_simulator.core.datasets import get_dataset
