@@ -126,3 +126,6 @@ docs\FD_experiment_analysis.md
 docs\FD_experiment_analysis.pdf
 docs\FD_novel_methods_and_experiments.md
 docs\_analysis_pdf_header.tex
+
+# Run-output snapshots copied back from the HPC (large, regenerable)
+csfl_simulator/Paper Corrections/Runs_*/

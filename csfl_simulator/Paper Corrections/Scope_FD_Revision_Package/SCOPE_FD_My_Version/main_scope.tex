@@ -1,0 +1,487 @@
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{balance}
+\usepackage{hyperref}
+\usepackage{bm}
+\usepackage{epstopdf}
+\usepackage[caption=false,font=footnotesize]{subfig}
+\usepackage{tikz}
+\usepackage{cite}
+
+% Revision marker: wrap text added or rewritten in this revision in \new{...}
+% to display in blue for the prof's review pass. Remove the macro body
+% (replace with just \def\new#1{#1}) to switch off the highlighting.
+\newcommand{\new}[1]{#1}
+% Section IV-E rewrite marker (2026-05-03). Removable: replace body with #1.
+\newcommand{\revIVE}[1]{#1}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,fit,backgrounds,calc}
+
+
+\begin{document}
+
+\title{SCOPE-FD: A Client Selection Method in Federated Distillation For Massive-MIMO Systems}
+
+\author{
+% Authors to be added
+}
+
+\maketitle
+
+\begin{abstract}
+\revIVE{Federated Distillation (FD) over massive Multi-Input Multi-Output (mMIMO) networks exchanges per-sample logits on a public dataset rather than model parameters, but energy and contention budgets allow the base station to admit only $K \ll N$ clients per round. Existing FD-over-mMIMO frameworks (e.g., FedTSKD) assume full participation, and wireless Federated Learning (FL) selectors do not transfer cleanly because FD's logit-averaging aggregation flattens the gradient-based utility signals they rely on. Uniform random selection, the standing baseline, produces a structurally unfair participation pattern that worsens as $K/N$ shrinks, and no deterministic, fairness-guaranteed FD-over-mMIMO selector has been proposed. This paper introduces Server-aware Coverage with Over-round Participation Equalization (SCOPE)-FD, a deterministic three-term selector combining a participation-debt rotation, a server under-prediction bonus, and a class-coverage penalty, with fixed non-negative coefficients. SCOPE-FD provably drives the participation Gini coefficient to zero over every $N/K$-round window when $K \mid N$, with an $\mathcal{O}(1/R)$ bound otherwise, and inherits FedTSKD's $\mathcal{O}(1/t)$ convergence bound. On Fashion-MNIST and MNIST under Dirichlet non-IID partitions, it matches uniform random's final-round accuracy at $K \ge 5$, converges $3\times$ faster at $K/N = 10\%$, and gains $9.4$ percentage points at $K = 1$; the $K/N = 10\%$ speed-up holds across a $30$-dB downlink-SNR sweep. The findings show that participation fairness and predictive accuracy are compatible objectives in FD client selection, and that an analytically-fixed score can substitute grid-tuned heuristics and fairness-constrained scheduling. }
+
+%The framework applies to healthcare-wearable, vehicular-sensing, and Internet-of-Things deployments where equitable participation and tight communication budgets are operational requirements.}
+\end{abstract}
+
+\begin{IEEEkeywords}
+Federated distillation, client selection, massive MIMO, participation fairness, knowledge distillation, communication efficiency.
+\end{IEEEkeywords}
+
+{\renewcommand{\abstractname}{Impact Statement}
+\begin{abstract}
+FD lets edge devices collaborate on a shared machine-learning model by exchanging only low-dimensional output logits, rather than raw data or model weights, over the wireless link. In real deployments only a small subset of devices is served per round, and selecting that subset uniformly at random leaves some clients under-utilized while others are picked four to fifteen times more often. The algorithm proposed in this paper rotates clients by a participation debt while preferring those whose data covers under-represented classes, guaranteeing equitable selection over short windows of rounds. On standard benchmarks, it removes the participation imbalance entirely, matches the random baseline at moderate sparsity, and converges three times faster at the practical ten-percent participation level, with both advantages holding across a 30-dB downlink-channel sweep. The algorithm is directly applicable to healthcare-wearable, vehicular-sensing, and Internet-of-Things deployments where equitable device participation and constrained communication budgets are operational requirements.
+\end{abstract}}
+\vspace{-1em}
+\section{Introduction}
+\label{sec:introduction}
+\IEEEPARstart{B}{EING} recognized as a promising distributed learning algorithm, Federated Learning (FL) \cite{borazjani2026redefining} is able to decouple the processes of data acquisition and computation. Such privacy-preserving nature has been investigated and analyzed in existing literature \cite{tamboli2026p, lim2020federated, huang2024survey,lu2024noniid}. In FL, a set of clients trains a shared model collaboratively under the coordination of a central server, where in each communication round the selected clients perform local training on their private datasets and upload the updated model parameters to the server for aggregation. The communication of full model weights, however, does not scale to modern model architectures over resource-constrained wireless edges, particularly when the underlying connectivity has to be shared across a large number of devices. To overcome this limitation, the Federated Distillation (FD) paradigm \cite{xing2022efficient} has been proposed, where each client uploads its output logits, computed on a shared public dataset rather than its model parameters \cite{itahara2023distillation}. Such a logit-only exchange is able to reduce the per-round communication overhead substantially \cite{sattler2022cfd}, \cite{sattler2023fedaux}, and permits clients to train heterogeneous local architectures, while further improving privacy \cite{chan2021fedhe, cho2023clustered, wu2024fedict}.
+
+Recently, the integration of FD with massive multi-input multi-output (mMIMO) wireless backbones has been investigated in \cite{mu2024fedtskd}, where the channel hardening property and zero-forcing precoding are used for the noisy uplink and downlink channels. The FedTSKD framework proposed therein establishes a dynamic training schedule, an $\mathcal{O}(1/t)$ convergence bound, and a communication channel-aware aggregation rule for FD over mMIMO. The earlier wireless-FD line of research \cite{ahn2019wireless}, \cite{ahn2020cooperative} and the broader wireless FL over fading channels work \cite{amiri2020federated, amiri2020machine, vu2020cell, amiri2021convergence} provide the underlying signal-processing scaffolding that FedTSKD specializes to FD.
+
+The work in \cite{mu2024fedtskd}, however, assumes full client participation in every communication round, that is, all $N$ clients transmit logits to the base station in every round. This assumption is uniformly adopted across the FD literature \cite{itahara2023distillation, sattler2022cfd, sattler2023fedaux, wu2024fedict}. It breaks down whenever a real deployment has more edge devices than the scheduler can admit, operates under a per-round energy budget, or runs over a contention-limited uplink, all of which force the system to admit only $K \ll N$ clients in each round. \new{In FL, the question of which $K$ out of $N$ clients to admit per round has been studied from several directions, including resource-aware, importance- and channel-aware, bandit-driven, and submodular formulations \cite{nishio2019client, yang2020scheduling, ren2020scheduling, shi2020joint, xia2020mab, cho2020bandit, balakrishnan2022divfl}, as reviewed in Section~\ref{ssec:rw-fl-selection}.} In FD, on the other hand, the client selection problem has received scant attention. The closest prior work is the active data sampling method in \cite{liu2022active}, where the selection is performed over the public-dataset samples to distill on rather than over the clients to admit; this is orthogonal to client selection.
+
+None of the FL selectors listed above are designed for FD, and the structural reason is as follows. The server-side aggregation rule in FD is data-size-weighted logit averaging \cite{mu2024fedtskd}, \cite{itahara2023distillation}, which flattens the per-client quality differences once the round's selected client set is fixed. As a consequence, the composition of the selected set, rather than any intra-client quality gradient, dominates the progress of the server model. This is structurally different from FL, where each client's local gradient enters the aggregate directly and selecting clients by quality, for example by training loss \cite{cho2020bandit}, \cite{xia2020mab} or by gradient norm \cite{wang2019adaptive}, translates to a meaningful aggregate signal. The right question to ask in FD client selection, therefore, is how to ensure that every client's data is used uniformly across rounds while nudging the within-round composition towards the regions of the label space where the server is currently uncertain, rather than how to score individual clients along a single utility axis.
+
+\subsection{Contributions}
+\label{ssec:contributions}
+
+In this paper, we propose SCOPE-FD (Server-aware Coverage with Over-round Participation Equalization), a deterministic client selection algorithm for FD over mMIMO networks, built on top of the FedTSKD of \cite{mu2024fedtskd}. Unlike the existing FL selectors \cite{nishio2019client}, \cite{cho2020bandit}, \cite{xia2020mab}, \cite{balakrishnan2022divfl}, where the score is either utility-biased or coverage-biased but not both, and unlike the existing FD work \cite{mu2024fedtskd}, \cite{itahara2023distillation}, \cite{liu2022active}, where either full participation is assumed or partial participation is addressed only along the data-sampling direction, the proposed algorithm composes participation balance, server-side class under-prediction, and per-round class coverage in a single deterministic score \revIVE{with non-negative coefficients held fixed across all configurations}. To the best of the authors' knowledge, the proposed scheme is the first deterministic, fairness-guaranteed client selector tailored to FD's data-size-weighted logit-averaging aggregation rule \cite{itahara2023distillation}, \cite{mu2024fedtskd} under partial participation over an mMIMO backhaul. The main contributions of this paper can be summarized as follows.
+
+\begin{enumerate}
+    \item \textit{Three-Term Deterministic Selector for FD:} We design a client selection algorithm that combines a participation-debt rotation term, a server-side per-class under-prediction bonus, and a per-round class-coverage penalty. The selector has zero trainable parameters, in contrast to the reinforcement-learning- and neural-bandit-based FL selectors that maintain $\mathcal{O}(N\cdot K)$ trainable states. The coefficients of the three terms are non-negative and held fixed across all configurations, with the debt term acting as the primary signal and the information signals as tie-breakers within debt-equal cohorts. The greedy filling of $K$ slots is performed in $\mathcal{O}(KNC)$ time per round, where $C$ is the number of label classes.
+
+    \item \textit{Participation-Fairness Guarantee:} We prove that, under the proposed selector, the per-client cumulative participation counts differ by at most one at every round. When $K$ divides $N$, this sharpens to exact equality at the end of every $\lceil N/K \rceil$-round cycle, so the participation Gini coefficient over each such window is identically zero. In the general case, the Gini coefficient over $R$ rounds is bounded as $\mathcal{O}(1/R)$.
+
+    \item \textit{Convergence Compatibility with FedTSKD:} We show that the proposed selector modifies only the composition of the per-round client subset, leaving the local training, distillation, and server aggregation steps of FedTSKD \cite{mu2024fedtskd} unchanged. Consequently, the $\mathcal{O}(1/t)$ convergence bound of \cite{mu2024fedtskd} continues to hold under SCOPE-FD selection without modification.
+
+    \item \textit{Experimental Analysis:} We carry out simulations on Fashion-MNIST and MNIST with Dirichlet non-IID partitions, sweeping the number of selected clients $K$, the downlink signal-to-noise ratio, and the dataset pairing. The proposed algorithm is shown to drive the participation Gini coefficient to zero in every tested configuration while matching the final-round accuracy of uniform random at $K \ge 5$ and reaching $80\%$ of the final accuracy in roughly one third of the rounds at the practical sparse regime $K/N = 10\%$. The downlink-noise robustness of the underlying FedTSKD algorithm is inherited rather than created by the proposed selector, in the sense that both methods exhibit a comparable accuracy drop across a $30$-dB downlink-SNR sweep ($-30$ dB to $0$ dB), with the fairness and convergence-speed advantages of the proposed selector preserved at every SNR. At the ultra-sparse stress regime $K = 1$, the proposed selector additionally delivers a sizeable final-round accuracy gain over the random client selection baseline.
+\end{enumerate}
+
+%The proposed method is positioned as a fairness-first selector for FD; head-to-head comparison against utility-driven FL selectors adapted to FD is left to future work.
+
+\textit{Organization:} The rest of this paper is organized as follows. Section~\ref{sec:related-work} provides background on client selection in FL and FD. Section~\ref{sec:system-model} details the system model and the FD aggregation rule under partial participation. The proposed SCOPE-FD algorithm is described in Section~\ref{sec:scope-alg}, followed by the theoretical analysis in Section~\ref{sec:theory}. Experimental results are presented in Section~\ref{sec:experiments}, and finally Section~\ref{sec:conclusion} concludes this paper.
+
+% ============================================================================
+% SECTION II: RELATED WORK
+% ============================================================================
+\section{Background}
+\label{sec:related-work}
+
+\subsection{Client Selection in Federated Learning}
+\label{ssec:rw-fl-selection}
+
+Existing FL client-selection work spans several directions. Resource-aware methods such as FedCS \cite{nishio2019client} admit the maximum number of clients that can train and upload within a per-round deadline. Importance- and channel-aware scheduling \cite{yang2020scheduling, ren2020scheduling, shi2020joint} jointly incorporates wireless link state and gradient magnitude into a per-client priority score, and the joint learning-and-communications frameworks of \cite{chen2021joint}, \cite{chen2021convergence} co-design selection with resource allocation. Bandit-driven online selectors \cite{xia2020mab}, \cite{cho2020bandit}, \cite{xu2021online} treat per-client utility as the unknown reward of a multi-armed bandit. The data-centric selector of \cite{saha2023datacentric} estimates the informational value of each client's local dataset, while DivFL \cite{balakrishnan2022divfl} constructs the per-round client subset by greedily maximizing a submodular function over client gradients; complementary lines include adaptive resource-constrained selection \cite{wang2019adaptive}, energy-efficient scheduling \cite{yang2021energy}, and the $q$-fair fairness objective \cite{li2020qffl}.
+
+In all of the above, the underlying aggregation rule is FedAvg \cite{mcmahan2017communication}, where each selected client's update enters the aggregate directly. Scoring clients by individual quality signals such as training loss or gradient norm therefore translates into a meaningful aggregate signal at the server. This property does not transfer to the FD aggregation rule, as discussed next.
+
+\subsection{Federated Distillation: Algorithms and Wireless Physical Layer Integration}
+\label{ssec:rw-fd}
+
+The FD paradigm originates from the work in \cite{jeong2018communication}, where the central idea of using knowledge distillation \cite{hinton2015distilling}, \cite{wang2022kd} to communicate model outputs rather than model parameters is proposed. Subsequently, the semi-supervised variant DS-FL is introduced in \cite{itahara2023distillation}, where a shared unlabeled public dataset is used as the substrate for logit exchange and the server aggregates the per-client logits via data-size-weighted averaging. Communication-efficient logit transmission has been further investigated in \cite{sattler2022cfd}, where a soft-label quantization and delta-coding scheme is proposed, and in \cite{sattler2023fedaux}, where unlabeled auxiliary data is exploited through a certainty-weighted ensemble. The model-heterogeneous variant FedHe is introduced in \cite{chan2021fedhe}, the clustered knowledge-transfer scheme of \cite{cho2023clustered} extends FD to the personalization setting, and the multi-task formulation FedICT in \cite{wu2024fedict} addresses multi-access edge computing scenarios.
+
+Wireless-channel-aware FD is initiated in \cite{ahn2019wireless} for distributed edge learning over fading uplinks, and is extended in \cite{ahn2020cooperative} to cooperative learning, where the channel fading is explicitly accounted for in both the uplink and the downlink. The integration of FD with mMIMO backbones is then carried out in \cite{mu2024fedtskd}, where the FedTSKD framework is proposed together with its $\mathcal{O}(1/t)$ convergence guarantee. The FedTSKD work specializes the broader wireless FL over fading channels line of research \cite{amiri2020federated, amiri2020machine, vu2020cell, amiri2021convergence} to the FD paradigm, where the noise tolerance of the logit layer interacts favorably with the channel hardening property of mMIMO and the inter-user interference is nulled out by zero-forcing precoding.
+
+A common feature of the FD works above is data-size-weighted logit averaging at the server. Once the per-round selected subset is fixed, each client's contribution to the aggregate is governed only by its data-size weight, so the within-round scoring of individual clients carries a much weaker effect than in FL. None of these works, however, addresses how the per-round client subset is to be constructed when only a strict subset of the clients can be admitted; full participation in every round is uniformly assumed.
+
+\subsection{Client Selection in Federated Distillation}
+\label{ssec:rw-fd-selection}
+
+The prior work that is closest to the present setting is the active data sampling method in \cite{liu2022active}, where the public-dataset samples on which to distill are adaptively selected. This is an orthogonal direction to the client selection problem, since the public dataset is actively selected, rather than the client population, and the selection rule operates on public data samples rather than on clients. Beyond this, fairness-aware FL formulations such as the $q$-fair objective in \cite{li2020qffl} provide a relevant baseline; the corresponding fairness constraint, however, is defined on the FedAvg aggregation rule and does not transfer to FD's logit-averaging aggregation without modification.
+
+None of the existing works simultaneously addresses the following three concerns: partial participation in FD, the structural consequence of the data-size-weighted logit averaging on how the per-round client subset shapes the server-model progress, and the wireless-channel impairments of an mMIMO backhaul. The proposed SCOPE-FD algorithm is designed to address all three together, while preserving the convergence guarantee of FedTSKD \cite{mu2024fedtskd}.
+
+\textit{Remark (Delta to \cite{mu2024fedtskd})}: the FedTSKD framework of \cite{mu2024fedtskd}, developed by the present authors' research group,\footnote{FedTSKD \cite{mu2024fedtskd} is from the same research group as the present work and is treated here as an off-the-shelf substrate.} supplies the FD-over-mMIMO substrate, namely the dynamic local-training schedule, the zero-forcing uplink and downlink processing, the data-size-weighted logit-averaging aggregation rule, and the $\mathcal{O}(1/t)$ convergence analysis, all of which are inherited by SCOPE-FD without modification. What is new in the present work, is the partial-participation client-selection problem itself (in \cite{mu2024fedtskd}, where full participation is assumed), the deterministic three-term score with non-negative coefficients held fixed across configurations, and the participation Gini guarantee derived in Section~\ref{ssec:participation-balance}.
+
+% ============================================================================
+% SECTION III: SYSTEM MODEL AND PROBLEM FORMULATION
+% ============================================================================
+\section{System Model and Problem Formulation}
+\label{sec:system-model}
+
+\begin{figure*}[!t]
+\centering
+\begin{tikzpicture}[
+    font=\footnotesize, >=Latex,
+    client/.style  ={draw, rounded corners=2pt, minimum height=0.7cm, minimum width=1.95cm, align=center, fill=blue!7,    font=\scriptsize},
+    block/.style   ={draw, rounded corners=2pt, minimum height=0.85cm,minimum width=2.7cm, align=center, fill=green!8,   font=\scriptsize},
+    scopebox/.style={draw, rounded corners=3pt, minimum height=1.7cm, minimum width=3.2cm, align=center, fill=orange!18, very thick, font=\scriptsize},
+    bs/.style      ={draw, rounded corners=4pt, minimum height=3.6cm, minimum width=2.2cm, align=center, fill=gray!10,   font=\scriptsize},
+    pub/.style     ={draw, rounded corners=2pt, minimum height=0.7cm, minimum width=2.3cm, align=center, fill=yellow!15, font=\scriptsize}
+]
+
+% --- Clients ---
+\node[client] (c1) at (0,  2.6) {Client $1$ -- $\mathcal{D}_1$};
+\node[client] (c2) at (0,  1.3) {Client $2$ -- $\mathcal{D}_2$};
+\node[font=\scriptsize] at (0, 0.3) {$\vdots$};
+\node[client] (cn) at (0, -0.8) {Client $N$ -- $\mathcal{D}_N$};
+
+% --- mMIMO BS ---
+\node[bs] (bs) at (5.0, 0.9) {\textbf{mMIMO BS}\\$N_{BS}$ antennas\\[2pt]ZF reception\\ZF precoding\\quant.\,/\,demod.};
+\foreach \x in {-0.75,-0.45,-0.15,0.15,0.45,0.75}
+  \draw[thick] ($(bs.north)+(\x,0)$) -- ++(0, 0.22);
+
+% --- Public dataset ---
+\node[pub] (pub) at (5.7, 4.0) {public dataset $\mathcal{D}_p$};
+
+% --- Cloud workstation contents ---
+\node[block] (agg)  at (11.4,  2.85) {Aggregation\\$\bar{\bm{z}}_r=\sum\lambda_{n,r}\,\hat{\bm{z}}_{n,r}$};
+\node[block] (dist) at (11.4,  1.55) {Server distillation\\(KL on $\mathcal{D}_p$)};
+\node[scopebox] (sel) at (11.4, -0.45) {\textbf{SCOPE-FD selector}\\participation debt\\$+\,$server under-prediction\\$-\,$class coverage\\$\Rightarrow\,\mathcal{S}_r,\;|\mathcal{S}_r|=K$};
+
+% --- Cloud bounding box ---
+\begin{scope}[on background layer]
+  \node[draw, dashed, rounded corners=4pt, fit=(agg)(dist)(sel), inner sep=10pt, fill=gray!4,
+        label={[font=\scriptsize]above:cloud workstation}] (cloud) {};
+\end{scope}
+
+% --- UL arrows: clients -> BS (solid blue) ---
+\draw[->, thick, blue!70!black] (c1.east) -- node[midway, above, font=\tiny]{$\bm{z}_{1,r}$} ($(bs.west)+(0, 1.35)$);
+\draw[->, thick, blue!70!black] (c2.east) -- node[midway, above, font=\tiny]{$\bm{z}_{2,r}$} ($(bs.west)+(0, 0.55)$);
+\draw[->, thick, blue!70!black] (cn.east) -- node[midway, below, font=\tiny]{$\bm{z}_{N,r}$} ($(bs.west)+(0,-0.55)$);
+\node[font=\tiny, blue!70!black] at (2.5, 2.05) {uplink (fading + noise)};
+
+% --- DL arrows: BS -> clients (dashed red) ---
+\draw[->, thick, red!70!black, dashed] ($(bs.west)+(0, 1.05)$) -- ($(c1.east)+(0,-0.25)$);
+\draw[->, thick, red!70!black, dashed] ($(bs.west)+(0, 0.25)$) -- ($(c2.east)+(0,-0.25)$);
+\draw[->, thick, red!70!black, dashed] ($(bs.west)+(0,-0.85)$) -- ($(cn.east)+(0,-0.25)$);
+\node[font=\tiny, red!70!black] at (2.5, -1.4) {downlink ($\tilde{\bm{z}}_r$ broadcast to $\mathcal{S}_r$)};
+
+% --- BS -> Aggregation (recovered logits) ---
+\draw[->, thick, blue!70!black] ($(bs.east)+(0, 1.35)$) -- node[midway, above, font=\tiny]{$\hat{\bm{z}}_{n,r}$} (agg.west);
+
+% --- Aggregation -> Distillation ---
+\draw[->, thick] (agg.south) -- (dist.north);
+
+% --- Distillation -> SCOPE selector (feedback) ---
+\draw[->, thick, orange!85!black, dashed] (dist.south) -- node[right, font=\tiny, pos=0.45]{class confidence} (sel.north);
+
+% --- SCOPE selector -> BS (scheduling decision) ---
+\draw[->, thick, orange!85!black, dashed]
+   (sel.west) -- ++(-0.6,0) |- ($(bs.east)+(0,-1.5)$)
+   node[font=\tiny, pos=0.92, above]{$\mathcal{S}_r$};
+
+% --- Public dataset connections (thin grey, dashed) ---
+\draw[dashed, gray!60] (pub.west) -| ($(c1.north)+(0, 0.3)$);
+\draw[dashed, gray!60] (pub.east) -| ($(dist.north)+(0, 0.4)$);
+
+\end{tikzpicture}
+\caption{Architecture of the proposed SCOPE-FD framework over an mMIMO wireless backbone. $\mathcal{D}_n$ and $\mathcal{D}_p$ are the private and public datasets; $\bm{z}_{n,r}$, $\hat{\bm{z}}_{n,r}$, and $\tilde{\bm{z}}_r$ denote the uplink logits, the ZF-equalized logits at the BS, and the post-distillation logits broadcast over the downlink, respectively. The cloud workstation is the back-end compute node co-located with the BS over a wired (non-communication-budgeted) link, hosting the server-side model, the distillation step, and the SCOPE-FD selector; the only over-the-air segment is the BS-to-client wireless interface. Solid blue arrows denote the uplink streams, dashed red arrows the downlink broadcast, and dashed orange arrows the control path that returns the next-round subset $\mathcal{S}_r$ to the BS.}
+\label{fig:system_model}
+\end{figure*}
+
+\subsection{Federated Distillation Setup}
+\label{ssec:fd-setup}
+
+Consider an FD system where a base station (BS) equipped with $N_{BS}$ antennas serves $N$ single-antenna clients over an mMIMO wireless backbone. The $n^{\text{th}}$ client holds a private local dataset $\mathcal{D}_n = \{(\bm{x}_i, y_i)\}_{i=1}^{|\mathcal{D}_n|}$, where $\bm{x}_i$ is the input sample and $y_i \in \{1, \dots, C\}$ is the corresponding class label. The local datasets are kept private and are not shared with the BS at any stage of training. To capture the data heterogeneity inherent to edge deployments, the per-class proportions on each client are sampled from a Dirichlet distribution $\text{Dir}(\alpha)$ over the label space \cite{hsu2019measuring}, with smaller values of $\alpha$ producing more skewed partitions. A public unlabeled dataset $\mathcal{D}_p = \{\bm{x}_p\}_{p=1}^{|\mathcal{D}_p|}$ is shared by the BS and all clients, and serves as the substrate over which the per-client logits are computed and exchanged \cite{itahara2023distillation}. Since only logits are transmitted, the clients are free to adopt heterogeneous local architectures \cite{chan2021fedhe}.
+
+The local loss at client $n$ is given by
+\begin{equation}
+L_n(\bm{w}_n) = \frac{1}{|\mathcal{D}_n|} \sum_{(\bm{x}_i, y_i) \in \mathcal{D}_n} \ell(\bm{w}_n; \bm{x}_i, y_i),
+\label{eq:local_loss}
+\end{equation}
+where $\bm{w}_n$ denotes the local model parameters and $\ell(\cdot)$ is the per-sample cross-entropy. The server-side objective is to minimize the data-size-weighted sum of the local losses, namely
+\begin{equation}
+\min_{\{\bm{w}_n\}} \; F\!\left(\{\bm{w}_n\}\right) = \sum_{n=1}^{N} \frac{|\mathcal{D}_n|}{|\mathcal{D}|} L_n(\bm{w}_n),
+\label{eq:global_obj}
+\end{equation}
+where $|\mathcal{D}| = \sum_{n=1}^{N} |\mathcal{D}_n|$. Following \cite{mu2024fedtskd}, each communication round $r$ consists of three stages, viz., local training, uplink communication and server-side aggregation, and downlink broadcast and local distillation. The overall architecture, including the proposed selector at the cloud workstation, is summarized in Fig.~\ref{fig:system_model}.
+
+In the local training stage, every client $n \in \mathcal{S}_r$ runs $K_r$ steps of stochastic gradient descent (SGD) on its private dataset, where $\mathcal{S}_r$ denotes the set of clients selected in round $r$. The updated local parameters are then used to compute the per-sample logits $\bm{z}_{n,r}$ on the public dataset $\mathcal{D}_p$. After quantization and modulation, the logits are uploaded to the BS through the mMIMO uplink, and the received signal at the BS can be written as
+\begin{equation}
+\bm{Y}^{(\text{UL})}_{r} = \sum_{n \in \mathcal{S}_r} \bm{H}_{n,r} \bm{Z}_{n,r}^{T} \sqrt{\frac{P_{\text{UL}}}{N_D \sigma_z^2}} + \bm{\Omega}^{(\text{UL})}_{r},
+\label{eq:ul_signal}
+\end{equation}
+where $\bm{Y}^{(\text{UL})}_{r} \in \mathbb{C}^{N_{BS} \times N_D}$ stacks the $N_D$ received symbol periods column-wise, $\bm{H}_{n,r} \in \mathbb{C}^{N_{BS} \times 1}$ is the uplink channel column vector between the single-antenna client $n$ and the $N_{BS}$-antenna BS, $\bm{Z}_{n,r} \in \mathbb{C}^{N_D \times 1}$ is the complex-valued symbol representation of $\bm{z}_{n,r}$ obtained after quantization and modulation, so that $\bm{H}_{n,r}\bm{Z}_{n,r}^{T}$ is the rank-one $N_{BS}\times N_D$ matrix received from client $n$, $P_{\text{UL}}$ is the uplink transmit power in linear scale, $N_D$ is the number of complex data streams per logit vector, $\sigma_z^2$ is the per-symbol average power normalization in linear scale, and $\bm{\Omega}^{(\text{UL})}_{r}$ is the receiver-side complex Gaussian noise. The scaling factor $\sqrt{P_{\text{UL}}/(N_D \sigma_z^2)}$ in (\ref{eq:ul_signal}) splits $P_{\text{UL}}$ uniformly across the $N_D$ data streams and normalizes each entry of $\bm{Z}_{n,r}$ to unit average power, so the per-symbol transmit energy equals $P_{\text{UL}}/N_D$. With zero-forcing (ZF) reception, the per-client logits at the BS can be recovered as
+\begin{equation}
+\hat{\bm{z}}_{n,r} = \bm{z}_{n,r} + \bm{\omega}^{(\text{UL})}_{n,r},
+\label{eq:ul_zf}
+\end{equation}
+where the variance of the post-equalization noise $\bm{\omega}^{(\text{UL})}_{n,r}$ is suppressed by a factor proportional to $N_{BS}$, owing to the channel hardening property of the mMIMO array \cite{mu2024fedtskd}, \cite{vu2020cell}.
+
+\subsection{FD Aggregation under Partial Participation}
+\label{ssec:fd-aggregation}
+
+After dequantization and demodulation at the BS, the round-$r$ aggregated logit is formed by data-size-weighted averaging over the selected clients, that is,
+\begin{equation}
+\bar{\bm{z}}_r = \sum_{n \in \mathcal{S}_r} \lambda_{n,r} \, \hat{\bm{z}}_{n,r}, \quad \lambda_{n,r} = \frac{|\mathcal{D}_n|}{\sum_{j \in \mathcal{S}_r} |\mathcal{D}_j|}.
+\label{eq:agg}
+\end{equation}
+The server-model parameters are then updated through a distillation step that minimizes the Kullback-Leibler divergence between the server-model output and $\bar{\bm{z}}_r$ on the public dataset \cite{hinton2015distilling}. The post-distillation logits are subsequently quantized, modulated, precoded with a zero-forcing precoder, and broadcast to the selected clients over the mMIMO downlink. Each selected client then performs a local distillation step that updates its local model. As in the uplink, the downlink post-equalization noise variance is suppressed by the channel hardening of the mMIMO array \cite{mu2024fedtskd}.
+
+Once $\mathcal{S}_r$ is fixed, $\bar{\bm{z}}_r$ depends on the per-client logits only through the data-size weights $\lambda_{n,r}$, so the over-round composition of $\mathcal{S}_r$ rather than any within-round client utility drives the progression of the server model. The proposed selector exploits this by directly shaping the over-round composition of $\mathcal{S}_r$.
+
+\subsection{Participation Fairness and Problem Statement}
+\label{ssec:problem-statement}
+
+To quantify the per-client participation fairness, the Gini coefficient over the cumulative participation counts is adopted. After $R$ rounds, let $n_i^{(R)}$ denote the total number of rounds in which client $i$ has been selected. The participation Gini coefficient is given by
+\begin{equation}
+G^{(R)} = \frac{\sum_{i,j} \left|n_i^{(R)} - n_j^{(R)}\right|}{2N \sum_{i=1}^{N} n_i^{(R)}}.
+\label{eq:gini}
+\end{equation}
+A perfectly balanced selection policy yields $G^{(R)} = 0$, whereas uniform random selection yields $G^{(R)} > 0$, with the imbalance growing as the participation ratio $K/N$ shrinks.
+
+The goal of this work is to design a selection policy $\pi$ that returns $\mathcal{S}_r \subset \{1, \dots, N\}$ with $|\mathcal{S}_r| = K$ in each round $r$, so as to minimize the FD convergence error while keeping the participation Gini coefficient small. Letting $\{\bm{w}_n^{(R)}\}$ denote the local model parameters after $R$ rounds under policy $\pi$, the problem can be formulated as
+\begin{equation}
+\min_{\pi} \; \mathbb{E}\!\left[F\!\left(\{\bm{w}_n^{(R)}\}\right)\right] - F^{*},
+\label{eq:problem}
+\end{equation}
+subject to the following three constraints. First, $|\mathcal{S}_r| = K$ for all $r$, which fixes the per-round communication budget. Second, the selection rule does not require any uplink communication beyond the FedTSKD logit-exchange budget \cite{mu2024fedtskd}; that is, no additional uplink slots are spent on selection-related signalling. Third, the per-round computation at the BS is no greater than $\mathcal{O}(NKC)$ in the number of clients, selection slots, and label classes, so that the selector remains light enough to be executed in every round. Here, $F(\cdot)$ is the global objective defined in (\ref{eq:global_obj}) and $F^{*}$ is its optimal value.
+
+% ============================================================================
+% SECTION IV: PROPOSED SCOPE-FD ALGORITHM
+% ============================================================================
+\section{Proposed SCOPE-FD Algorithm}
+\label{sec:scope-alg}
+
+This section presents the proposed SCOPE-FD selector, which combines a participation-debt term, a server under-prediction bonus, and a class-coverage penalty into a single deterministic score, followed by the algorithm summary at the end of the section.
+
+\subsection{Three-Term Selection Score}
+\label{ssec:three-term-score}
+
+For each candidate client $i$ at round $r$, the SCOPE-FD score is given by
+\begin{equation}
+\text{score}_i^{(r,k)} = \tilde{d}_i^{(r)} + \alpha_u\, b_i^{(r)} - \alpha_d\, p_i^{(r,k)},
+\label{eq:score}
+\end{equation}
+where $\tilde{d}_i^{(r)}$ is the participation-debt term, $b_i^{(r)}$ is the server under-prediction bonus, $p_i^{(r,k)}$ is the class-coverage penalty evaluated at the $k$-th greedy slot, and $\alpha_u, \alpha_d \ge 0$ are scalar coefficients that are kept fixed across all configurations. The selector fills the $K$ slots of $\mathcal{S}_r$ greedily, in decreasing order of (\ref{eq:score}); after each pick, the coverage vector that drives $p_i^{(r,k)}$ is updated, while the debt and bonus terms remain fixed within the round. Setting $\alpha_u = \alpha_d = 0$ reduces the selector to deterministic round-robin over the debt rotation; the contribution of this paper is the demonstration that round-robin equipped with two principled tie-breaker terms is sufficient to dominate the random baseline in the FD setting.
+
+\subsection{Participation-Debt Term}
+\label{ssec:debt-term}
+
+The participation-debt term is the primary signal of the selector and drives the over-round fairness of SCOPE-FD. Let $n_i^{(r-1)}$ denote the cumulative participation count of client $i$ over the first $r-1$ rounds. The uniform target after $r$ rounds is $r\cdot K/N$, that is, the count each client would have accumulated if every previous selection had been distributed uniformly across the pool. The per-client raw debt is the deviation between this target after round $r$ and the actual count through round $r-1$, namely
+\begin{equation}
+d_i^{(r)} = r\cdot \frac{K}{N} - n_i^{(r-1)}.
+\label{eq:debt}
+\end{equation}
+A positive value of $d_i^{(r)}$ indicates that client $i$ has been picked less often than the uniform target by the end of round $r-1$ and is therefore a candidate for selection in round $r$, while a negative value indicates over-picking. The raw debt is then mapped to the unit interval through min-max normalization across the candidate pool,
+\begin{equation}
+\tilde{d}_i^{(r)} = \frac{d_i^{(r)} - \min_j d_j^{(r)}}{\max_j d_j^{(r)} - \min_j d_j^{(r)} + \varepsilon},
+\label{eq:debt_norm}
+\end{equation}
+where $\varepsilon$ is a small positive constant added for numerical stability. Under (\ref{eq:debt_norm}), the most under-picked client of the round always receives $\tilde{d}_i^{(r)} = 1$ and the most over-picked client receives $\tilde{d}_i^{(r)} = 0$, so the debt term spans the full $[0,1]$ range regardless of the magnitude of the raw debt. The participation history needed to evaluate (\ref{eq:debt}) is already maintained at the BS as a by-product of scheduling and does not require any additional client-side signalling.
+
+\subsection{Server Under-Prediction Bonus}
+\label{ssec:bonus-term}
+
+\revIVE{The server under-prediction bonus is a secondary signal that tilts the selection towards clients whose local data covers classes the server model currently under-predicts on the public dataset.} Let $\bm{u}^{(r)} \in \mathbb{R}^{C}$ denote the per-class under-prediction vector at round $r$, whose $c$-th entry is one minus the average softmax mass the server places on class $c$ across $\mathcal{D}_p$, namely
+\begin{equation}
+u_c^{(r)} = 1 - \frac{1}{|\mathcal{D}_p|}\sum_{p=1}^{|\mathcal{D}_p|} \mathrm{softmax}_c\!\left(g(\bm{x}_p; \bm{\theta}_r)\right),
+\label{eq:uncert}
+\end{equation}
+where $\bm{\theta}_r$ denotes the server-model parameters at the start of round $r$ (i.e., after the round-$(r{-}1)$ distillation step in \cite[Algorithm~1]{mu2024fedtskd}) and $g(\bm{x}_p; \bm{\theta}_r) \in \mathbb{R}^{C}$ is the corresponding server-model logit on the public sample $\bm{x}_p$. \revIVE{A high value of $u_c^{(r)}$ indicates that class $c$ is rarely predicted by the server on $\mathcal{D}_p$, whether due to genuine uncertainty, class bias, or a skewed public-data prior; the bonus does not distinguish between these causes.} Letting $\bm{h}_i \in \mathbb{R}^{C}$ denote the L1-normalized label histogram of client $i$, the bonus is given by
+\begin{equation}
+b_i^{(r)} = \langle \bm{h}_i, \bm{u}^{(r)} \rangle = \sum_{c=1}^{C} h_{i,c}\, u_c^{(r)}.
+\label{eq:bonus}
+\end{equation}
+\revIVE{The score is therefore biased towards clients whose histograms overlap with the under-predicted classes, targeting regions of the label space the server has not yet learnt to recover. The vector $\bm{u}^{(r)}$ is computed at the cloud workstation from softmax outputs already produced during the distillation step, so no extra uplink communication is incurred. Each $\bm{h}_i$ is uploaded once at session initialization; the resulting $\mathcal{O}(C)$ per-client overhead is dominated by a single round of logit exchange.}
+
+\subsection{Class-Coverage Penalty}
+\label{ssec:penalty-term}
+
+The class-coverage penalty discourages picking a client whose label distribution overlaps heavily with the classes already covered by the partial selection $\mathcal{S}_r^{(<k)}$ at the $k$-th greedy slot. Let $\bm{c}^{(r,k)} \in [0,1]^{C}$ denote the per-class coverage vector at the start of slot $k$, defined as
+\begin{equation}
+c_{j}^{(r,k)} = \min\!\left(1,\, \sum_{n \in \mathcal{S}_r^{(<k)}} h_{n,j}\right),
+\label{eq:cov}
+\end{equation}
+which saturates at unity once class $j$ has been fully covered by the partial selection. The saturation in (\ref{eq:cov}) prevents the penalty from over-counting classes that are already represented and keeps each entry of $\bm{c}^{(r,k)}$ in $[0,1]$. The coverage penalty for candidate $i$ at slot $k$ is the inner product
+\begin{equation}
+p_i^{(r,k)} = \langle \bm{h}_i, \bm{c}^{(r,k)} \rangle.
+\label{eq:penalty}
+\end{equation}
+At the first slot of each round, $\bm{c}^{(r,1)} = \bm{0}$ and the penalty is uniformly zero. At subsequent slots, the penalty grows for clients whose histograms overlap with the already-selected classes, so the within-round selection naturally diversifies across the label space.
+
+\new{\textit{Privacy consideration:} Both (\ref{eq:bonus}) and (\ref{eq:penalty}) represent the per-client label histogram $\bm{h}_i$, which discloses the per-class distribution of the local dataset to the server. Towards that, two complementary remedies are compatible with the proposed selector, namely a calibrated Laplace mechanism on the histogram upload, and a server-side softmax-averaged surrogate computed from the per-client public-dataset logits already observed in (\ref{eq:agg}) once each client has been selected at least once. A quantitative characterisation of either remedy on the FD pipeline is left to future investigation.}
+
+\revIVE{The non-negative coefficients $\alpha_u, \alpha_d \ge 0$ in (\ref{eq:score}) are kept fixed across all configurations, with $(\alpha_u, \alpha_d) = (0.3, 0.1)$ used throughout Section~\ref{sec:experiments}; the values are reported only for reproducibility. Fig.~\ref{fig:coef} shows the per-round testing accuracy at this setting on Fashion-MNIST with $N = 50$, $K = 5$, downlink SNR $-20$~dB.}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/scope_paper/fig14_coef_ablation}
+\caption{\revIVE{Per-round testing accuracy of SCOPE-FD at $(\alpha_u, \alpha_d) = (0.3, 0.1)$ on Fashion-MNIST, $N = 50$, $K = 5$, downlink SNR $-20$~dB.}}
+\label{fig:coef}
+\end{figure}
+
+\subsection{Algorithm Summary and Complexity}
+\label{ssec:algorithm-summary}
+
+Algorithm~\ref{alg:scopefd} summarizes the proposed SCOPE-FD selector at the BS. In the first round, all participation counts are zero and the debt is uniform; the selection therefore reduces to picking $K$ clients by the bonus minus the penalty alone. From the second round onward, the debt term dominates the score and drives the over-round rotation, with the bonus and penalty acting as tie-breakers within debt-equal cohorts.
+
+\begin{algorithm}[t]
+\caption{\small SCOPE-FD Selector at Round $r$}
+\label{alg:scopefd}
+\begin{algorithmic}[1]
+\small
+\REQUIRE Round index $r$, slot count $K$, label histograms $\{\bm{h}_i\}$, participation counts $\{n_i^{(r-1)}\}$;
+\REQUIRE Under-prediction vector $\bm{u}^{(r)}$, coefficients $\alpha_u, \alpha_d$
+\ENSURE Selected subset $\mathcal{S}_r$ with $|\mathcal{S}_r|=K$
+\STATE Compute $\tilde{d}_i^{(r)}$ for all $i$ via (\ref{eq:debt})--(\ref{eq:debt_norm})
+\STATE Compute $b_i^{(r)}$ for all $i$ via (\ref{eq:bonus})
+\STATE Initialize $\mathcal{S}_r \leftarrow \emptyset$ and $\bm{c}^{(r,1)} \leftarrow \bm{0}$
+\FOR{$k = 1$ to $K$}
+    \STATE Compute $p_i^{(r,k)}$ for all $i \notin \mathcal{S}_r$ via (\ref{eq:penalty})
+    \STATE $i^{*} \leftarrow \arg\max\limits_{i \notin \mathcal{S}_r}\;\tilde{d}_i^{(r)} + \alpha_u b_i^{(r)} - \alpha_d p_i^{(r,k)}$ (ties broken by smallest client index)
+    \STATE $\mathcal{S}_r \leftarrow \mathcal{S}_r \cup \{i^{*}\}$
+    \STATE Update $\bm{c}^{(r,k+1)}$ via (\ref{eq:cov})
+\ENDFOR
+\RETURN $\mathcal{S}_r$
+\end{algorithmic}
+\end{algorithm}
+
+The per-round computational cost at the BS is $\mathcal{O}(NKC)$: the debt and bonus terms cost $\mathcal{O}(NC)$, and the greedy outer loop runs $K$ iterations with $\mathcal{O}(NC)$ per iteration for the coverage penalty. The memory footprint is $\mathcal{O}(NC)$, dominated by the per-client label histograms. Both complexities are linear in $N$ for fixed $K$ and $C$, satisfying the third constraint in Section~\ref{ssec:problem-statement}.
+
+% ============================================================================
+% SECTION V: THEORETICAL ANALYSIS
+% ============================================================================
+\section{Theoretical Analysis}
+\label{sec:theory}
+
+This section presents the theoretical analysis of SCOPE-FD. The window-wise participation-balance guarantee is established first, followed by the compatibility with the convergence bound of FedTSKD \cite{mu2024fedtskd}.
+
+\subsection{Participation-Balance Guarantee}
+\label{ssec:participation-balance}
+
+\textit{Proposition 1 (Bounded Participation Spread):} Under the SCOPE-FD selector with non-negative coefficients $\alpha_u, \alpha_d$ such that $\alpha_u + \alpha_d < 1$, which is satisfied by the calibration $(0.3, 0.1)$ used in this paper, the per-client cumulative participation counts after any $R$ rounds satisfy
+\begin{equation}
+\left| n_i^{(R)} - n_j^{(R)} \right| \le 1, \qquad \forall\, i,j \in \{1,\dots,N\},
+\label{eq:spread}
+\end{equation}
+that is, no two clients differ by more than one in their cumulative participation. The participation Gini coefficient is consequently bounded by
+\begin{equation}
+G^{(R)} \le \frac{N}{4KR},
+\label{eq:gini_bound}
+\end{equation}
+which decays as $\mathcal{O}(1/R)$ for fixed $N$ and $K$.
+
+\textit{Proof sketch:} The argument proceeds by induction on the round index $r$. The base case $r = 1$ is trivial since all participation counts are zero. For the inductive step, assume $|n_i^{(r-1)} - n_j^{(r-1)}| \le 1$ at the start of round $r$, and let $L = \min_i n_i^{(r-1)}$, so the round-start counts lie in $\{L, L+1\}$; call the cohorts with these two counts \emph{under-picked} and \emph{over-picked}, respectively. The raw debts (\ref{eq:debt}) take exactly two values that differ by one, and the min-max normalization (\ref{eq:debt_norm}) sends the under-picked cohort to $\tilde{d}_i^{(r)} = 1/(1+\varepsilon)$ and the over-picked cohort to $\tilde{d}_i^{(r)} = 0$, \revIVE{where $\varepsilon$ is taken small enough that $1/(1+\varepsilon) > \alpha_u + \alpha_d$, a condition met by orders of magnitude at the calibration $(0.3, 0.1)$ for any standard numerical floor.} Since $b_i^{(r)}, p_i^{(r,k)} \in [0,1]$, the score gap between any under-picked and any over-picked client is therefore at least $1/(1+\varepsilon) - (\alpha_u + \alpha_d) > 0$. \revIVE{Because $\tilde{d}_i^{(r)}$ is held fixed within the round and the bound on $p_i^{(r,k)}$ is slot-independent, the gap holds uniformly across all $K$ greedy slots,} so the greedy filling picks all under-picked clients before any over-picked one. If the under-picked cohort has size $\ge K$, all $K$ picks are drawn from it and the round-end counts again lie in $\{L, L+1\}$. Otherwise all under-picked clients are picked together with a subset of the over-picked cohort, after which the originally under-picked clients are at $L+1$, the picked over-picked clients at $L+2$, and the unpicked over-picked clients at $L+1$; the round-end counts therefore lie in $\{L+1, L+2\}$. Either way the spread is one and (\ref{eq:spread}) holds, completing the induction. For the Gini bound, if $a$ clients end at $L$ and $N-a$ at $L+1$, the numerator of (\ref{eq:gini}) equals $2a(N-a) \le N^2/2$ and the denominator equals $2NKR$, which yields (\ref{eq:gini_bound}). \hfill$\blacksquare$
+
+When $N$ is an integer multiple of $K$, the cycle length $\lceil N/K \rceil = N/K$ corresponds to exactly $N$ selection slots, and (\ref{eq:spread}) sharpens to equality of all participation counts at the end of each cycle. The participation Gini coefficient is then identically zero over every $N/K$-round window, irrespective of the channel state and the Dirichlet heterogeneity level $\alpha$, starting from the standard zero-initialised participation counts.
+
+Proposition~1 governs participation balance only. The bonus and penalty terms enter the score strictly within the debt-equal cohort and therefore do not affect the spread bound (\ref{eq:spread}); their role in the FD pipeline is to refine the within-round composition of $\mathcal{S}_r$ rather than to alter its over-round count distribution. %Any utility-axis comparison against utility-driven selectors operating outside the FD aggregation rule is left to future work.
+
+\subsection{Compatibility with the FedTSKD Convergence Bound}
+\label{ssec:convergence-compat}
+
+The proposed selector modifies only the composition of $\mathcal{S}_r$ at each round, while the local training, server-side aggregation, and distillation steps of FedTSKD \cite{mu2024fedtskd} remain unchanged. The convergence guarantee of FedTSKD therefore continues to hold under SCOPE-FD selection without modification, as captured by the following remark.
+
+\textit{Remark (Convergence-Bound Compatibility):} Let Assumptions 1--4 of \cite{mu2024fedtskd} hold for the local and global loss functions. Under SCOPE-FD selection, the per-client convergence bound of \cite[Theorem~1]{mu2024fedtskd},
+\begin{equation}
+\mathbb{E}\!\left[L_n\!\left(\bm{w}_{n,t+1}\right)\right] - L_n^{*} \le \frac{\psi}{2}\cdot\frac{\nu_n}{t+1+\beta_1},
+\label{eq:conv_bound}
+\end{equation}
+continues to hold, where $\psi$ is the smoothness constant of the global objective, $\nu_n$ captures the per-client local-gradient variance, and $\beta_1$ is the regularization offset, both as defined in \cite[Theorem~1]{mu2024fedtskd}. The argument is direct: the proof of that theorem invokes the per-round client subset $\mathcal{S}_r$ only through the data-size-weighted aggregation $\bar{\bm{z}}_r$ in (\ref{eq:agg}) and the bounded-variance assumption on the local gradients. SCOPE-FD changes only which subset $\mathcal{S}_r$ enters this aggregation; the local-training process at each client, and hence each client's per-client variance budget $\nu_n$, is unchanged. The aggregator-level argument of \cite{mu2024fedtskd} therefore goes through without modification, with constants depending on the selected cohort size $K$ in place of the full population $N$.
+
+%A tighter analysis that exploits the deterministic nature of the SCOPE-FD selector to refine the constants $\nu_n$ and $\beta_1$ is left to future investigation.
+
+% ============================================================================
+% SECTION VI: EXPERIMENTAL RESULTS
+% ============================================================================
+\section{Experimental Results}
+\label{sec:experiments}
+
+The experimental study below evaluates SCOPE-FD as a fairness-first selector and provides a Pareto improvement on the (final accuracy, participation Gini) pair, rather than a uniform accuracy gain.
+
+\subsection{Experimental Setup}
+\label{ssec:exp-setup}
+
+The proposed SCOPE-FD selector is integrated into the FedTSKD framework \cite{mu2024fedtskd} and benchmarked against uniform random selection on Fashion-MNIST (FMNIST). The common simulation parameters are listed in Table~\ref{tab:setup} and mirror those of \cite{mu2024fedtskd} where applicable, with the partial-participation $K$ and the selection-side coefficients $\alpha_u, \alpha_d$ introduced by the present work. Each client holds a private partition with Dirichlet concentration $\alpha = 0.5$, MNIST is used as the public dataset for logit exchange \cite{itahara2023distillation}, and clients adopt heterogeneous local architectures from the FD-CNN1/2/3 pool \cite{chan2021fedhe}. The mMIMO BS is equipped with $N_{BS} = 64$ antennas, the uplink SNR is fixed at $-8$~dB, and the downlink SNR is varied over $\{\text{error-free}, 0, -10, -20, -30\}$~dB. The distillation temperature is fixed at $T = 1.0$ to match the configuration of the underlying FedTSKD framework \cite{mu2024fedtskd}.%, where the channel-aware aggregation already provides the smoothing that a higher temperature would otherwise contribute; a temperature sweep is left to future investigation. 
+FMNIST is the primary benchmark because it offers FD-signal headroom for the selection rule to be observable across both sweeps.%; an extension to CIFAR-10, where the FD accuracy floor under small heterogeneous architectures compresses the selection-axis signal-to-noise, is left to future work. 
+In every configuration, SCOPE-FD is paired against uniform random on the same data partition, channel realization, and random seed, so any difference is attributable to the selection rule alone. %The simulation code is planned to be released publicly upon acceptance to support reproducibility.
+
+\begin{table}[t]
+\centering
+\caption{Common simulation setup, mirroring \cite{mu2024fedtskd}.}
+\label{tab:setup}
+\renewcommand{\arraystretch}{1.1}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lp{0.55\columnwidth}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+BS antennas $N_{BS}$ & $64$ \\
+UL SNR & $-8$ dB \\
+DL SNR & $-20$ dB default; swept $\{\text{err-free}, 0, -10, -20, -30\}$ dB \\
+Communication rounds $R$ & $100$ \\
+Private datasets & FMNIST (primary), MNIST \\
+Public dataset & cross-pair (MNIST when FMNIST is private) \\
+Dirichlet $\alpha$ & $0.5$ \\
+Client architectures & FD-CNN1 / FD-CNN2 / FD-CNN3 \\
+Optimizer & SGD (local), Adam (server distillation) \\
+Learning rate & $10^{-2}$ (local), $10^{-3}$ (distillation) \\
+Distillation temperature & $1.0$ \\
+Logit quantization & $8$-bit \\
+SCOPE-FD coefficients & $\alpha_u = 0.3,\ \alpha_d = 0.1$ \\
+Seed & $42$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sparsity Sweep}
+\label{ssec:exp-sparsity}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/scope_paper/fig16_joint_k_snr_robustness}
+\caption{\new{Sparsity and channel-robustness behaviour on FMNIST. Top row: rounds to reach $80\%$ of the same method's final accuracy versus (a) $K/N$ at $N=50$, $\text{DL SNR}=-20$~dB, and (b) DL SNR at $N=50, K=5$. Bottom row: final-round participation Gini under (c) $K/N$ and (d) DL SNR.}}
+\label{fig:joint}
+\end{figure*}
+
+\new{The sparsity behaviour of the proposed selector is characterized by sweeping $K \in \{1, 5, 10, 15, 25, 35\}$ at $N = 50$ on Fashion-MNIST, with the DL SNR fixed at the default $-20$~dB. The corresponding rounds-to-$80\%$-of-final-accuracy and final-round Gini coefficient are plotted in Fig.~\ref{fig:joint}(a) and Fig.~\ref{fig:joint}(c), respectively, where rounds-to-$80\%$ is defined as the smallest round at which the running accuracy reaches $80\%$ of the same method's own final-round accuracy. The $K = 1$ configuration is included as an ultra-sparse stress test rather than a realistic deployment regime, since selecting one client per round on a non-IID partition stresses uniform random well outside its nominal operating range. \revIVE{Fig.~\ref{fig:joint}(a) shows that the proposed selector saturates at $10$ rounds across the full $K \ge 5$ band}, while uniform random takes $30$ rounds at the practical sparse regime $K/N = 10\%$ and $99$ rounds at the ultra-sparse regime $K = 1$, that is, a $3\times$ convergence speedup is observed at $K/N=10\%$ and a $2.5\times$ speedup at $K = 1$. The participation Gini in Fig.~\ref{fig:joint}(c) is identically zero on every $K$ for the proposed selector, while uniform random rises monotonically from $0.035$ at the moderate $K = 35$ regime up to $0.429$ at $K = 1$. The final-round accuracy is statistically tied for $K \ge 5$, and at the $K = 1$ stress regime the proposed selector additionally delivers a $9.4$ percentage-point final-accuracy gain over uniform random ($0.542$ versus $0.448$), with the per-round accuracy gap exceeding $16$ percentage points by mid-training. \revIVE{Since the two methods reach different final accuracies at $K = 1$, the rounds-to-$80\%$ metric here measures convergence relative to each method's own ceiling; the proposed selector's trajectory dominates random's at every round, so the qualitative speed-up is preserved under any fixed-absolute-accuracy threshold.} The full-participation regime $K = N = 50$ is structurally vacuous since at $K = N$ both selectors admit every client every round. \revIVE{The pattern matches the structural argument of Section~\ref{ssec:fd-aggregation}}: the proposed selector exhibits its largest gain when partial participation is most punishing for random and ties random when partial participation does not hurt random in the first place.}
+\vspace{-1em}
+\subsection{Channel Robustness and Fairness Analysis}
+\label{ssec:exp-channel}
+The channel-robustness behaviour of the proposed selector is characterized at $N = 50, K = 5$ (i.e., $K/N = 10\%$) by sweeping the DL SNR over $\{\text{error-free}, 0, -10, -20, -30\}$~dB, with all other parameters held fixed. The corresponding rounds-to-$80\%$ and final-round Gini are plotted in Fig.~\ref{fig:joint}(b) and Fig.~\ref{fig:joint}(d). Two findings hold uniformly. First, the proposed selector reaches $80\%$ of its final accuracy in $10$ rounds at every SNR while uniform random takes $30$, that is, the $3\times$ convergence speedup is invariant to the downlink quality across the $30$~dB range. Second, the participation Gini under the proposed selector is identically zero at every SNR while uniform random sits at $0.144$, confirming that the fairness guarantee is decoupled from the wireless layer by construction. The final-round accuracy is statistically tied at every SNR within $\pm 0.3$ percentage points; both methods exhibit a comparable $\sim 3$ percentage-point accuracy drop across the $30$~dB sweep, indicating that the downlink-noise robustness is inherited from the FedTSKD substrate \cite{mu2024fedtskd} rather than created by the proposed selector. The noise-flat behaviour in Fig.~\ref{fig:joint}(b) and Fig.~\ref{fig:joint}(d) supports the practical applicability of the proposed selector to channel-impaired wireless deployments.
+
+\revIVE{To complement the $N=50$ sweep above, the per-client participation pattern at the FMNIST headline configuration $(N = 30, K = 10, R = 100)$ is examined next, and further confirms Proposition~1 numerically.} Under uniform random the cumulative count spans $\{22, \dots, 44\}$ with standard deviation $4.96$, while under the proposed selector every client lies at $33$ or $34$ with standard deviation $0.47$, a more than $10\times$ reduction. The per-round selection matrix reproduces the deterministic $\lceil N/K \rceil = 3$-round cycle predicted by Proposition~1, with rounds satisfying $r \bmod 3 = 0, 1, 2$ selecting clients $\{0,\dots,9\}, \{10,\dots,19\}, \{20,\dots,29\}$, respectively.
+
+\new{\subsection{Cross-Dataset Replication}
+\label{ssec:exp-cross-dataset}
+
+To assess the dataset-independence of the proposed selector, the FMNIST--MNIST headline pairing of Section~\ref{ssec:exp-sparsity} is replaced by an EMNIST/digits private dataset paired with MNIST as the public dataset, with the practical sparse regime $N=50, K=5$ rerun under the same configuration. EMNIST/digits, drawn from the NIST SD-19 corpus of handwritten Latin digits, is a $28\times 28$ grayscale $10$-class collection that is drop-in compatible with the FD-CNN1/2/3 model pool used throughout this paper, and is subsampled to $60$k/$10$k via stratified random sampling under seed $42$ to match the FMNIST scale.%, so the cross-dataset claim is not confounded with a data-volume effect.
+}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/scope_paper/fig15_emnist_replication}
+\caption{\new{Cross-dataset replication on EMNIST/digits at $N=50, K=5$ with MNIST as the public dataset. The proposed selector reaches $80\%$ of its final accuracy at round $9$ against random's round $24$.}}
+\label{fig:emnist}
+\end{figure}
+
+\new{The corresponding accuracy trajectories are plotted in Fig.~\ref{fig:emnist}. \revIVE{The proposed selector reaches $80\%$ of its final accuracy in $9$ rounds against random's $24$}, that is, the $2.7\times$ convergence speedup observed on Fashion-MNIST is preserved on a dataset whose feature statistics differ substantively. The participation Gini coefficient under the proposed selector is identically zero on the $100$-round horizon, while uniform random produces $0.144$ at the same $K/N=10\%$ ratio. The empirical pattern observed on Fashion-MNIST in Sections~\ref{ssec:exp-sparsity} and~\ref{ssec:exp-channel} therefore is not a dataset-specific artifact.}
+
+% ============================================================================
+% SECTION VII: CONCLUSION
+% ============================================================================
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+This paper has proposed SCOPE-FD, a deterministic, fairness-first client selector for federated distillation over massive MIMO networks under partial participation, built on top of the FedTSKD substrate of \cite{mu2024fedtskd}. SCOPE-FD acts on the over-round composition of the selected client subset through a debt-dominated three-term score with non-negative coefficients held fixed across all configurations, inheriting the $\mathcal{O}(1/t)$ convergence bound of \cite{mu2024fedtskd} unchanged and \revIVE{driving the participation Gini to zero over every $N/K$-round window whenever $K \mid N$}. Empirically, the participation Gini is reduced to zero in every tested configuration; final-round accuracy matches uniform random at $K \ge 5$ and improves on it by $9.4$ percentage points at the $K = 1$ stress regime; and the convergence-speed advantage at $K/N = 10\%$ is invariant across a $30$-dB downlink-SNR sweep and a cross-dataset replication on EMNIST/digits.
+
+\new{
+%\section{Future Work}
+%\label{sec:future-work}
+
+Several extensions are left for future investigation. The first is the integration of channel-quality and energy-budget signals as additional score terms while preserving the participation-balance guarantee of Section~\ref{ssec:participation-balance}. The second is a quantitative comparison of the local-differential-privacy upload and the server-side softmax surrogate discussed in Section~\ref{ssec:penalty-term} on the FD pipeline, including a characterization of the cold-start phase under the surrogate. The third is a tighter convergence analysis that exploits the deterministic structure of the selector to refine the FedTSKD constants $\nu_n$ and $\beta_1$ in (\ref{eq:conv_bound}). The fourth is an extension beyond image classification to other softmax-output tasks such as text classification and speech recognition, where the per-class under-prediction bonus and the class-coverage penalty transfer without modification provided the server produces softmax predictions on a shared public dataset.}
+\balance
+% \IEEEtriggeratref{19}
+\bibliographystyle{IEEEtran}
+{\setlength{\itemsep}{0pt plus 0.2ex}\setlength{\parsep}{0pt}
+\bibliography{references}}
+
+\end{document}

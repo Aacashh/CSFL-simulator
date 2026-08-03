@@ -1,0 +1,210 @@
+\documentclass[10pt]{article}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{bm}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[bookmarks=false,breaklinks=false,pdfborder={0 0 1},backref=false,colorlinks=false]{hyperref}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{booktabs}
+
+\oddsidemargin -0.04cm
+\evensidemargin -0.04cm
+\textwidth 16.59cm
+\textheight 21.94cm
+\topmargin -0.25cm
+\renewcommand{\baselinestretch}{1.35}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em plus 0.1em minus 0.1em}
+
+\newcommand{\paperTitle}{SCOPE-FD: A Client Selection Method in Federated Distillation for Massive-MIMO Systems}
+
+% Marker for replies that still depend on experiments in progress.
+\newcommand{\PENDING}[1]{{\color{red}\textbf{[PENDING] }#1}}
+
+\begin{document}
+
+\title{
+\small Response to Reviewers' Comments and Changes Incorporated in the Revised Manuscript \\
+\vspace{1em}
+{\Large \bf \paperTitle} \\
+(\textbf{Original Manuscript ID: TAI-2026-May-A-00956})
+}
+\date{}
+\maketitle
+
+\vspace{-3em}
+
+We sincerely thank the Editor, the Associate Editor, and all the anonymous Reviewers for their valuable time and effort in evaluating our manuscript. We are also thankful to all of you for the detailed and constructive feedback. The comments were extremely valuable and have helped us improve the quality, the clarity, and the technical depth of our work. In the revised version, we have carefully addressed the raised concerns. {\color{blue}All changes made in response to the Reviewers' comments have been clearly highlighted in blue, as per the journal's guidelines}. Below, we provide a detailed point-by-point response to each comment. Please note that the Reviewers' comments are \textit{italicized}, followed by our responses in normal font. Along with this letter we submit (a) a clean version of the revised manuscript and (b) a coloured marked version of the revised manuscript, in which the changes are highlighted.\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Associate Editor}}}
+
+\noindent
+\textbf{Comment:} \textit{A revision stage is needed.}\\
+\noindent
+\textbf{Reply:} {We thank the Associate Editor for giving us the opportunity to revise and resubmit the manuscript. We have treated this round as a major revision rather than a light edit. Every experimental claim in the paper is now supported by multiple seeds with confidence intervals. We added a four-way ablation that separates the participation-debt term from the under-prediction and coverage terms. We added four published client-selection baselines that we ported into the federated distillation pipeline. We added a full grid over the two scoring coefficients. We extended the heterogeneity sweep and the client-scale sweep, and we added configurations in which $K$ does not divide $N$. We also added a rolling-window fairness metric that does not align with the participation cycle. The changes are highlighted in blue in the revised manuscript, and each point is addressed in the per-Reviewer responses below.}\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 1}}}
+
+\noindent
+\textbf{Comment 1:} \textit{The paper aims to demonstrate convergence compatibility with FedTSKD and client selection. However, the convergence proof is based on FedTSKD, and the effect of client selection via a client subset with bounded variance can easily be derived. Therefore, the analytical contribution of Section V-B is minimal.} \\
+\noindent
+\textbf{Reply 1:} \PENDING{This reply depends on the revised convergence analysis, which is still being prepared. It will state the partial-participation result and the assumptions taken from FedTSKD, or it will restate the claim in the more modest form suggested by Reviewer 2.}\\
+
+\noindent
+\textbf{Comment 2:} \textit{Only two datasets, Fashion-MNIST and MNIST, which have very similar characteristics, are tested. The dataset is compatible with the given model. However, as mentioned in the conclusion and future work, the applicability of the proposed method to domains other than images is questionable, as the proposed SCOPE-FD was tested under a narrow scenario.} \\
+\noindent
+\textbf{Reply 2:} \PENDING{The non-image experiment on the Free Spoken Digit Dataset and the additional multi-seed runs on MNIST, EMNIST, and CIFAR-10 are currently running. This reply will report those results.}\\
+
+\noindent
+\textbf{Comment 3:} \textit{As the experimental results were conducted in limited settings, it would be useful to show confidence intervals on the graphs.} \\
+\noindent
+\textbf{Reply 3:} {We are thankful to the Reviewer for this valuable suggestion. Every result in the revised manuscript is now reported over multiple independent seeds. The main configurations use five seeds and the sweeps use three seeds. We report the mean and the standard deviation for every entry. All learning curves now carry shaded $95\%$ confidence bands and all bar charts carry error bars. We also report the number of seeds $n$ in every table, so the reader can see the exact basis of each number. As an example, the headline configuration with $N=30$, $K=5$, and Dirichlet $\alpha=0.5$ now reads $71.21 \pm 0.99$ for SCOPE-FD and $70.99 \pm 1.38$ for random selection. The reporting protocol is stated in Section~VI-A. The multi-seed values appear in Table~II and Table~III and in Fig.~2 to Fig.~8 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 4:} \textit{The coefficients (e.g., alphau and alphad) are not ablated. The selection process for these coefficients needs to be described.} \\
+\noindent
+\textbf{Reply 4:} {We thank the Reviewer for this suggestion. We agree that the coefficients needed empirical support. We have added a full grid over $\alpha_u \in \{0, 0.1, 0.2, 0.3, 0.5, 0.8\}$ and $\alpha_d \in \{0, 0.05, 0.1, 0.2, 0.4\}$. This gives $30$ cells, and each cell is run with three seeds. The result is that SCOPE-FD is not sensitive to these two coefficients. Final accuracy across the whole grid ranges from $70.94\%$ to $72.27\%$, so the total spread is only $1.33$ percentage points. The participation Gini is $1.33\%$ in every single cell of the grid. This matches the magnitude argument in Section~IV-D. The debt term dominates the score whenever $\alpha_u + \alpha_d < 1$, so the fairness guarantee does not depend on the exact values chosen. The setting used throughout the paper, $\alpha_u = 0.3$ and $\alpha_d = 0.1$, gives $71.99\%$, which is within $0.28$ percentage points of the best cell in the grid. We now describe the selection of these values in a dedicated paragraph rather than a footnote. We state plainly that the values were chosen to keep the debt term dominant and that the method is robust to the exact choice. The rationale is given in the paragraph ``Choice of the coefficients'' in Section~IV-D. The grid is reported in Section~VI-D and Fig.~4 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 5:} \textit{The baseline is too simple when considering uniform randomization. There are other client selection mechanisms in FL (e.g., DevFL) that apply submodular diversity maximization to the client histogram, which is similar to SCOPE-FD's coverage penalty. Therefore, the authors need to consider more realistic and fair comparison baselines.} \\
+\noindent
+\textbf{Reply 5:} {We are grateful to the Reviewer for this suggestion, and we agree that random selection alone was not a sufficient baseline. We have added four published client-selection methods and ported each one into the federated distillation pipeline. The first is DivFL, which performs facility-location submodular maximization. In federated distillation a client does not send a gradient, so we use the public-set logit vector as the representation for the submodular objective. The second is SubTrunc, which is a truncated submodular method diversified by client loss. The third is UnionFL, which is diversified by historical participation. The fourth is Oort, which is a utility-based selector from standard federated learning. At the headline configuration over five seeds the results are as follows. SCOPE-FD reaches $71.21 \pm 0.99$ with a Gini of $1.33\%$. Random selection reaches $70.99 \pm 1.38$ with a Gini of $12.49\%$. DivFL reaches $69.88 \pm 0.83$ with a Gini of $36.84\%$. SubTrunc reaches $69.40 \pm 1.00$ with a Gini of $38.65\%$. UnionFL reaches $71.18 \pm 1.40$ with a Gini of $1.33\%$. We report these numbers plainly. SCOPE-FD is ahead of DivFL by $1.33$ percentage points and ahead of SubTrunc by $1.81$ percentage points. SCOPE-FD is statistically tied with random selection and with UnionFL on accuracy, and the clear separation is in participation fairness. We do not claim an accuracy win where the data does not support one. The ported methods are described in Section~II-A. The results are in Section~VI-C, Table~III, and Fig.~3 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 6:} \textit{Only a single value of Dirichlet $\alpha$ (0.5) is tested, producing moderate heterogeneity. Experiment scale is too small to represent Massive-MIMO systems.} \\
+\noindent
+\textbf{Reply 6:} {We thank the Reviewer for raising both points. We have addressed each one with new experiments.
+
+For the heterogeneity, we now sweep the Dirichlet parameter over $\alpha \in \{0.05, 0.1, 0.3, 0.5, 1.0, 5.0\}$ and we also include an independent and identically distributed setting. The behaviour is consistent across the whole range. At $\alpha = 0.05$, which is severe heterogeneity, SCOPE-FD reaches $26.74 \pm 4.19$ and random selection reaches $27.07 \pm 4.24$. At $\alpha = 5.0$, which is mild heterogeneity, SCOPE-FD reaches $84.67 \pm 0.11$ and random selection reaches $84.60 \pm 0.18$. Accuracy is therefore a tie at every level of heterogeneity. The participation Gini is $1.33\%$ for SCOPE-FD and $12.49\%$ for random selection at every level. The fairness advantage is therefore invariant to the degree of heterogeneity.
+
+For the scale, we now report client pools of $N \in \{47, 50, 53, 100, 200\}$ at participation ratios of five, ten, and twenty percent. The fairness result strengthens as the pool grows. At $N = 200$ with $K = 10$, SCOPE-FD reaches $51.27\%$ with a Gini of $0.00\%$, while random selection reaches $48.84\%$ with a Gini of $24.16\%$. We also report the cases where SCOPE-FD does not lead. At $N = 200$ with $K = 40$, random selection reaches $68.40\%$ and SCOPE-FD reaches $66.98\%$. We state this openly in the text. The advantage of SCOPE-FD is largest when participation is sparse, which is the regime the paper targets. The heterogeneity sweep is in Section~VI-E and Fig.~5. The scaling study is in Section~VI-H and Fig.~8 of the revised manuscript.}\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 2}}}
+
+\noindent
+\textbf{Comment 1:} \textit{The most important missing comparison is a debt-only selector with $\alpha_u = \alpha_d = 0$. Section IV-A states that this setting reduces SCOPE-FD to deterministic round-robin, and Section V-A shows that the debt term dominates the fairness guarantee. Without this baseline, it is unclear whether the gains in Fig. 3 come from the under-prediction and coverage terms or simply from replacing random selection with balanced rotation. Please also report ablations for debt plus under-prediction only and debt plus coverage only.} \\
+\noindent
+\textbf{Reply 1:} {We thank the Reviewer for this comment. It identified the single most important gap in our evidence, and the requested experiment has changed how we describe our own contribution. We have added the debt-only selector and the two partial variants. The complete four-way ablation now runs at the headline configuration, across the participation sweep, and across the channel sweep, with five seeds. At the headline configuration the results are as follows. The debt-only selector reaches $71.26 \pm 1.14$. Debt plus under-prediction reaches $70.55 \pm 1.19$. Debt plus coverage reaches $71.56 \pm 0.98$. The complete SCOPE-FD score reaches $71.21 \pm 0.99$. The participation Gini is $1.33\%$ for all four variants.
+
+We report the honest reading of this result. The Reviewer's suspicion was correct on the accuracy axis. The four variants are statistically indistinguishable in final accuracy, and the fairness guarantee comes entirely from the participation-debt term. The under-prediction and the coverage terms do not add accuracy. Their measurable contribution is to convergence speed. The complete score reaches seventy percent absolute accuracy in $69.8$ rounds, while the debt-only selector needs $71.0$ rounds and debt plus coverage needs $71.8$ rounds. This margin is small and we no longer describe it as a primary contribution. We have rewritten the claims in the Abstract, the Introduction, and the Evaluation so that the deterministic fairness guarantee is presented as the main result and the two auxiliary terms are presented as a small convergence refinement. The ablation is in Section~VI-B, Table~II, and Fig.~2. The claim statements were rewritten in the Abstract, in Section~I-A, and in Section~VII of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 2:} \textit{Equations (12) and (14) require each client to reveal its label histogram $h_i$. This is not raw-data sharing, but it still discloses the local class distribution. Since FD is partly motivated by privacy, this assumption should be treated as a central limitation. Please either evaluate the Laplace-noise or server-side surrogate variants mentioned in Section IV-D, or narrow the privacy-related claims.} \\
+\noindent
+\textbf{Reply 2:} \PENDING{The Laplace-mechanism sweep over $\varepsilon$ and the server-side surrogate-histogram variant are currently running. This reply will report the accuracy and fairness cost of each variant and will state the resulting limitation.}\\
+
+\noindent
+\textbf{Comment 3:} \textit{The participation-fairness proof is convincing, but the convergence claim needs more care. Section V-B says that the FedTSKD $O(1/t)$ bound holds ``without modification,'' but SCOPE-FD changes full participation into partial participation. Please provide a clearer theorem for the partial-participation setting, or state more modestly that SCOPE-FD is compatible with the FedTSKD pipeline under the assumptions of [13].} \\
+\noindent
+\textbf{Reply 3:} \PENDING{The revised convergence analysis is being prepared. This reply will either present the partial-participation theorem or adopt the more modest statement that the Reviewer suggests.}\\
+
+\noindent
+\textbf{Comment 4:} \textit{The experiments use a single reported seed and do not show confidence intervals or standard deviations. It remains unclear what the actual performance is under all possible scenarios. Claims such as ``statistically tied'' and ``3x faster'' should be supported by multi-seed results and error bars. The rounds-to-80\%-of-final-accuracy metric is useful, but it should be complemented with final accuracy tables, rounds to a fixed absolute accuracy, and sensitivity to $\alpha_u$, $\alpha_d$, Dirichlet $\alpha$, and K/N.} \\
+\noindent
+\textbf{Reply 4:} {We are grateful to the Reviewer for this detailed comment. We have acted on every part of it.
+
+All results now use multiple seeds. The main configurations use five seeds and the sweeps use three seeds. Every table entry is a mean and a standard deviation, and every figure carries confidence bands or error bars. We also report the number of seeds in each table.
+
+We added the two metrics that the Reviewer asks for. The paper now reports a plain final-accuracy table. It also reports the number of rounds needed to reach fixed absolute accuracy thresholds of sixty, seventy, and eighty percent, in place of relying on the relative rounds-to-eighty-percent-of-final metric alone.
+
+We added the four sensitivity studies. The coefficient study covers a grid of $\alpha_u$ and $\alpha_d$ with $30$ cells. The heterogeneity study covers Dirichlet $\alpha$ from $0.05$ to $5.0$ and the independent and identically distributed case. The participation study covers $K \in \{1, 3, 5, 10\}$ at $N = 30$ and participation ratios of five, ten, and twenty percent at $N$ up to $200$.
+
+We also re-checked the two claims the Reviewer names. For the tie claim, we now support it with paired Wilcoxon signed-rank tests over matched seeds rather than asserting it. For the speed claim, the multi-seed data does not support the original wording, and we have therefore removed it and replaced it with the measured rounds-to-threshold values with their standard deviations. The protocol is in Section~VI-A. The sensitivity studies are in Section~VI-D, Section~VI-E, Section~VI-F, and Section~VI-H of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 5:} \textit{The motivation emphasizes massive-MIMO, energy budgets, and contention-limited uplinks, but the selection score in Eq. (8) does not include any channel or energy information. The SNR sweep mainly shows that FedTSKD remains robust under noise; it does not show that SCOPE-FD exploits MIMO properties. Please either add channel/energy-aware experiments or clearly position SCOPE-FD as a fairness/data-coverage selector running on top of an mMIMO communication substrate.} \\
+\noindent
+\textbf{Reply 5:} \PENDING{The channel-aware and energy-aware variant is currently running under an energy-budget-constrained scenario. This reply will report the measured effect and will then either present the variant or adopt the positioning that the Reviewer suggests.}\\
+
+\noindent
+\textbf{Comment 6:} \textit{Please define ``K$|$N'' clearly as a divisibility condition in the abstract. In Section VI-A, fix missing spaces such as ``[13].FMNIST'' and ``sweeps. In every configuration.'' The title should likely use lowercase ``for'' if title case is applied consistently.} \\
+\noindent
+\textbf{Reply 6:} {We thank the Reviewer for catching these. All three have been corrected. The abstract now defines the notation explicitly and states that $K \mid N$ means that the cohort size $K$ divides the client-pool size $N$ without remainder. The missing spaces in Section~VI-A have been fixed, including ``[13]. FMNIST'' and ``sweeps. In every configuration.'' The title now uses lowercase ``for'' so that the title case is applied consistently. We also made a further proofreading pass over the whole manuscript for similar spacing errors.}\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 3}}}
+
+\noindent
+\textbf{Comment 1:} \textit{The authors clearly explain why traditional federated learning client selection methods cannot be directly applied to federated distillation.} \\
+\noindent
+\textbf{Reply 1:} {We thank the Reviewer for this request. We agree that this argument was asserted in prose and not demonstrated. We now demonstrate it. We took Oort, which is a standard utility-based selector from federated learning, and ran it unmodified inside the federated distillation pipeline at the headline configuration. The result is decisive. Oort reaches $21.14 \pm 0.60$ accuracy with a participation Gini of $83.33\%$. SCOPE-FD reaches $71.21 \pm 0.99$ with a Gini of $1.33\%$. Random selection reaches $70.99 \pm 1.38$. The gap is over fifty percentage points.
+
+The reason is the aggregation rule. In federated distillation the server averages logits on the public set with weights proportional to client data size. A utility-based selector repeatedly picks the same small group of high-loss clients. In federated learning this is useful because those updates are averaged into the global model. In federated distillation it instead narrows the set of clients that contribute to the consensus logits, so the distillation target collapses toward a small and biased subset. High per-client utility does not translate into a better consensus target. This experiment gives the direct evidence for the argument that previously appeared only as text. The port is described in Section~II-A and the measurement is in Section~VI-C and Table~III of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 2:} \textit{How sensitive is the proposed algorithm to different values of $\alpha_u$ and $\alpha_d$?} \\
+\noindent
+\textbf{Reply 2:} {We thank the Reviewer for this question. The algorithm is not sensitive to these two values. We ran a grid over $\alpha_u \in \{0, 0.1, 0.2, 0.3, 0.5, 0.8\}$ and $\alpha_d \in \{0, 0.05, 0.1, 0.2, 0.4\}$, giving $30$ cells with three seeds each. Final accuracy across the whole grid stays between $70.94\%$ and $72.27\%$, so the spread is $1.33$ percentage points. The participation Gini is $1.33\%$ in every cell without exception. This is the behaviour that Section~IV-A predicts, because the debt term dominates the score whenever $\alpha_u + \alpha_d < 1$, and so the fairness guarantee holds for any admissible choice. Please refer to Section~VI-D and Fig.~4 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 3:} \textit{Improve the resolution of Figure 1.} \\
+\noindent
+\textbf{Reply 3:} {We thank the Reviewer for pointing this out. Figure~1 has been regenerated at $400$ dots per inch and is now also supplied in vector form, so it stays sharp at any zoom level. We took the same opportunity to enlarge the fonts, thicken the plot lines, and clarify the axis labels and the legend. We applied the same treatment to every other figure in the manuscript for consistency.}\\
+
+\noindent
+\textbf{Comment 4:} \textit{How does SCOPE-FD perform under more severe non-IID settings?} \\
+\noindent
+\textbf{Reply 4:} {We thank the Reviewer for this question. We extended the heterogeneity sweep well past the original single value. The revised paper covers Dirichlet $\alpha \in \{0.05, 0.1, 0.3, 0.5, 1.0, 5.0\}$ and the independent and identically distributed case. Severe heterogeneity lowers accuracy for every method alike. At $\alpha = 0.05$, SCOPE-FD reaches $26.74 \pm 4.19$ and random selection reaches $27.07 \pm 4.24$. At $\alpha = 0.1$, SCOPE-FD reaches $39.28 \pm 2.55$ and random selection reaches $39.14 \pm 2.69$. The two methods are statistically tied on accuracy at every severity level we tested. The difference is in fairness, and it is stable. The participation Gini is $1.33\%$ for SCOPE-FD and $12.49\%$ for random selection at every value of $\alpha$. The fairness guarantee therefore does not degrade as the data becomes more heterogeneous, which is the property the guarantee is meant to provide. Please refer to Section~VI-E and Fig.~5 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 5:} \textit{How would the method perform under asynchronous federated learning or client dropout scenarios?} \\
+\noindent
+\textbf{Reply 5:} \PENDING{The client-dropout experiment and the bounded-staleness asynchronous experiment are currently running. This reply will report how the fairness guarantee and the accuracy behave when selected clients fail to return logits and when logits arrive late.}\\
+
+\noindent
+\textbf{Comment 6:} \textit{Since the proposed method relies on a public dataset, how sensitive is its performance to the quality or distribution of that public dataset?} \\
+\noindent
+\textbf{Reply 6:} \PENDING{The public-dataset sensitivity study is currently running. It varies the identity of the public set, its size, and the level of injected label noise. This reply will report those results.}\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 4}}}
+
+\noindent
+\textbf{Comment:} \textit{(There are no comments.)} \\
+\noindent
+\textbf{Reply:} {We thank Reviewer 4 for taking the time to evaluate our manuscript.}\\
+
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of the Attached Review Document}}}
+
+\noindent
+\textbf{Comment 1 (Convergence analysis):} \textit{The manuscript states that the convergence behavior of FedTSKD is preserved because SCOPE-FD only changes the composition of the selected client subset while leaving the remaining learning procedure unchanged. Since deterministic partial participation introduces a different client-selection policy, it would be helpful to clarify whether the assumptions required in the original convergence analysis of FedTSKD remain satisfied. If a complete theoretical extension is beyond the scope of this work, a brief discussion of the underlying assumptions would improve the presentation.} \\
+\noindent
+\textbf{Reply 1:} \PENDING{The assumption-by-assumption discussion is being prepared together with the revised convergence analysis. This reply will state which sampling assumptions of the original analysis are satisfied by a deterministic and without-replacement rotation and which are not.}\\
+
+\noindent
+\textbf{Comment 2 (Fairness evaluation):} \textit{The theoretical participation-fairness guarantee is one of the main strengths of the manuscript. However, the experimental validation could be expanded to demonstrate the proposed behavior under a broader range of settings. For example, additional experiments using different values of N and R, configurations where K does not divide N, or evaluation windows that do not exactly coincide with complete participation cycles would provide stronger empirical evidence for the generality of the proposed fairness behavior.} \\
+\noindent
+\textbf{Reply 2:} {We are grateful to the Reviewer for this suggestion. It asks for exactly the three stress tests that the original fairness evidence lacked, and we have added all three.
+
+For different client-pool sizes, the revised paper covers $N \in \{30, 47, 50, 53, 100, 200\}$ at several participation ratios.
+
+For the case where $K$ does not divide $N$, we added dedicated configurations. At $N = 47$ with $K = 6$, SCOPE-FD reaches a Gini of $1.40\%$ while random selection reaches $15.70\%$. At $N = 53$ with $K = 7$, SCOPE-FD reaches $1.25\%$ while random selection reaches $13.81\%$. The guarantee therefore degrades gracefully rather than breaking. The small residual arises because the total number of selections is not an exact multiple of the pool size, so the counts cannot all be equal.
+
+For evaluation windows that do not align with a participation cycle, we added a rolling-window Gini. It is computed over a window that is deliberately not aligned with the cycle length. SCOPE-FD stays between $4.52\%$ and $18.58\%$ across all tested configurations, while random selection stays between $43.85\%$ and $52.22\%$. The advantage therefore does not depend on measuring at a cycle boundary.
+
+For different numbers of rounds, we note that every run records the full per-round history, so the fairness metrics can be read at any horizon. We now report the fairness metrics at $R \in \{25, 50, 75, 100\}$ rather than only at the final round. The theoretical discussion of the non-divisible case is in Section~V-A. The measurements are in Section~VI-H and Fig.~8 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 3 (Experimental reproducibility):} \textit{The reported results appear to be obtained using a single random seed. Since federated learning performance can vary due to random initialization and data partitioning, reporting results over multiple independent runs together with statistics such as mean standard deviation would substantially improve the reproducibility and reliability of the reported performance, particularly for convergence-speed comparisons and the sparse participation setting.} \\
+\noindent
+\textbf{Reply 3:} {We thank the Reviewer for this suggestion. Every reported result now comes from multiple independent runs. The main configurations use five seeds and the sweeps use three seeds. We report the mean and the standard deviation for every entry, and we state the number of seeds in every table.
+
+We gave particular attention to the two cases the Reviewer highlights. For the convergence-speed comparison, we replaced the single-seed relative metric with rounds to fixed absolute accuracy, reported as a mean and a standard deviation over seeds, and we support the comparison with a paired Wilcoxon signed-rank test over matched seeds. For the sparse participation setting, the case $K = 1$ at $N = 30$ now uses multiple seeds and reads $60.61 \pm 1.68$ for SCOPE-FD. The participation sweep across $K \in \{1, 3, 5, 10\}$ is reported in the same way. Please refer to Section~VI-A for the protocol and to Section~VI-F for the sparse-participation sweep of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 4 (Ablation study):} \textit{The proposed scoring function consists of three complementary components. An ablation study comparing participation debt only, debt plus under-prediction bonus, debt plus class-coverage penalty, and the complete SCOPE-FD score would help quantify the contribution of each component and provide additional insight into the design choices.} \\
+\noindent
+\textbf{Reply 4:} {We thank the Reviewer for this suggestion, which matches the request of Reviewer 2. We have added the exact four-way comparison. Over five seeds at the headline configuration, participation debt only reaches $71.26 \pm 1.14$. Debt plus the under-prediction bonus reaches $70.55 \pm 1.19$. Debt plus the class-coverage penalty reaches $71.56 \pm 0.98$. The complete SCOPE-FD score reaches $71.21 \pm 0.99$. The participation Gini is $1.33\%$ for all four.
+
+The insight from this ablation is clear and we report it plainly. The participation-debt term alone provides the entire fairness guarantee. The two auxiliary terms do not improve final accuracy. Their contribution is confined to convergence speed, where the complete score reaches seventy percent absolute accuracy in $69.8$ rounds against $71.0$ rounds for debt only. We have adjusted the claims in the manuscript to match this evidence. Please refer to Section~VI-B, Table~II, and Fig.~2 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 5 (Privacy discussion):} \textit{The proposed method requires each client to upload its normalized label histogram. Although the manuscript briefly discusses possible privacy-preserving alternatives, a slightly more detailed discussion of the practical implications of sharing these statistics would further improve the completeness of the paper.} \\
+\noindent
+\textbf{Reply 5:} \PENDING{The privacy variants are currently running. This reply will give the extended discussion together with the measured cost of the Laplace mechanism and the server-side surrogate.}\\
+
+\end{document}
