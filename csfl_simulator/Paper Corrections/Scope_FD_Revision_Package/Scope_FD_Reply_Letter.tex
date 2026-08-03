@@ -97,7 +97,11 @@ We report the honest reading of this result. The Reviewer's suspicion was correc
 \noindent
 \textbf{Comment 2:} \textit{Equations (12) and (14) require each client to reveal its label histogram $h_i$. This is not raw-data sharing, but it still discloses the local class distribution. Since FD is partly motivated by privacy, this assumption should be treated as a central limitation. Please either evaluate the Laplace-noise or server-side surrogate variants mentioned in Section IV-D, or narrow the privacy-related claims.} \\
 \noindent
-\textbf{Reply 2:} \PENDING{The Laplace-mechanism sweep over $\varepsilon$ and the server-side surrogate-histogram variant are currently running. This reply will report the accuracy and fairness cost of each variant and will state the resulting limitation.}\\
+\textbf{Reply 2:} {We thank the Reviewer for this comment, and we agree that histogram disclosure had to be treated seriously rather than deferred. We evaluated both variants named in Section~IV-D. The first applies a Laplace mechanism to the histogram before the selector reads it, swept over $\varepsilon \in \{0.1, 0.5, 1, 2, 5\}$. The second removes the disclosure altogether by replacing the histogram with a server-side surrogate built from the public-set logits each client already submits.
+
+Neither variant costs anything measurable. The undefended selector reaches $71.99 \pm 0.63$. The Laplace variants reach $72.01 \pm 0.86$ at $\varepsilon = 0.1$ and $71.85 \pm 0.73$ at $\varepsilon = 5$, and the surrogate reaches $71.93 \pm 0.67$. Every difference lies inside one standard deviation, including at the strongest noise setting. The participation Gini is $1.33\%$ for all seven variants.
+
+The reason is structural and connects to the ablation of Comment 1. The histogram feeds only the under-prediction and coverage terms, and those terms do not change final accuracy, so perturbing their input cannot change it either. The participation-debt term that carries the fairness guarantee never reads the histogram. Because the disclosure can be removed at no cost, we did not need to narrow the privacy claims. Please refer to Section~VI-I of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 3:} \textit{The participation-fairness proof is convincing, but the convergence claim needs more care. Section V-B says that the FedTSKD $O(1/t)$ bound holds ``without modification,'' but SCOPE-FD changes full participation into partial participation. Please provide a clearer theorem for the partial-participation setting, or state more modestly that SCOPE-FD is compatible with the FedTSKD pipeline under the assumptions of [13].} \\
@@ -120,7 +124,13 @@ We also re-checked the two claims the Reviewer names. For the tie claim, we now 
 \noindent
 \textbf{Comment 5:} \textit{The motivation emphasizes massive-MIMO, energy budgets, and contention-limited uplinks, but the selection score in Eq. (8) does not include any channel or energy information. The SNR sweep mainly shows that FedTSKD remains robust under noise; it does not show that SCOPE-FD exploits MIMO properties. Please either add channel/energy-aware experiments or clearly position SCOPE-FD as a fairness/data-coverage selector running on top of an mMIMO communication substrate.} \\
 \noindent
-\textbf{Reply 5:} \PENDING{The channel-aware and energy-aware variant is currently running under an energy-budget-constrained scenario. This reply will report the measured effect and will then either present the variant or adopt the positioning that the Reviewer suggests.}\\
+\textbf{Reply 5:} {We are grateful for this comment, because acting on it produced one of the more informative results in the revision. We built the channel-aware and energy-aware variant the Reviewer describes, adding a fourth score term that reads per-client channel quality and energy, and evaluated it under an explicit energy budget.
+
+The result is negative and we report it in full. The variant is worse on both axes at every downlink SNR. It reaches $61.56 \pm 3.31$ at $-30$~dB against $65.23 \pm 1.39$ for the plain selector, a deficit of about $3.5$ percentage points that is stable across the sweep, and its participation Gini rises to $11.69\%$ against $1.33\%$.
+
+We then instrumented the selection loop to find out why. The energy budget acts as a hard feasibility filter that removes clients whose energy exceeds the remaining allowance, regardless of how far behind they are in participation. Under the plain selector every round admits the full cohort of five and the participation counts span exactly one, as Proposition~1 requires. Under the channel-aware variant $89$ of $100$ rounds admit fewer than five clients, the mean cohort falls to $3.56$, the counts span $15$, and two of thirty clients are never selected. This is a genuine boundary of the guarantee. Proposition~1 assumes every client remains selectable, and a hard constraint that filters on a criterion uncorrelated with debt breaks that assumption.
+
+We have therefore taken the second option the Reviewer offers, and now position SCOPE-FD explicitly as a fairness and data-coverage selector operating on top of an mMIMO substrate rather than one that exploits channel state. The difference is that this positioning is now supported by a measurement rather than asserted. Please refer to Section~VI-K of the revised manuscript and to the revised framing in the Abstract and Section~VII.}\\
 
 \noindent
 \textbf{Comment 6:} \textit{Please define ``K$|$N'' clearly as a divisibility condition in the abstract. In Section VI-A, fix missing spaces such as ``[13].FMNIST'' and ``sweeps. In every configuration.'' The title should likely use lowercase ``for'' if title case is applied consistently.} \\
@@ -154,12 +164,22 @@ The reason is the aggregation rule. In federated distillation the server average
 \noindent
 \textbf{Comment 5:} \textit{How would the method perform under asynchronous federated learning or client dropout scenarios?} \\
 \noindent
-\textbf{Reply 5:} \PENDING{The client-dropout experiment and the bounded-staleness asynchronous experiment are currently running. This reply will report how the fairness guarantee and the accuracy behave when selected clients fail to return logits and when logits arrive late.}\\
+\textbf{Reply 5:} {We thank the Reviewer for this question. We added both settings. Under dropout each selected client fails to return its logits with probability $p_{\text{drop}}$ and the server aggregates over whoever responded. Under bounded staleness a client may return its logits up to $W$ rounds late, aggregated with a staleness discount.
+
+Under dropout the method retains both advantages. At $p_{\text{drop}} = 0.1$ it reaches $71.16 \pm 0.69$ against $70.95 \pm 1.02$ for random selection, and at $p_{\text{drop}} = 0.3$ it reaches $69.20 \pm 1.03$ against $69.16 \pm 1.48$. Accuracy falls for both as dropout rises, since fewer clients contribute to each round. The Gini moves from $0.80\%$ to $1.88\%$ while random moves from $13.42\%$ to $15.45\%$. Dropout is in fact the only perturbation in the whole revision that moves the Gini at all, because it is the only one that changes which clients actually participated.
+
+Under bounded staleness the guarantee is untouched. The Gini is $1.33\%$ at both $W = 1$ and $W = 2$, identical to the synchronous value, because a late arrival changes when a contribution is aggregated but not whether the client was selected. Accuracy is $71.71 \pm 0.61$ and $71.54 \pm 0.60$ respectively. Please refer to Section~VI-J of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 6:} \textit{Since the proposed method relies on a public dataset, how sensitive is its performance to the quality or distribution of that public dataset?} \\
 \noindent
-\textbf{Reply 6:} \PENDING{The public-dataset sensitivity study is currently running. It varies the identity of the public set, its size, and the level of injected label noise. This reply will report those results.}\\
+\textbf{Reply 6:} {We thank the Reviewer for this question. We varied the public set along three axes, namely its identity, its size, and the level of injected label noise.
+
+Identity matters most. Replacing the matched public set with MNIST lowers accuracy from $71.75 \pm 0.81$ to $67.10 \pm 1.05$, a drop of $4.65$ percentage points. Size matters with a clear threshold. Reducing the public set from $2000$ to $500$ samples costs about $2.5$ percentage points, but reducing it further from $500$ to $100$ costs only a further $0.17$, so a few hundred public samples are sufficient in this setting.
+
+Label noise on the public set has no effect at all, and we report this as a structural rather than an empirical finding. Federated distillation aggregates public-set logits and never reads public-set labels, so label noise cannot enter the pipeline. The measured values at noise levels $0.1$ and $0.3$ are identical to the noise-free baseline, which confirms this.
+
+We also note that the proposed selector degrades in step with random selection rather than more gracefully, with the gap between them staying between $0.03$ and $0.38$ percentage points across all cells. We state this plainly rather than claiming a robustness advantage the data does not support. Please refer to Section~VI-H of the revised manuscript.}\\
 
 \hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 4}}}
 
@@ -186,7 +206,7 @@ For the case where $K$ does not divide $N$, we added dedicated configurations. A
 
 For evaluation windows that do not align with a participation cycle, we added a rolling-window Gini. It is computed over a window that is deliberately not aligned with the cycle length. SCOPE-FD stays between $4.52\%$ and $18.58\%$ across all tested configurations, while random selection stays between $43.85\%$ and $52.22\%$. The advantage therefore does not depend on measuring at a cycle boundary.
 
-For different numbers of rounds, we note that every run records the full per-round history, so the fairness metrics can be read at any horizon. We now report the fairness metrics at $R \in \{25, 50, 75, 100\}$ rather than only at the final round. The theoretical discussion of the non-divisible case is in Section~V-A. The measurements are in Section~VI-H and Fig.~8 of the revised manuscript.}\\
+For different numbers of rounds, we note that every run records the full per-round history, so the fairness metrics can be read at any horizon. We now report the fairness metrics at $R \in \{25, 50, 75, 100\}$ rather than only at the final round. The theoretical discussion of the non-divisible case is in Section~V-A. The measurements are in Section~VI-L and Fig.~8 of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 3 (Experimental reproducibility):} \textit{The reported results appear to be obtained using a single random seed. Since federated learning performance can vary due to random initialization and data partitioning, reporting results over multiple independent runs together with statistics such as mean standard deviation would substantially improve the reproducibility and reliability of the reported performance, particularly for convergence-speed comparisons and the sparse participation setting.} \\
