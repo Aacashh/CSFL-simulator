@@ -210,14 +210,19 @@ if [[ "$JOBS" -le 1 ]]; then
 else
     echo "[note] running $JOBS jobs at a time; each is its own process, so CUDA"
     echo "       memory is returned on exit. Output per job is in its own stdout.log."
-    i=0
-    for job in "${JOBS_LIST[@]}"; do
-        i=$((i+1))
-        while (( $(jobs -rp | wc -l) >= JOBS )); do sleep 10; done
-        [[ "$DRY_RUN" == false ]] && wait_for_vram
-        run_one "$job" "$i" &
-    done 2>&1 | tee -a "$LOG"
-    wait
+    # The wait must live inside the same subshell as the background jobs. A
+    # `wait` placed after the pipeline runs in the parent, which knows nothing
+    # about them, and aggregation would then start on half-written results.
+    {
+        i=0
+        for job in "${JOBS_LIST[@]}"; do
+            i=$((i+1))
+            while (( $(jobs -rp | wc -l) >= JOBS )); do sleep 10; done
+            [[ "$DRY_RUN" == false ]] && wait_for_vram
+            run_one "$job" "$i" &
+        done
+        wait
+    } 2>&1 | tee -a "$LOG"
 fi
 
 [[ "$DRY_RUN" == true ]] && { echo; echo "Dry run, nothing executed."; exit 0; }
