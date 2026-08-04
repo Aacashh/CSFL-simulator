@@ -125,9 +125,19 @@ fi
 # ------------------------------------------------------------------ EMNIST ---
 hr; echo "EMNIST  (~536 MB)"
 RAW="$DATA/EMNIST/raw"
-if [[ -f "$RAW/emnist-digits-train-images-idx3-ubyte" ]]; then
+# torchvision opens all four of these, so all four must be present. Checking
+# only one lets a partial extraction from an earlier attempt short-circuit the
+# repair, which is exactly what happened before.
+EMNIST_FILES=(emnist-digits-train-images-idx3-ubyte emnist-digits-train-labels-idx1-ubyte
+              emnist-digits-test-images-idx3-ubyte  emnist-digits-test-labels-idx1-ubyte)
+emnist_complete=true
+for f in "${EMNIST_FILES[@]}"; do
+    [[ -f "$RAW/$f" ]] || { emnist_complete=false; break; }
+done
+if [[ "$emnist_complete" == true ]]; then
     echo "  already extracted, skipping"
 else
+    [[ -d "$RAW" ]] && echo "  incomplete extraction detected, redoing it"
     mkdir -p "$RAW"
     OK=false
     # primary mirror, then the Google-hosted mirror torchvision also ships
@@ -154,8 +164,7 @@ else
         ) && echo "  extracted"
         # confirm the four files torchvision actually opens
         miss=0
-        for f in emnist-digits-train-images-idx3-ubyte emnist-digits-train-labels-idx1-ubyte \
-                 emnist-digits-test-images-idx3-ubyte  emnist-digits-test-labels-idx1-ubyte; do
+        for f in "${EMNIST_FILES[@]}"; do
             [[ -f "$RAW/$f" ]] || { echo "  !! missing $f"; miss=1; }
         done
         [[ $miss -eq 0 ]] || FAILED+=("EMNIST")

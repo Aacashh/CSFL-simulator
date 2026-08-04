@@ -52,6 +52,10 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Python buffers stdout when it is not a terminal, so under nohup the per-round
+# progress would arrive in chunks. Stream it instead.
+export PYTHONUNBUFFERED=1
+
 # Output root. Honours SCOPE_OUT, then falls back to whichever layout is
 # actually present, since some checkouts keep the runs under runs/.
 OUT="${SCOPE_OUT:-}"
@@ -190,8 +194,8 @@ run_one() {
     # shellcheck disable=SC2086
     python3 -m csfl_simulator compare --methods "$methods" \
         --name "h_${fam}_${tag}" --output "$res" \
-        $COMMON $args > "$dir/stdout.log" 2>&1
-    local rc=$? mins=$(( ($(date +%s)-t0)/60 ))
+        $COMMON $args 2>&1 | tee "$dir/stdout.log"
+    local rc=${PIPESTATUS[0]} mins=$(( ($(date +%s)-t0)/60 ))
     if [[ $rc -eq 0 ]] && is_done "$res"; then echo "    ok  (${mins} min)"
     else echo "    FAILED rc=$rc (${mins} min), see $dir/stdout.log"; fi
 }
@@ -217,7 +221,9 @@ if [[ "$JOBS" -le 1 ]]; then
     done 2>&1 | tee -a "$LOG"
 else
     echo "[note] running $JOBS jobs at a time; each is its own process, so CUDA"
-    echo "       memory is returned on exit. Output per job is in its own stdout.log."
+    echo "       memory is returned on exit. With concurrency the per-round lines"
+    echo "       from different jobs interleave on screen; each job's own"
+    echo "       stdout.log stays clean and complete."
     # The wait must live inside the same subshell as the background jobs. A
     # `wait` placed after the pipeline runs in the parent, which knows nothing
     # about them, and aggregation would then start on half-written results.

@@ -84,6 +84,10 @@ set -uo pipefail   # deliberately no -e: one bad job must not kill the campaign
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Python buffers stdout when it is not a terminal, so under nohup the per-round
+# progress would arrive in chunks. Stream it instead.
+export PYTHONUNBUFFERED=1
+
 # Output root. Honours SCOPE_OUT, then falls back to whichever layout is
 # actually present, since some checkouts keep the runs under runs/.
 OUT="${SCOPE_OUT:-}"

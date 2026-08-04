@@ -31,6 +31,10 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 ROOT="$(pwd)"
 
+# Python buffers stdout when it is not a terminal, so under nohup the per-round
+# progress would arrive in chunks. Stream it instead.
+export PYTHONUNBUFFERED=1
+
 SKIP_HARDENING=false
 ONLY_HARDENING=false
 DRY_RUN=false
