@@ -19,6 +19,8 @@
 # Idempotent. Anything already extracted is left alone, so it is safe to re-run.
 #
 # Datasets and sizes:
+#   FMNIST     ~30 MB    the primary private set
+#   MNIST      ~10 MB    private set and cross-pair public set
 #   CIFAR-10   ~163 MB   private set for the CIFAR runs
 #   STL-10     ~2.5 GB   public set for the CIFAR runs
 #   EMNIST     ~536 MB   private set for the cross-dataset runs
@@ -80,6 +82,20 @@ fetch() {
     return 1
 }
 
+# ------------------------------------------------- Fashion-MNIST and MNIST ---
+# These are the primary datasets for almost every run. They were previously
+# assumed to be on disk, which is true of a machine that has run before and
+# false of a fresh checkout. torchvision fetches them from mirrors that have
+# been reliable here, so the simulator's own loader is used.
+hr; echo "Fashion-MNIST and MNIST  (~90 MB total)"
+python3 - <<'PYEOF' || FAILED+=("Fashion-MNIST/MNIST")
+from csfl_simulator.core.datasets import get_dataset
+for name in ("Fashion-MNIST", "MNIST"):
+    for train in (True, False):
+        get_dataset(name, train=train, download=True)
+    print(f"  {name} OK")
+PYEOF
+
 # ---------------------------------------------------------------- CIFAR-10 ---
 hr; echo "CIFAR-10  (~163 MB)"
 if [[ -d "$DATA/cifar-10-batches-py" ]]; then
@@ -123,10 +139,26 @@ else
         fi
     done
     if [[ "$OK" == true ]]; then
-        ( cd "$RAW" \
-          && unzip -oq gzip.zip \
-          && for f in gzip/*.gz; do gunzip -c "$f" > "$(basename "${f%.gz}")"; done \
-          && rm -rf gzip ) && echo "  extracted"
+        # torchvision wants emnist-digits-*-idx?-ubyte directly in raw/. The
+        # archive nests them under gzip/, but mirrors differ, so find them
+        # wherever they land rather than assuming the layout.
+        (
+            cd "$RAW" || exit 1
+            unzip -oq gzip.zip || exit 1
+            found=0
+            while IFS= read -r f; do
+                gunzip -c "$f" > "$(basename "${f%.gz}")" && found=$((found+1))
+            done < <(find . -name 'emnist-digits-*.gz' -type f)
+            [[ $found -gt 0 ]] || { echo "  !! no emnist-digits-*.gz inside the archive"; exit 1; }
+            find . -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+        ) && echo "  extracted"
+        # confirm the four files torchvision actually opens
+        miss=0
+        for f in emnist-digits-train-images-idx3-ubyte emnist-digits-train-labels-idx1-ubyte \
+                 emnist-digits-test-images-idx3-ubyte  emnist-digits-test-labels-idx1-ubyte; do
+            [[ -f "$RAW/$f" ]] || { echo "  !! missing $f"; miss=1; }
+        done
+        [[ $miss -eq 0 ]] || FAILED+=("EMNIST")
     else
         FAILED+=("EMNIST")
     fi
