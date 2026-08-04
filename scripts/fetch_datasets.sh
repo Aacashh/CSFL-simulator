@@ -42,6 +42,7 @@ DATA="${REPO_ROOT}/data"
 mkdir -p "$DATA"
 
 FAILED=()
+SKIPPED=()      # optional datasets that did not work out; these never block
 
 hr() { printf '%s\n' "-------------------------------------------------------------"; }
 
@@ -167,9 +168,10 @@ else
         for f in "${EMNIST_FILES[@]}"; do
             [[ -f "$RAW/$f" ]] || { echo "  !! missing $f"; miss=1; }
         done
-        [[ $miss -eq 0 ]] || FAILED+=("EMNIST")
+        [[ $miss -eq 0 ]] || { echo "  !! EMNIST unusable; it is optional, continuing"; SKIPPED+=("EMNIST"); }
     else
-        FAILED+=("EMNIST")
+        echo "  !! EMNIST download failed; it is optional, continuing"
+        SKIPPED+=("EMNIST")
     fi
 fi
 
@@ -187,7 +189,7 @@ python3 - <<'PY'
 import sys
 from csfl_simulator.core.datasets import get_dataset
 bad = []
-for d in ("Fashion-MNIST", "MNIST", "CIFAR-10", "STL-10", "EMNIST", "FSDD"):
+for d in ("Fashion-MNIST", "MNIST", "CIFAR-10", "STL-10", "FSDD"):
     try:
         tr = get_dataset(d, train=True, download=False)
         print(f"  {d:<14} OK   train={len(tr)}")
@@ -212,7 +214,8 @@ if [[ ${#FAILED[@]} -ne 0 || $VERIFY -ne 0 ]]; then
     exit 1
 fi
 
-echo "All datasets present and loadable."
+echo "All required datasets present and loadable."
+[[ ${#SKIPPED[@]} -gt 0 ]] && echo "Skipped (optional, not needed by any scheduled run): ${SKIPPED[*]}"
 
 if [[ "$RUN_AFTER" != true ]]; then
     echo "Launch the campaign when ready:"

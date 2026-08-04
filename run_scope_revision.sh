@@ -168,7 +168,12 @@ for s in $SEEDS_AUDIO; do add audio_fsdd "le3_s$s" "$M5" "$P_AUDIO --seed $s"; d
 T1=${#JOBS[@]}
 
 # TIER 2 — requested, expensive (~36h)
-for d in MNIST EMNIST; do for s in $SEEDS; do
+# EMNIST is omitted: its NIST mirror would not extract into a layout
+# torchvision accepts on this machine. The cross-dataset claim rests on
+# MNIST here, on the FSDD audio study, and on the single-seed EMNIST
+# replication already reported in the manuscript. Re-add "EMNIST" below
+# if the archive is ever obtained by hand.
+for d in MNIST; do for s in $SEEDS; do
     add dataset_generality "${d}_s$s" "$M5" "$P_IMG --dataset $d --seed $s"; done; done                                   # R1.3 R2.4
 for s in $SEEDS; do add cifar10_multiseed "s$s" "$M5" "$P_CIFAR --seed $s"; done                                          # R2.4
 for s in $SEEDS; do                                                                                                       # R3.6
@@ -233,7 +238,7 @@ if [[ "$SKIP_TESTS" == false && "$DRY_RUN" == false ]]; then
 import ssl, sys
 from csfl_simulator.core.datasets import get_dataset
 missing = []
-for d in ("CIFAR-10", "STL-10", "EMNIST"):
+for d in ("CIFAR-10", "STL-10"):
     try:
         get_dataset(d, train=True, download=True)
         print(f"  {d} OK")
