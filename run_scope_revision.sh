@@ -83,7 +83,15 @@ set -uo pipefail   # deliberately no -e: one bad job must not kill the campaign
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-OUT="runs_scope_revised"
+# Output root. Honours SCOPE_OUT, then falls back to whichever layout is
+# actually present, since some checkouts keep the runs under runs/.
+OUT="${SCOPE_OUT:-}"
+if [[ -z "$OUT" ]]; then
+    if   [[ -d "runs_scope_revised" ]];      then OUT="runs_scope_revised"
+    elif [[ -d "runs/runs_scope_revised" ]]; then OUT="runs/runs_scope_revised"
+    else OUT="runs_scope_revised"
+    fi
+fi
 SEEDS="11 22 33"
 SEEDS_AUDIO="11 22 33 44 55"   # audio is the only non-image evidence, so 5 seeds
 REF_METHOD="fd_native.scope_fd"
