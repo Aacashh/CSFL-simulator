@@ -141,10 +141,10 @@ P_IMG="--dataset Fashion-MNIST --model FD-CNN2 --model-heterogeneous --model-poo
 # 150 because FSDD's held-out split is only 300 samples, so 300 would make the
 # distillation set identical to the evaluation set.
 P_AUDIO="--dataset FSDD --model AudioCNN --public-dataset-size 150 --batch-size 32 --distillation-batch-size 150 --local-epochs 3"
-# CIFAR draws its public set from its own held-out split, as every other
-# family does. That is a 2000-of-10000 overlap, the same fraction FMNIST
-# uses, and it removes a 2.5 GB STL-10 download for three runs.
-P_CIFAR="--dataset CIFAR-10 --public-dataset same --model ResNet18-FD --model-heterogeneous --model-pool ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
+# CIFAR pairs with STL-10, matching the original submission. STL-10 is a
+# genuinely separate unlabeled corpus, so unlike the "same" convention used
+# elsewhere the public set here is disjoint from the evaluation set.
+P_CIFAR="--dataset CIFAR-10 --public-dataset STL-10 --model ResNet18-FD --model-heterogeneous --model-pool ResNet18-FD,MobileNetV2-FD,ShuffleNetV2-FD"
 
 # ---- build the job list ---------------------------------------------------
 JOBS=()
@@ -223,13 +223,13 @@ if [[ "$SKIP_TESTS" == false && "$DRY_RUN" == false ]]; then
     # for R1. Surface a broken download now, not ~28h in. Non-fatal: nothing
     # else depends on FSDD.
     # Twelve runs failed last campaign with CERTIFICATE_VERIFY_FAILED while
-    # fetching CIFAR-10 and EMNIST. Fail loudly here instead of ~20h in.
+    # fetching CIFAR-10, STL-10 and EMNIST. Fail loudly here instead of ~20h in.
     echo "[gate] datasets that require a download ..."
     python3 - <<'PYEOF' || echo "  !! DATASET DOWNLOAD FAILED — see the SSL note in the header."
 import ssl, sys
 from csfl_simulator.core.datasets import get_dataset
 missing = []
-for d in ("CIFAR-10", "EMNIST"):
+for d in ("CIFAR-10", "STL-10", "EMNIST"):
     try:
         get_dataset(d, train=True, download=True)
         print(f"  {d} OK")

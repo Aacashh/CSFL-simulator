@@ -8,7 +8,7 @@
 # WHY THIS EXISTS
 # Twelve runs in the previous campaign died with
 #     urllib.error.URLError: [SSL: CERTIFICATE_VERIFY_FAILED]
-# while torchvision tried to fetch CIFAR-10 and EMNIST mid-run, and the
+# while torchvision tried to fetch CIFAR-10, STL-10 and EMNIST mid-run, and the
 # failure only surfaced when each job reached its slot, hours in. This script
 # fetches all three up front with curl, which can be told to skip certificate
 # verification, and then verifies every archive against the MD5 that torchvision
@@ -19,7 +19,8 @@
 # Idempotent. Anything already extracted is left alone, so it is safe to re-run.
 #
 # Datasets and sizes:
-#   CIFAR-10   ~163 MB   private set and public set for the CIFAR runs
+#   CIFAR-10   ~163 MB   private set for the CIFAR runs
+#   STL-10     ~2.5 GB   public set for the CIFAR runs
 #   EMNIST     ~536 MB   private set for the cross-dataset runs
 #   FSDD       ~10 MB    audio, fetched through the simulator's own loader
 # =============================================================================
@@ -92,6 +93,19 @@ else
     fi
 fi
 
+# ------------------------------------------------------------------ STL-10 ---
+hr; echo "STL-10  (~2.5 GB)"
+if [[ -d "$DATA/stl10_binary" ]]; then
+    echo "  already extracted, skipping"
+else
+    if fetch "http://ai.stanford.edu/~acoates/stl10/stl10_binary.tar.gz" \
+             "$DATA/stl10_binary.tar.gz" "91f7769df0f17e558f3565bffb0c7dfb"; then
+        tar -xzf "$DATA/stl10_binary.tar.gz" -C "$DATA" && echo "  extracted"
+    else
+        FAILED+=("STL-10")
+    fi
+fi
+
 # ------------------------------------------------------------------ EMNIST ---
 hr; echo "EMNIST  (~536 MB)"
 RAW="$DATA/EMNIST/raw"
@@ -132,7 +146,7 @@ python3 - <<'PY'
 import sys
 from csfl_simulator.core.datasets import get_dataset
 bad = []
-for d in ("Fashion-MNIST", "MNIST", "CIFAR-10", "EMNIST", "FSDD"):
+for d in ("Fashion-MNIST", "MNIST", "CIFAR-10", "STL-10", "EMNIST", "FSDD"):
     try:
         tr = get_dataset(d, train=True, download=False)
         print(f"  {d:<14} OK   train={len(tr)}")
@@ -152,6 +166,7 @@ if [[ ${#FAILED[@]} -ne 0 || $VERIFY -ne 0 ]]; then
     echo "fetch the archive on another machine, copy it to the path below, then"
     echo "re-run this script to verify and extract:"
     echo "    CIFAR-10  -> ${DATA}/cifar-10-python.tar.gz"
+    echo "    STL-10    -> ${DATA}/stl10_binary.tar.gz"
     echo "    EMNIST    -> ${DATA}/EMNIST/raw/gzip.zip"
     exit 1
 fi
