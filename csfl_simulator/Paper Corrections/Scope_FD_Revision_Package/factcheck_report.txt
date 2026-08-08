@@ -1,0 +1,158 @@
+manuscript : /Users/advaitpathak/CSFL-simulator/CSFL-simulator/csfl_simulator/Paper Corrections/Scope_FD_Revision_Package/main_scope_revised.tex
+runs       : /Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs_scope_revised/runs_scope_revised
+
+==============================================================================
+PASS A   every quoted number traced to a run
+==============================================================================
+
+62 distinct mean +- sd pairs
+  ok    12.95 +- 0.96   <-  dirichlet_severity/divfl_fd n=3 accuracy  (+1 more)
+  ok    13.11 +- 1.20   <-  dirichlet_severity/scope_fd n=3 accuracy
+  ok    13.47 +- 1.33   <-  dirichlet_severity/random n=3 accuracy
+  ok    21.14 +- 0.60   <-  literature_baselines/oort n=5 accuracy
+  ok    26.74 +- 4.19   <-  dirichlet_severity/scope_fd n=3 accuracy
+  ok    27.07 +- 4.24   <-  dirichlet_severity/random n=3 accuracy
+  ok    40.53 +- 1.49   <-  audio_fsdd/divfl_fd n=5 accuracy
+  ok    40.66 +- 1.48   <-  audio_fsdd/subtrunc_fd n=5 accuracy
+  ok    44.99 +- 1.59   <-  audio_fsdd/random n=5 accuracy
+  ok    45.54 +- 1.17   <-  audio_fsdd/scope_fd_debt_only n=5 accuracy
+  ok    46.16 +- 1.69   <-  audio_fsdd/scope_fd n=5 accuracy
+  ok    58.67 +- 2.28   <-  literature_baselines_k_sweep/random n=3 accuracy
+  ok    60.61 +- 1.68   <-  ablation_k_sweep/scope_fd_no_diversity n=3 accuracy  (+2 more)
+  ok    61.56 +- 3.31   <-  channel_energy/scope_fd_channel_aware n=3 accuracy
+  ok    62.48 +- 3.23   <-  channel_energy/scope_fd_channel_aware n=3 accuracy
+  ok    63.95 +- 3.04   <-  channel_energy/scope_fd_channel_aware n=3 accuracy
+  ok    65.23 +- 1.39   <-  ablation_channel_sweep/scope_fd n=3 accuracy  (+1 more)
+  ok    65.95 +- 1.17   <-  ablation_channel_sweep/scope_fd n=3 accuracy  (+1 more)
+  ok    66.72 +- 0.89   <-  public_dataset_sensitivity/random n=3 accuracy
+  ok    67.10 +- 1.05   <-  public_dataset_sensitivity/scope_fd n=3 accuracy
+  ok    67.14 +- 0.95   <-  public_dataset_sensitivity/scope_fd_debt_only n=3 accuracy
+  ok    67.39 +- 0.97   <-  ablation_channel_sweep/scope_fd n=3 accuracy  (+1 more)
+  ok    68.04 +- 1.34   <-  literature_baselines_k_sweep/random n=3 accuracy
+  ok    69.05 +- 0.94   <-  ablation_k_sweep/scope_fd n=3 accuracy  (+1 more)
+  ok    69.05 +- 1.16   <-  public_dataset_sensitivity/scope_fd n=3 accuracy
+  ok    69.16 +- 1.48   <-  dropout/random n=3 accuracy
+  ok    69.20 +- 1.03   <-  dropout/scope_fd n=3 accuracy
+  ok    69.22 +- 0.84   <-  public_dataset_sensitivity/scope_fd n=3 accuracy
+  ok    69.40 +- 1.00   <-  dirichlet_severity/subtrunc_fd n=5 accuracy  (+1 more)
+  ok    69.88 +- 0.83   <-  dirichlet_severity/divfl_fd n=5 accuracy  (+1 more)
+  ok    70.09 +- 1.04   <-  dropout/random n=3 accuracy
+  ok    70.41 +- 1.00   <-  dropout/scope_fd n=3 accuracy
+  ok    70.55 +- 1.19   <-  ablation_headline/scope_fd_no_diversity n=5 accuracy
+  ok    70.95 +- 1.02   <-  dropout/random n=3 accuracy
+  ok    70.99 +- 1.38   <-  dirichlet_severity/random n=5 accuracy  (+1 more)
+  ok    71.03 +- 1.00   <-  dirichlet_severity/scope_fd_debt_only n=5 accuracy  (+1 more)
+  ok    71.05 +- 1.18   <-  bounded_staleness/random n=3 accuracy
+  ok    71.16 +- 0.69   <-  dropout/scope_fd n=3 accuracy
+  ok    71.18 +- 1.40   <-  literature_baselines/unionfl_fd n=5 accuracy
+  ok    71.21 +- 0.99   <-  ablation_headline/scope_fd n=5 accuracy  (+2 more)
+  ok    71.26 +- 1.14   <-  ablation_headline/scope_fd_debt_only n=5 accuracy
+  ok    71.38 +- 1.20   <-  bounded_staleness/random n=3 accuracy
+  ok    71.54 +- 0.60   <-  bounded_staleness/scope_fd n=3 accuracy
+  ok    71.56 +- 0.98   <-  ablation_headline/scope_fd_no_server n=5 accuracy
+  ok    71.71 +- 0.61   <-  bounded_staleness/scope_fd n=3 accuracy
+  ok    71.71 +- 0.72   <-  histogram_privacy/scope_fd_hist_dp_eps0_5 n=3 accuracy
+  ok    71.75 +- 0.81   <-  ablation_k_sweep/scope_fd n=3 accuracy  (+3 more)
+  ok    71.78 +- 0.80   <-  histogram_privacy/scope_fd_hist_dp_eps2 n=3 accuracy
+  ok    71.85 +- 0.73   <-  histogram_privacy/scope_fd_hist_dp_eps5 n=3 accuracy
+  ok    71.93 +- 0.67   <-  histogram_privacy/scope_fd_surrogate_hist n=3 accuracy
+  ok    71.97 +- 0.69   <-  histogram_privacy/scope_fd_hist_dp_eps1 n=3 accuracy
+  ok    71.99 +- 0.63   <-  histogram_privacy/scope_fd n=3 accuracy
+  ok    72.01 +- 0.86   <-  histogram_privacy/scope_fd_hist_dp_eps0_1 n=3 accuracy
+  ok    84.60 +- 0.18   <-  dirichlet_severity/random n=5 accuracy
+  ok    84.67 +- 0.11   <-  dirichlet_severity/scope_fd n=5 accuracy
+  ok    85.61 +- 0.09   <-  iid_sanity/random n=5 accuracy
+  ok    85.68 +- 0.07   <-  iid_sanity/scope_fd n=5 accuracy
+  ok    87.91 +- 0.50   <-  dataset_generality/subtrunc_fd n=3 accuracy
+  ok    88.48 +- 0.43   <-  dataset_generality/divfl_fd n=3 accuracy
+  ok    90.50 +- 0.56   <-  dataset_generality/scope_fd n=3 accuracy
+  ok    90.58 +- 0.43   <-  dataset_generality/random n=3 accuracy
+  ok    90.88 +- 0.42   <-  dataset_generality/scope_fd_debt_only n=3 accuracy
+
+33 distinct bare percentages
+  ok     0.00%  <-  ablation_k_sweep/scope_fd_debt_only n=3 fairness_gini  (+297 more)
+  ok     0.42%  <-  dropout/scope_fd gini@R=100
+  ok     0.67%  <-  ablation_k_sweep/scope_fd_debt_only n=3 fairness_gini  (+23 more)
+  ok     0.80%  <-  dropout/scope_fd n=3 fairness_gini
+  ok     1.25%  <-  scale_and_nondivisible/scope_fd_debt_only n=5 fairness_gini  (+14 more)
+  ok     1.33%  <-  ablation_channel_sweep/scope_fd_debt_only n=3 fairness_gini  (+557 more)
+  ok     1.40%  <-  scale_and_nondivisible/scope_fd_debt_only n=5 fairness_gini  (+11 more)
+  ok     1.88%  <-  dropout/scope_fd n=3 fairness_gini
+  ok     2.12%  <-  dropout/scope_fd gini@R=100
+  ok     3.33%  <-  ablation_channel_sweep/scope_fd_debt_only gini@R=25  (+469 more)
+  ok     4.52%  <-  scale_and_nondivisible/scope_fd_debt_only n=5 rolling_window_gini  (+3 more)
+  ok     6.67%  <-  ablation_k_sweep/scope_fd_debt_only n=3 fairness_gini  (+27 more)
+  ok     7.61%  <-  literature_baselines_k_sweep/random n=3 fairness_gini
+  ok    11.69%  <-  channel_energy/scope_fd_channel_aware mean gini@R=100 n=9  (+1 more)
+  ok    12.16%  <-  audio_fsdd/random n=3 fairness_gini  (+21 more)
+  ok    12.49%  <-  audio_fsdd/random n=5 fairness_gini  (+12 more)
+  ok    13.42%  <-  dropout/random n=3 fairness_gini
+  ok    13.81%  <-  scale_and_nondivisible/random n=5 fairness_gini  (+1 more)
+  ok    15.45%  <-  dropout/random n=3 fairness_gini
+  ok    15.70%  <-  scale_and_nondivisible/random n=5 fairness_gini
+  ok    18.58%  <-  scale_and_nondivisible/scope_fd n=5 rolling_window_gini  (+1 more)
+  ok    23.93%  <-  iid_sanity/random mean gini@R=25 n=5  (+1 more)
+  ok    24.16%  <-  scale_and_nondivisible/random n=5 fairness_gini
+  ok    30.11%  <-  literature_baselines_k_sweep/random n=3 fairness_gini
+  ok    43.85%  <-  scale_and_nondivisible/random n=5 rolling_window_gini
+  ok    48.84%  <-  scale_and_nondivisible/random n=5 rolling_window_gini  (+2 more)
+  ok    51.27%  <-  scale_and_nondivisible/scope_fd n=5 accuracy
+  ok    52.22%  <-  scale_and_nondivisible/random n=5 rolling_window_gini
+  ok    53.37%  <-  dirichlet_severity/divfl_fd n=3 fairness_gini  (+1 more)
+  ok    70.94%  <-  coefficient_grid cell au=0.2 ad=0.0 n=3  (+4 more)
+  ok    71.99%  <-  histogram_privacy/scope_fd n=3 accuracy  (+1 more)
+  ok    72.27%  <-  coefficient_grid cell au=0.0 ad=0.4 n=3  (+3 more)
+  ok    83.33%  <-  literature_baselines/oort n=5 fairness_gini  (+26 more)
+
+summary: 62/62 pairs and 33/33 percentages traced
+
+==============================================================================
+PASS B   structural claims
+==============================================================================
+  PASS  Gini closed form holds in 457 of 457 selector runs   457 agree, 0 disagree
+  PASS  Gini is zero exactly when N divides KR
+  PASS  N=30 K=5 has K|N yet Gini is 1.33 percent   measured 1.333
+  PASS  N=50 K=3 has K not dividing N yet Gini is zero   measured 0.000
+  PASS  every aligned 3-round window partitions the pool   396/396 windows
+  PASS  complete score uses 35 to 54 distinct cohorts   35 to 54
+  PASS  debt-only uses exactly 3 distinct cohorts   [3]
+  PASS  uniform random count sd is 4.53   4.532 over 3 seeds
+  PASS  uniform random counts span 23 to 42   23 to 42
+  PASS  proposed selector count sd is 0.47   [0.4714]
+  PASS  count sd reduction is about 9.6x   9.61x
+  PASS  15 matched configurations   15
+  PASS  three seeds at 30/1, 30/3, 30/10 and five everywhere else   three-seed [(30, 1), (30, 3), (30, 10)], five-seed count 12
+  PASS  ratios span 0.033 to 0.333   0.033 to 0.333
+  PASS  complete score positive in 12 of 15   12
+  PASS  debt-only positive in 15 of 15   15 of 15
+  PASS  complete score gap spans -1.42 to +2.43 pp   -1.42 to +2.43
+  PASS  debt-only gap spans +0.05 to +2.39 pp   +0.05 to +2.39
+  PASS  complete score Spearman -0.815 at p = 0.0002   rho=-0.815 p=0.00022
+  PASS  debt-only Spearman -0.764 at p = 0.0009   rho=-0.764 p=0.00092
+  PASS  the three trailing configurations are N=100/K=20, 200/20, 200/40   [(100, 20), (200, 20), (200, 40)]
+  PASS  all trailing configurations have K >= 20
+  PASS  debt-only leads by 0.67, 1.34, 1.90 pp there   [0.67, 1.34, 1.9]
+  PASS  audio: proposed selector wins on all five seeds   [0.51, 0.92, 1.29, 1.41, 1.7]
+  PASS  audio: per-seed margin 0.51 to 1.70 pp   0.51 to 1.70
+  PASS  audio: beats divfl_fd by at least 4 pp on every seed   min 5.21
+  PASS  audio: beats subtrunc_fd by at least 4 pp on every seed   min 4.02
+  PASS  284 completed runs   284
+  PASS  17 families   17
+  PASS  1.33 percent returned in 202 runs   202
+  PASS  spanning 15 of the 17 families   15
+  PASS  9 dropout runs of the proposed selector   9
+  PASS  dropout moves the coefficient over 0.42 to 2.12 percent   0.42 to 2.12
+  PASS  coefficient grid has 30 cells   30
+  PASS  3 seeds in every grid cell
+  PASS  grid accuracy spans 70.94 to 72.27   70.94 to 72.27
+  PASS  grid spread is 1.33 pp   1.33
+  PASS  the chosen cell (0.3, 0.1) reaches 71.99   71.99
+  PASS  the chosen cell is 0.27 pp off the best   0.27
+  PASS  Gini is 1.33 percent in all 90 grid runs   [1.333]
+  PASS  channel-aware Gini is 11.69 percent pooled over 9 runs   11.69 over 9 runs
+  PASS  results section does not mention 'single seed'
+  PASS  results section does not mention 'one seed'
+  PASS  results section does not mention 'a single random seed'
+
+==============================================================================
+all structural checks passed

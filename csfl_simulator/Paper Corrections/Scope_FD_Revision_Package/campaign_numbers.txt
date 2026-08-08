@@ -1,0 +1,296 @@
+SCOPE-FD campaign numbers
+source: /Users/advaitpathak/CSFL-simulator/CSFL-simulator/runs_scope_revised/runs_scope_revised
+
+==============================================================================
+1.  CAMPAIGN INVENTORY
+==============================================================================
+family                            runs   seeds  methods
+ablation_channel_sweep              15       3        4
+ablation_headline                    5       5        4
+ablation_k_sweep                    12       3        4
+audio_fsdd                           8       5        5
+bounded_staleness                    6       3        3
+channel_energy                       9       3        4
+cifar10_multiseed                    1       1        5
+coefficient_grid                    90       3        1
+dataset_generality                   3       3        5
+dirichlet_severity                  31       5        5
+dropout                              9       3        3
+histogram_privacy                    3       3        7
+iid_sanity                           5       5        3
+literature_baselines                 5       5        7
+literature_baselines_k_sweep        12       3        6
+public_dataset_sensitivity          15       3        3
+scale_and_nondivisible              55       5        3
+TOTAL                              284
+
+17 families, 284 completed runs
+20 run directories without a result file:
+    cifar10_multiseed/s22
+    cifar10_multiseed/s33
+    dataset_generality/EMNIST_s11
+    dataset_generality/EMNIST_s22
+    dataset_generality/EMNIST_s33
+    dirichlet_severity/0a0963b6f089
+    dirichlet_severity/0d8ff95c3af2
+    dirichlet_severity/12fb56f5feea
+    dirichlet_severity/89512ca9fe40
+    dirichlet_severity/8d7320c8c644
+    dirichlet_severity/a0b30e42643d
+    dirichlet_severity/db21c2f3d401
+    public_dataset_sensitivity/pub-CIFAR10_s11
+    public_dataset_sensitivity/pub-CIFAR10_s22
+    public_dataset_sensitivity/pub-CIFAR10_s33
+    public_dataset_sensitivity/pub-EMNIST_s11
+    public_dataset_sensitivity/pub-EMNIST_s22
+    public_dataset_sensitivity/pub-EMNIST_s33
+    scale_and_nondivisible/8cf3d4c73b47
+    scale_and_nondivisible/N500_K25_s11
+
+==============================================================================
+2.  EXACT LAW FOR THE PARTICIPATION GINI COEFFICIENT
+==============================================================================
+Claim  G(R) = m(N-m)/(N K R)  with  m = KR mod N,  for any selector whose
+       counts differ by at most one.  Maximum over m is N/(4KR) at m = N/2,
+       and G = 0 exactly when N divides KR.
+
+457 selector runs agree with the law, 0 disagree, largest deviation 0.0000 pp
+    SCOPE-FD                  275 runs
+    debt only                 182 runs
+18 runs held out: dropout changes which clients actually participated
+
+    N    K    R   K|N   N|KR  KR mod N  measured %    law %  bound %
+   30    1  100   yes     no        10       6.667    6.667    7.500
+   30    3  100   yes    yes         0       0.000    0.000    2.500
+   30    5  100   yes     no        20       1.333    1.333    1.500
+   30   10  100   yes     no        10       0.667    0.667    0.750
+   47    6  100    no     no        36       1.404    1.404    1.958
+   50    3  100    no    yes         0       0.000    0.000    4.167
+   50    5  100   yes    yes         0       0.000    0.000    2.500
+   50   10  100   yes    yes         0       0.000    0.000    1.250
+   53    7  100    no     no        11       1.245    1.245    1.893
+  100    5  100   yes    yes         0       0.000    0.000    5.000
+  100   10  100   yes    yes         0       0.000    0.000    2.500
+  100   20  100   yes    yes         0       0.000    0.000    1.250
+  200   10  100   yes    yes         0       0.000    0.000    5.000
+  200   20  100   yes    yes         0       0.000    0.000    2.500
+  200   40  100   yes    yes         0       0.000    0.000    1.250
+
+Horizon slice at the headline N=30 K=5, five seeds
+    R    law %     SCOPE-FD measured          uniform random
+   25    3.333   3.33 +- 0.00  (n=5)    23.93 +- 1.79  (n=5)
+   50    2.667   2.67 +- 0.00  (n=5)    17.24 +- 3.10  (n=5)
+   75    2.000   2.00 +- 0.00  (n=5)    15.37 +- 1.60  (n=5)
+  100    1.333   1.33 +- 0.00  (n=5)    12.49 +- 0.81  (n=5)
+
+==============================================================================
+3.  HEADLINE, ABLATION AND PORTED SELECTORS
+==============================================================================
+Four-way ablation, Fashion-MNIST N=30 K=5 alpha=0.5
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   debt + coverage         71.56 +- 0.98  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.062
+   debt only               71.26 +- 1.14  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.625
+   SCOPE-FD                71.21 +- 0.99  (n=5)1.33 +- 0.00  (n=5)19.60 +- 5.42  (n=5)        
+   debt + under-prediction 70.55 +- 1.19  (n=5)1.33 +- 0.00  (n=5)16.63 +- 8.25  (n=5)   0.062
+
+Ported selectors, Fashion-MNIST N=30 K=5 alpha=0.5
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                71.21 +- 0.99  (n=5)1.33 +- 0.00  (n=5)19.60 +- 5.42  (n=5)        
+   UnionFL                 71.18 +- 1.40  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.812
+   debt only               71.03 +- 1.00  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.438
+   uniform random          70.99 +- 1.38  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.625
+   DivFL                   69.88 +- 0.83  (n=5)36.84 +- 0.90  (n=5)65.85 +- 5.74  (n=5)   0.062
+   SubTrunc                69.40 +- 1.00  (n=5)38.65 +- 2.88  (n=5)71.41 +- 5.30  (n=5)   0.062
+   Oort                    21.14 +- 0.60  (n=5)83.33 +- 0.00  (n=5)83.33 +- 0.00  (n=5)   0.062
+
+Histogram privacy, Fashion-MNIST N=30 K=5 alpha=0.5
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   Laplace eps=0.1         72.01 +- 0.86  (n=3)1.33 +- 0.00  (n=3)19.27 +- 2.42  (n=3)   1.000
+   SCOPE-FD                71.99 +- 0.63  (n=3)1.33 +- 0.00  (n=3)17.75 +- 5.06  (n=3)        
+   Laplace eps=1           71.97 +- 0.69  (n=3)1.33 +- 0.00  (n=3)18.76 +- 8.24  (n=3)   1.000
+   surrogate histogram     71.93 +- 0.67  (n=3)1.33 +- 0.00  (n=3)24.35 +- 3.62  (n=3)   0.750
+   Laplace eps=5           71.85 +- 0.73  (n=3)1.33 +- 0.00  (n=3)20.54 +- 4.00  (n=3)   0.250
+   Laplace eps=2           71.78 +- 0.80  (n=3)1.33 +- 0.00  (n=3)21.94 +- 2.20  (n=3)   0.250
+   Laplace eps=0.5         71.71 +- 0.72  (n=3)1.33 +- 0.00  (n=3)17.24 +- 9.24  (n=3)   0.250
+
+Dirichlet sweep
+
+  alpha = 0.01
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                13.11 +- 1.20  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)        
+   debt only               13.37 +- 1.31  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.500
+   uniform random          13.47 +- 1.33  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.250
+   DivFL                   12.95 +- 0.96  (n=3)53.37 +- 0.74  (n=3)77.05 +- 6.52  (n=3)   0.750
+   SubTrunc                12.95 +- 0.96  (n=3)53.37 +- 0.74  (n=3)77.05 +- 6.52  (n=3)   0.750
+
+  alpha = 0.05
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                26.74 +- 4.19  (n=3)1.33 +- 0.00  (n=3)16.35 +- 4.38  (n=3)        
+   debt only               27.14 +- 4.07  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   1.000
+   uniform random          27.07 +- 4.24  (n=3)12.64 +- 0.59  (n=3)48.86 +- 1.90  (n=3)   1.000
+   DivFL                   25.48 +- 4.15  (n=3)52.05 +- 8.34  (n=3)78.89 +- 3.13  (n=3)   0.250
+   SubTrunc                25.70 +- 4.16  (n=3)51.93 +- 8.25  (n=3)76.79 +- 2.87  (n=3)   0.250
+
+  alpha = 0.1
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                39.28 +- 2.55  (n=5)1.33 +- 0.00  (n=5)22.04 +- 4.33  (n=5)        
+   debt only               39.58 +- 2.49  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.812
+   uniform random          39.14 +- 2.69  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.625
+   DivFL                   37.54 +- 1.61  (n=5)49.10 +- 4.98  (n=5)72.74 +- 4.12  (n=5)   0.062
+   SubTrunc                37.34 +- 2.08  (n=5)49.70 +- 6.35  (n=5)70.08 +- 4.98  (n=5)   0.062
+
+  alpha = 0.3
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                62.66 +- 0.74  (n=5)1.33 +- 0.00  (n=5)22.80 +- 4.37  (n=5)        
+   debt only               62.54 +- 1.18  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.625
+   uniform random          62.47 +- 0.64  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.312
+   DivFL                   61.25 +- 1.06  (n=5)41.83 +- 1.95  (n=5)71.03 +- 2.22  (n=5)   0.062
+   SubTrunc                60.92 +- 1.07  (n=5)43.05 +- 4.39  (n=5)69.47 +- 5.82  (n=5)   0.062
+
+  alpha = 0.5
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                71.21 +- 0.99  (n=5)1.33 +- 0.00  (n=5)19.60 +- 5.42  (n=5)        
+   debt only               71.03 +- 1.00  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.438
+   uniform random          70.99 +- 1.38  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.625
+   DivFL                   69.88 +- 0.83  (n=5)36.84 +- 0.90  (n=5)65.85 +- 5.74  (n=5)   0.062
+   SubTrunc                69.40 +- 1.00  (n=5)38.65 +- 2.88  (n=5)71.41 +- 5.30  (n=5)   0.062
+
+  alpha = 1.0
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                79.84 +- 0.51  (n=5)1.33 +- 0.00  (n=5)18.69 +- 6.38  (n=5)        
+   debt only               79.62 +- 0.50  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.062
+   uniform random          79.55 +- 0.71  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.125
+   DivFL                   78.94 +- 0.61  (n=5)34.17 +- 3.46  (n=5)72.17 +- 5.57  (n=5)   0.062
+   SubTrunc                78.56 +- 0.60  (n=5)42.34 +- 1.41  (n=5)73.28 +- 3.54  (n=5)   0.062
+
+  alpha = 5.0
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                84.67 +- 0.11  (n=5)1.33 +- 0.00  (n=5)21.28 +- 4.13  (n=5)        
+   debt only               84.67 +- 0.10  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   1.000
+   uniform random          84.60 +- 0.18  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.312
+   DivFL                   84.26 +- 0.21  (n=5)27.39 +- 2.58  (n=5)70.61 +- 4.40  (n=5)   0.062
+   SubTrunc                84.18 +- 0.17  (n=5)33.90 +- 1.94  (n=5)70.99 +- 5.80  (n=5)   0.062
+
+Public-set sensitivity
+
+  public set = MNIST
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                67.10 +- 1.05  (n=3)1.33 +- 0.00  (n=3)14.83 +- 5.06  (n=3)        
+   debt only               67.14 +- 0.95  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.750
+   uniform random          66.72 +- 0.89  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.250
+
+  public set size 500
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                69.22 +- 0.84  (n=3)1.33 +- 0.00  (n=3)21.94 +- 2.20  (n=3)        
+   debt only               69.22 +- 0.97  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   1.000
+   uniform random          69.19 +- 1.15  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   1.000
+
+  public set size 100
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                69.05 +- 1.16  (n=3)1.33 +- 0.00  (n=3)13.43 +- 2.64  (n=3)        
+   debt only               69.02 +- 1.05  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.750
+   uniform random          68.96 +- 1.03  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.750
+
+  public label noise 0.1
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                71.75 +- 0.81  (n=3)1.33 +- 0.00  (n=3)21.81 +- 4.62  (n=3)        
+   debt only               71.33 +- 1.05  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.250
+   uniform random          71.60 +- 1.23  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.750
+
+  public label noise 0.3
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                71.75 +- 0.81  (n=3)1.33 +- 0.00  (n=3)21.81 +- 4.62  (n=3)        
+   debt only               71.33 +- 1.05  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.250
+   uniform random          71.60 +- 1.23  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.750
+
+==============================================================================
+4.  ACCURACY GAP AGAINST THE PARTICIPATION RATIO K/N
+==============================================================================
+Fashion-MNIST, alpha=0.5, no dropout, no staleness, no budget, no channel noise,
+public set drawn from the held-out split at 2000 samples.
+
+    N   K     K/N   n   SCOPE-FD gap   wins      p   debt-only gap   wins      p
+   30   1   0.033   3          +1.94    3/3  0.250           +2.39    3/3  0.250
+  200  10   0.050   5          +2.43    5/5  0.062           +2.24    5/5  0.062
+  100   5   0.050   5          +1.61    5/5  0.062           +1.28    5/5  0.062
+   50   3   0.060   5          +1.30    5/5  0.062           +0.85    5/5  0.062
+   30   3   0.100   3          +1.01    3/3  0.250           +0.41    3/3  0.250
+   50   5   0.100   5          +0.52    4/5  0.188           +0.33    3/5  0.625
+  100  10   0.100   5          +0.60    5/5  0.062           +0.64    5/5  0.062
+  200  20   0.100   5          -0.49    1/5  0.312           +0.86    5/5  0.062
+   47   6   0.128   5          +0.46    4/5  0.125           +0.22    5/5  0.062
+   53   7   0.132   5          +0.65    5/5  0.062           +0.21    3/5  0.438
+   30   5   0.167   5          +0.22    3/5  0.625           +0.05    3/5  1.000
+  200  40   0.200   5          -1.42    0/5  0.062           +0.48    5/5  0.062
+  100  20   0.200   5          -0.41    0/5  0.062           +0.26    4/5  0.125
+   50  10   0.200   5          +0.14    2/5  1.000           +0.26    4/5  0.125
+   30  10   0.333   3          +0.18    2/3  0.500           +0.31    2/3  0.500
+
+  SCOPE-FD: 15 configurations, 12 with a positive mean gap, range -1.42 to +2.43 pp, sign test p = 0.03516
+            Spearman rho against K/N = -0.815, p = 0.00022
+ debt only: 15 configurations, 15 with a positive mean gap, range +0.05 to +2.39 pp, sign test p = 0.00006
+            Spearman rho against K/N = -0.764, p = 0.00092
+
+==============================================================================
+5.  CROSS-DOMAIN RESULTS
+==============================================================================
+Free Spoken Digit Dataset, five seeds, three local epochs, 150-sample public set
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                46.16 +- 1.69  (n=5)1.33 +- 0.00  (n=5)21.05 +- 6.61  (n=5)        
+   debt only               45.54 +- 1.17  (n=5)1.33 +- 0.00  (n=5)11.90 +- 0.00  (n=5)   0.188
+   uniform random          44.99 +- 1.59  (n=5)12.49 +- 0.81  (n=5)45.85 +- 5.21  (n=5)   0.062
+   SubTrunc                40.66 +- 1.48  (n=5)44.94 +- 2.31  (n=5)70.72 +- 7.99  (n=5)   0.062
+   DivFL                   40.53 +- 1.49  (n=5)45.96 +- 2.38  (n=5)72.74 +- 5.54  (n=5)   0.062
+
+Earlier audio attempt, three seeds, one local epoch, 300-sample public set
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   SCOPE-FD                44.08 +- 2.58  (n=3)1.33 +- 0.00  (n=3)26.76 +- 1.98  (n=3)        
+   debt only               43.40 +- 1.46  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.500
+   uniform random          43.38 +- 1.44  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   0.500
+   DivFL                   41.12 +- 2.23  (n=3)39.72 +- 2.39  (n=3)70.57 +- 1.51  (n=3)   0.250
+   SubTrunc                40.28 +- 1.98  (n=3)41.50 +- 1.99  (n=3)74.06 +- 2.70  (n=3)   0.250
+
+MNIST private, three seeds
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   debt only               90.88 +- 0.42  (n=3)1.33 +- 0.00  (n=3)11.90 +- 0.00  (n=3)   0.250
+   uniform random          90.58 +- 0.43  (n=3)12.16 +- 0.95  (n=3)43.84 +- 5.97  (n=3)   1.000
+   SCOPE-FD                90.50 +- 0.56  (n=3)1.33 +- 0.00  (n=3)21.43 +- 8.42  (n=3)        
+   DivFL                   88.48 +- 0.43  (n=3)36.24 +- 2.70  (n=3)67.02 +- 3.03  (n=3)   0.250
+   SubTrunc                87.91 +- 0.50  (n=3)38.28 +- 2.86  (n=3)68.67 +- 3.24  (n=3)   0.250
+
+CIFAR-10 private with STL-10 public
+   selector                          accuracy %            Gini %      rolling Gini %       p
+   debt only               29.29 +- 0.00  (n=1)1.33 +- 0.00  (n=1)11.90 +- 0.00  (n=1)        
+   SCOPE-FD                29.24 +- 0.00  (n=1)1.33 +- 0.00  (n=1)30.95 +- 0.00  (n=1)        
+   uniform random          28.66 +- 0.00  (n=1)11.33 +- 0.00  (n=1)37.24 +- 0.00  (n=1)        
+   DivFL                   27.97 +- 0.00  (n=1)47.36 +- 0.00  (n=1)78.76 +- 0.00  (n=1)        
+   SubTrunc                27.95 +- 0.00  (n=1)42.64 +- 0.00  (n=1)58.76 +- 0.00  (n=1)        
+   seeds completed: [11]
+
+Public set disjoint from the evaluation data
+   Two configurations draw the public set from a separate corpus:
+   MNIST public with Fashion-MNIST private, and STL-10 public with CIFAR-10 private.
+
+==============================================================================
+6.  INVARIANCE CENSUS FOR THE PARTICIPATION GINI COEFFICIENT
+==============================================================================
+284 runs include the proposed selector
+
+   Gini %   runs  families   families
+     1.33    202        15   ablation_channel_sweep, ablation_headline, ablation_k_sweep, audio_fsdd, bounded_staleness, channel_energy, cifar10_multiseed, coefficient_grid, dataset_generality, dirichlet_severity, histogram_privacy, iid_sanity, literature_baselines, literature_baselines_k_sweep, public_dataset_sensitivity
+     0.00     51         3   ablation_k_sweep, literature_baselines_k_sweep, scale_and_nondivisible
+     6.67      6         2   ablation_k_sweep, literature_baselines_k_sweep
+     0.67      6         2   ablation_k_sweep, literature_baselines_k_sweep
+     1.25      5         1   scale_and_nondivisible
+     1.40      5         1   scale_and_nondivisible
+     0.78      1         1   dropout
+     0.42      1         1   dropout
+     1.21      1         1   dropout
+     1.05      1         1   dropout
+     1.74      1         1   dropout
+     1.84      1         1   dropout
+     1.67      1         1   dropout
+     2.12      1         1   dropout
+     1.86      1         1   dropout
+
+total families in the campaign: 17
