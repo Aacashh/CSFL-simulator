@@ -211,7 +211,9 @@ def fig_convergence(c100: pd.DataFrame, plots_dir: Path, conv_dir: Path = CONV_R
         ax.set_ylabel(ylab, fontsize=11, fontweight="normal")
         if legloc is not None:
             _inset_legend(ax, loc=legloc, ncol=2, methods=present)
-    for ax in axes[1]:
+    # Label every panel, not only the bottom row.  Each panel is read on its own
+    # in the article, so an unlabelled x-axis on (a) and (b) is a defect.
+    for ax in axes.flat:
         ax.set_xlabel("Communication round", fontsize=11, fontweight="normal")
     fig.tight_layout(rect=(0, 0, 1, 0.965))
     fig.suptitle(r"CIFAR-100 (non-IID, $\alpha{=}0.5$)", fontsize=13, fontweight="normal", y=0.992)

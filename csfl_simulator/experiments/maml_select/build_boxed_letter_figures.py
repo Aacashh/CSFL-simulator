@@ -221,12 +221,12 @@ def _draw_scaling(ax, ax2, scaling_csv: Path, *, label_fs: float = 9.0, tick_fs:
     ax2.set_title(f"({letters[1]}) Analytical work", fontsize=title_fs, fontweight="normal")
     ax.text(0.96, 0.93, r"flat $\approx$20--26 ms", transform=ax.transAxes, ha="right", va="top",
             fontsize=tick_fs, color=line_color)
+    # Both panels are labelled in either layout.  A reader looking at the upper
+    # panel alone would otherwise have no way to tell what the x-axis shows.
+    for axis in (ax, ax2):
+        axis.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
     if stacked:
-        # Both panels keep their own x-tick numbers; only the bottom one is labelled.
-        ax2.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
-    else:
-        ax.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
-        ax2.set_xlabel("Client pool size $N$ (log)", fontsize=label_fs, fontweight="normal")
+        ax.xaxis.labelpad = 1.5
 
 
 def build_scaling_boxed(scaling_csv: Path, output_dir: Path) -> None:

@@ -196,6 +196,13 @@ def _outer_step(
     qy = _as_tensor(np.asarray([r.cost for r in query], dtype=np.float32), device)
     with torch.no_grad():
         l_query = float(_loss(model, adapted, qx, qy))
+        # Drift increment for the tracking bound.  The support set is the query
+        # set of the previous round, so evaluating both at the *same* (current,
+        # un-adapted) parameters gives q_{t+1}(phi_{t+1}) - q_t(phi_{t+1})
+        # exactly, which is the per-round term of V_T.  Free apart from one
+        # forward pass, and reported only through the convergence sidecar.
+        l_query_at_base = float(_loss(model, base_params, qx, qy))
+    drift_increment = l_query_at_base - l_sup_before  # nan on the first round
     query_gradients = torch.autograd.grad(_loss(model, adapted, qx, qy), tuple(adapted.values()))
     meta_grad_norm = float(
         torch.sqrt(sum((g.detach() ** 2).sum() for g in query_gradients)).item()
@@ -218,6 +225,8 @@ def _outer_step(
         "l_sup_after": l_sup_after,
         "l_sup_descent": l_sup_after - l_sup_before,
         "l_query": l_query,
+        "l_query_at_base": l_query_at_base,
+        "drift_increment": drift_increment,
         "meta_grad_norm": meta_grad_norm,
         "dphi_norm": dphi_norm,
     }
