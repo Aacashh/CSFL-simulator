@@ -392,7 +392,7 @@ def _sweep(G, CFG, family, xkey, xlabel, out, extra=(), logx=False, xticks=None)
                          textcoords="offset points", zorder=5)
 
         top.set_ylabel(ylab)
-        top.set_xticklabels([])
+        top.tick_params(axis="x", labelbottom=False)
         bot.set_ylabel(strip_lab, fontsize=6.2, labelpad=1.5, linespacing=1.0)
         bot.set_xlabel(xlabel)
         for ax in (top, bot):
@@ -400,8 +400,10 @@ def _sweep(G, CFG, family, xkey, xlabel, out, extra=(), logx=False, xticks=None)
                 ax.set_xscale("log")
             if xticks:
                 ax.set_xticks(xticks)
-                ax.set_xticklabels([str(t) for t in xticks] if ax is bot else [])
+                if ax is bot:
+                    ax.set_xticklabels([str(t) for t in xticks])
             frame(ax)
+        top.tick_params(axis="x", labelbottom=False)
         span = max(d.max() - min(d.min(), 0.0), 1e-6)
         bot.set_ylim(min(d.min(), 0.0) - 0.30 * span, d.max() + 0.42 * span)
         bot.tick_params(labelsize=6.2)
@@ -509,7 +511,7 @@ def fig_scale(G, CFG):
                markerfacecolor="white", markeredgewidth=0.95, label="rolling window"),
     ]
     ax.legend(handles=handles, ncol=2, loc="upper right",
-              bbox_to_anchor=(1.012, 1.038), columnspacing=0.7)
+              bbox_to_anchor=(0.995, 0.995), borderaxespad=0.3, columnspacing=0.7)
     ax.text(0.012, 0.012, "*  $K \\nmid N$", transform=ax.transAxes,
             fontsize=6.2, color=MUTED, ha="left", va="bottom")
     fig.subplots_adjust(left=0.20, right=0.975, top=0.985, bottom=0.105)
@@ -564,6 +566,106 @@ def fig_channel(G, CFG):
     save(fig, "fig_r7_channel_sweep")
 
 
+def _spearman(x, y):
+    """Rank correlation without a scipy dependency."""
+    def rank(a):
+        order = np.argsort(a)
+        r = np.empty_like(order, dtype=float)
+        r[order] = np.arange(len(a))
+        return r
+    rx, ry = rank(np.asarray(x, dtype=float)), rank(np.asarray(y, dtype=float))
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def fig_ratio_gap(G, CFG):
+    """Forest plot of the SCOPE-FD / debt-only accuracy advantage over random,
+    one row per (N, K) configuration, sorted by participation ratio K/N so the
+    trend reads directly rather than requiring a table lookup. The advantage
+    shrinks and eventually reverses as K/N grows, which is the headline result
+    of the client-scale sweep restated as a single, sortable figure."""
+    order = ["fd_native.scope_fd", "fd_native.scope_fd_debt_only"]
+    rows = {}
+    for k, c in fam(G, CFG, "scale_and_nondivisible"):
+        N, K = c.get("total_clients"), c.get("clients_per_round")
+        r = {}
+        for m in order + ["heuristic.random"]:
+            if m in G[k]:
+                v = agg([x["acc"] for x in G[k][m].values()])
+                if v is not None:
+                    r[m] = v
+        if "heuristic.random" in r and any(m in r for m in order):
+            rows[(N, K)] = r
+    if not rows:
+        return
+    cfgs = sorted(rows, key=lambda nk: -(nk[1] / nk[0]))  # descending K/N, top row = largest ratio
+    n_rows = len(cfgs)
+
+    fig, ax = plt.subplots(figsize=(COL, 3.55))
+    ax.axvspan(-2.5, 0, color="#f7d6d0", alpha=0.55, lw=0, zorder=0)
+    rowbands(ax, n_rows, 0, 1)
+    ax.axvline(0, color=INK, lw=0.6, zorder=2)
+
+    offs = {"fd_native.scope_fd": 0.14, "fd_native.scope_fd_debt_only": -0.14}
+    ratios, deltas = {m: [] for m in order}, {m: [] for m in order}
+    for i, (N, K) in enumerate(cfgs):
+        y = n_rows - 1 - i  # top row = largest index so the largest ratio plots at the top
+        rmu, rsd, _ = rows[(N, K)]["heuristic.random"]
+        for m in order:
+            if m not in rows[(N, K)]:
+                continue
+            mu, sd, _ = rows[(N, K)][m]
+            d = (mu - rmu) * 100
+            dsd = float(np.hypot(sd, rsd)) * 100
+            col, mk, _ = STYLE[m]
+            ax.plot([d - dsd, d + dsd], [y + offs[m]] * 2, color=col, lw=1.1, zorder=3)
+            halo(ax, d, y + offs[m], col, mk, ms=3.6, z=4)
+            ratios[m].append(K / N)
+            deltas[m].append(d)
+
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels([f"{N}/{K}" for N, K in reversed(cfgs)])
+    ax.set_ylim(-0.6, n_rows - 0.4)
+    ax.set_xlim(-2.0, 3.6)
+    ax.set_ylabel("Client pool / cohort  $N/K$")
+    ax.set_xlabel("Final accuracy minus uniform random (pp)")
+    frame(ax)
+    ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+
+    labelbox = dict(boxstyle="round,pad=0.28", fc="white", ec="none", alpha=0.78)
+    ax.text(0.012, 0.985, "worse than\nrandom", transform=ax.transAxes,
+            fontsize=6.4, color="#B33A2E", ha="left", va="top", linespacing=1.2,
+            bbox=labelbox, zorder=6)
+
+    ax2 = ax.twinx()
+    ax2.set_ylim(ax.get_ylim())
+    ax2.set_yticks(range(n_rows))
+    ax2.set_yticklabels([f"{K/N:.3f}" for N, K in reversed(cfgs)], fontsize=6.0, color=MUTED)
+    ax2.set_ylabel("Participation ratio $K/N$", fontsize=6.6, color=MUTED)
+    ax2.tick_params(length=0, colors=MUTED)
+    for sp in ax2.spines.values():
+        sp.set_visible(False)
+
+    handles = [Line2D([], [], color=STYLE[m][0], marker=STYLE[m][1], lw=1.1,
+                       markersize=3.6, markeredgecolor="white", markeredgewidth=0.7,
+                       label=STYLE[m][2]) for m in order]
+    ax.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.995, 0.995),
+              borderaxespad=0.3, ncol=1, frameon=True, framealpha=0.85,
+              edgecolor="none", facecolor="white")
+
+    lines = ["Spearman $\\rho$ against $K/N$"]
+    for m in order:
+        if len(ratios[m]) > 2:
+            rho = _spearman(ratios[m], deltas[m])
+            lines.append(f"{STYLE[m][2]}  {rho:+.2f}")
+    if len(lines) > 1:
+        ax.text(0.012, 0.015, "\n".join(lines), transform=ax.transAxes,
+                fontsize=6.0, color=INK, ha="left", va="bottom", linespacing=1.35,
+                bbox=labelbox, zorder=6)
+
+    fig.subplots_adjust(left=0.20, right=0.86, top=0.985, bottom=0.09)
+    save(fig, "fig_r8_ratio_gap")
+
+
 def main():
     print(f"reading {RUNS}")
     G, CFG = load()
@@ -580,6 +682,7 @@ def main():
     fig_coefgrid(G, CFG)
     fig_scale(G, CFG)
     fig_channel(G, CFG)
+    fig_ratio_gap(G, CFG)
     print(f"\n{OUT}")
 
 

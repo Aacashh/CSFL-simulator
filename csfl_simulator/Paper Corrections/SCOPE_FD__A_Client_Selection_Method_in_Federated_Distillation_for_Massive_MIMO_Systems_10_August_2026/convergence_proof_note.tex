@@ -1,0 +1,408 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+\theoremstyle{definition}
+\newtheorem*{note}{Note}
+
+\newcommand{\authorflag}[1]{{\color{purple}\emph{[Draft note: #1]}}}
+
+\title{Round-Indexed Convergence of SCOPE-FD under Partial Participation\\
+\large A supplementary derivation for Reviewer Comments R1-C1, R2-C3, and Attached-Review-C1}
+\author{Draft prepared for advisor review --- not for submission as-is}
+\date{August 2026 (verified against Mu, Garg \& Ratnarajah, \emph{IEEE TCCN}, Vol.~10, No.~4, Aug.~2024)}
+
+\begin{document}
+\maketitle
+
+\begin{note}
+This note was drafted by an AI assistant. Its first version (an earlier draft
+of this file) was built entirely from the manuscript's own citations of
+\cite{mu2024fedtskd} and flagged one open question in purple: whether
+FedTSKD's Theorem~1 assumes a specific stochastic sampling scheme for the
+per-round client subset. \textbf{The source paper has since been supplied and
+checked directly, and that question is now resolved} --- see
+\S\ref{sec:audit}. Every remaining purple flag below concerns only
+manuscript-integration choices (numbering, placement), not the mathematics.
+\end{note}
+
+\tableofcontents
+
+% =============================================================================
+\section{What FedTSKD actually assumes and proves --- verified against the source}
+\label{sec:source-facts}
+% =============================================================================
+
+Five facts below are quoted or directly restated from
+\cite{mu2024fedtskd}, not inferred from the manuscript's citation of it.
+
+\subsection*{Fact 1: FedTSKD has no client-selection mechanism at all}
+Algorithm~1 of \cite{mu2024fedtskd} (``Dynamic Training Steps Based FD
+Algorithm'') loops \texttt{for n = 1,\ldots,N do} inside every round $r$ ---
+every one of the $N$ clients updates every round. There is no subset, no
+selection variable, and no sampling step anywhere in the algorithm. This is
+not an oversight to be worked around; it is confirmed as the paper's explicit
+experimental design: \emph{``Full participation is considered; that is, all
+local users join the training process for each global communication round,
+since the communication payload required in the FD algorithm is much less
+than that in the FL scheme''} (\cite{mu2024fedtskd}, Section~VI). FedTSKD's
+authors chose full participation because FD's communication cost is cheap
+enough to afford it at their scale; SCOPE-FD's partial-participation setting
+is a genuine extension of the problem they left open, not a departure from an
+assumption they made.
+
+\subsection*{Fact 2: Assumptions 1--4 are stated with no reference to a subset}
+Quoting \cite{mu2024fedtskd}, Section~II-A, verbatim in substance:
+\begin{itemize}[leftmargin=2em]
+\item \textbf{Assumption 1 (Smoothness).} $L_1,\ldots,L_N$ are all
+$\psi$-smooth.
+\item \textbf{Assumption 2 (Convexity).} $L_1,\ldots,L_N$ are all
+$\mu$-strongly convex; $Q_1,\ldots,Q_N$ are all $\mu_q$-strongly convex.
+\item \textbf{Assumption 3 (Bounded Variance).} The stochastic gradients
+satisfy $\mathbb{E}\|\nabla L_n(\bm w_{n,t},\mathcal{D}_{n,t}) - \nabla
+L_n(\bm w_{n,t},\mathcal{D}_n)\|_2^2 \le \sigma_n^2$ (and the analogous bound
+for $Q_n$ with variance $\sigma_{qn}^2$), where $\mathcal{D}_{n,t}\subset
+\mathcal{D}_n$ is \emph{``a subset chosen uniformly and independently from
+$n$th user's local training dataset $\mathcal{D}_n$ at time step $t$''} ---
+i.e.\ this is a statement about \emph{minibatch sampling within client $n$'s
+own data}, not about which clients participate in round $r$.
+\item \textbf{Assumption 4 (Uniformly Bounded Gradient).} $\mathbb{E}\|\nabla
+L_n(\bm w_{n,t},\mathcal{D}_n)\|_2^2 \le G^2$ (and analogously for $Q_n$ with
+bound $G_q^2$).
+\end{itemize}
+None of the four assumptions mentions $\mathcal{S}_r$, a selection
+probability, or any property of \emph{which} clients update in a given round.
+They are properties of the loss landscape and of each client's own local
+data, full stop.
+
+\subsection*{Fact 3: the proof itself never introduces $\mathcal{S}_r$}
+Lemma~1 (local-training step), Lemma~2 (server+local distillation step),
+Corollary~1, Corollary~2, and Theorem~1 of \cite{mu2024fedtskd} (its
+Appendices B--F) are all stated and proved \emph{per client $n$}, tracking a
+single client's own weight sequence $\bm w_{n,t}$ through the recursion
+$\bm w_{n,t+1} = \bm w_{n,t} - \eta_t \nabla L_n(\bm w_{n,t},\mathcal{D}_{n,t})$
+(their Eq.~12) and its distillation analogue (their Eq.~14). At no point does
+any induction step, bound, or constant depend on which \emph{other} clients
+did or did not update in the same round. This is exactly what one would
+expect given Fact~1: with no selection mechanism in the algorithm, the proof
+has nothing selection-related to condition on.
+
+\subsection*{Fact 4: what the time index $t$ actually counts}
+$t$ ranges over $\mathcal{T} = \mathcal{T}_{LT} \cup \mathcal{T}_{SD} \cup
+\mathcal{T}_{LD}$ (\cite{mu2024fedtskd}, Eq.~11), the merged index set of
+local-training, server-distillation, and local-distillation steps. Under
+\emph{full} participation this coincides with a single shared wall-clock
+counter, since every client passes through the same phases at the same time.
+Once participation is partial, this coincidence breaks: a client only
+advances through $\mathcal{T}_{LT}$ (and is only handed a server broadcast to
+run $\mathcal{T}_{LD}$ on) during rounds in which it is actually selected.
+This is the one place a genuinely new statement is needed --- not a violated
+assumption, but an index that needs to be correctly re-attached to
+per-client participation once selection becomes partial. That is the content
+of \S\ref{sec:corollary}.
+
+\subsection*{Fact 5: the objective is already stated per-client, additively}
+\cite{mu2024fedtskd}'s own problem statement (their Eq.~2) is
+$\bm w^{*} = \arg\min_{\bm w} L_n(\bm w),\ \forall n$ --- $N$ separate,
+independent minimizations, one per client, with no shared/global model
+coupling them in the stated objective. The manuscript's own
+Eq.~(\ref{eq:global_obj}), $F(\{\bm w_n\}) = \sum_n \lambda_n L_n(\bm w_n)$,
+inherits this additive structure directly from \cite{mu2024fedtskd} rather
+than introducing it. Consequently $F^{*} = \sum_n \lambda_n L_n^{*}$ holds by
+the source paper's own problem formulation, not as a simplifying assumption
+of this note.
+
+% =============================================================================
+\section{The manuscript's given results, restated}
+% =============================================================================
+
+\subsection*{Given 1: Proposition 1 (already proved in the manuscript)}
+For client $i$ at round $r$, with cumulative participation count
+$n_i^{(r-1)}$ and raw debt $d_i^{(r)} = r K/N - n_i^{(r-1)}$, normalized to
+$\tilde d_i^{(r)}\in[0,1]$ by min--max scaling, the manuscript's
+Proposition~1 proves by induction that whenever $\alpha_u+\alpha_d<1$,
+\begin{equation}
+\bigl|n_i^{(R)}-n_j^{(R)}\bigr|\;\le\;1 \qquad \forall\, i,j,\ \forall\, R.
+\label{eq:given-spread}
+\end{equation}
+
+\subsection*{Given 2: the exact participation count (manuscript's Eq.~17)}
+Writing $m = KR \bmod N$,
+\begin{equation}
+n_i^{(R)} \;=\; \Big\lfloor \frac{KR}{N}\Big\rfloor \;+\; \mathbb{1}[i \in \mathcal{M}], \qquad |\mathcal{M}| = m,
+\label{eq:given-exact-count}
+\end{equation}
+so \emph{every} client, not merely the average one, satisfies
+\begin{equation}
+n_i^{(R)} \;\ge\; \frac{KR}{N} - 1
+\qquad \forall\, i.
+\label{eq:given-lowerbound}
+\end{equation}
+
+\subsection*{Given 3: FedTSKD's per-client bound (verified, \S\ref{sec:source-facts})}
+\begin{equation}
+\mathbb{E}\bigl[L_n(\bm w_{n,t+1})\bigr] - L_n^{*} \;\le\; \frac{\psi}{2}\cdot\frac{\nu_n}{t+1+\beta_1},
+\label{eq:manuscript-conv}
+\end{equation}
+with $t \in \mathcal{T}_{LT}\cup\mathcal{T}_{SD}\cup\mathcal{T}_{LD}$
+counting client $n$'s own elapsed local-training and distillation steps
+(Fact~4), and $\psi,\nu_n,\beta_1$ as defined in \cite{mu2024fedtskd}'s
+Theorem~1.
+
+% =============================================================================
+\section{Why the manuscript's current Remark understates its own case}
+% =============================================================================
+
+The manuscript's current Remark (Section~V-B) states that FedTSKD's bound
+``continues to hold... without modification.'' Read literally at the level
+of Eq.~(\ref{eq:manuscript-conv}), this is close to a tautology, and now that
+Facts~1--3 are confirmed it is exactly as trivial as it looks: FedTSKD's
+proof was never conditioned on a selection mechanism, because FedTSKD has
+none. A generic claim of ``the per-client bound still holds'' therefore
+requires no argument at all --- which is precisely Reviewer~1's objection
+(Comment~1): the analytical content of the original Remark is minimal because
+it was never really about partial participation.
+
+The substantive question the reviewers actually want answered is: as a
+function of the number of \emph{communication rounds} $R$, how fast does
+every client's bound shrink? Under full participation this is a non-question
+(every client's $t$ equals the elapsed round count, up to the fixed
+per-round step budget). Under SCOPE-FD's partial participation it is not,
+because a client's own clock $t$ only advances on rounds it is selected
+(Fact~4), and Eq.~(\ref{eq:manuscript-conv}) alone says nothing about how
+small $t$ can be relative to $R$ for an arbitrary policy. This is exactly
+where Proposition~1 does real work: it pins down, for \emph{every} client
+simultaneously, how $t$ relates to $R$.
+
+% =============================================================================
+\section{The round-indexed corollary}
+\label{sec:corollary}
+% =============================================================================
+
+Let $K_r$ denote the number of local-training steps in round $r$ (as in the
+manuscript and in \cite{mu2024fedtskd}; it may be constant or follow a fixed,
+data-independent schedule, but it does not depend on the selection policy or
+on any client's participation history) and let $S$ denote the fixed number of
+distillation steps per round. Define $K_{\min} := \min_{1\le r\le R} K_r > 0$,
+a constant fixed by the training-step schedule alone.
+
+\begin{corollary}[Uniform per-client rate in communication rounds]
+\label{cor:per-client}
+Let Assumptions~1--4 of \cite{mu2024fedtskd} hold (as already assumed by the
+manuscript's existing Remark; by Fact~2 none of them constrains the selection
+policy), let $\alpha_u+\alpha_d<1$ (as already assumed by Proposition~1), and
+let $R$ be large enough that $(K_{\min}+S)\bigl(KR/N - 1\bigr) + \beta_1 > 0$.
+Then, under SCOPE-FD selection, \emph{every} client $n\in\{1,\dots,N\}$
+satisfies
+\begin{equation}
+\mathbb{E}\bigl[L_n(\bm w_n^{(R)})\bigr] - L_n^{*}
+\;\le\; \frac{\psi}{2}\cdot\frac{\nu_n}{(K_{\min}+S)\!\left(\dfrac{KR}{N} - 1\right) + \beta_1}
+\;=\; \mathcal{O}\!\left(\frac{N}{KR}\right),
+\label{eq:cor-per-client}
+\end{equation}
+where $\bm w_n^{(R)}$ denotes client $n$'s local model after $R$
+communication rounds.
+\end{corollary}
+
+\begin{proof}
+By Algorithm~1 of the manuscript (only $n \in \mathcal{S}_r$ update in round
+$r$), client $n$'s weights are unchanged on any round it is not selected,
+so its own elapsed-step counter $t$ (Fact~4) advances only on rounds it
+participates in, and by exactly $K_{r}+S \ge K_{\min}+S$ steps on each such
+round. Hence after $R$ communication rounds, client $n$'s own counter
+satisfies
+\[
+t_n^{(R)} \;\ge\; (K_{\min}+S)\cdot n_i^{(R)}.
+\]
+Applying Eq.~(\ref{eq:manuscript-conv}) at $t+1 = t_n^{(R)}$ and using the
+lower bound above together with Eq.~(\ref{eq:given-lowerbound})
+(Proposition~1's exact-count refinement, which holds for \emph{every} $i$
+simultaneously) gives Eq.~(\ref{eq:cor-per-client}).
+\end{proof}
+
+\begin{note}
+The word ``every'' is the entire content of this corollary. Proposition~1's
+spread guarantee (Eq.~\ref{eq:given-spread}) is what licenses it: no policy
+without a comparable balance guarantee --- uniform random selection included
+--- can make the same claim uniformly, since an in-expectation fairness
+property alone permits some client's realized $n_i^{(R)}$ to fall arbitrarily
+below $KR/N$ at any finite $R$.
+\end{note}
+
+\begin{corollary}[Global objective, round-indexed]
+\label{cor:global}
+Under the same hypotheses as Corollary~\ref{cor:per-client}, and using
+$F(\{\bm w_n\}) = \sum_n \lambda_n L_n(\bm w_n)$ with $\lambda_n =
+|\mathcal{D}_n|/|\mathcal{D}|$, $F^{*}=\sum_n\lambda_n L_n^{*}$ (Fact~5),
+\begin{equation}
+\mathbb{E}\bigl[F(\{\bm w_n^{(R)}\})\bigr] - F^{*}
+\;\le\; \frac{\psi\, N\,\bar\nu}{2\left[(K_{\min}+S)(KR - N) + N\beta_1\right]}
+\;=\; \mathcal{O}\!\left(\frac{N}{KR}\right),
+\qquad \bar\nu := \sum_{n=1}^N \lambda_n \nu_n.
+\label{eq:cor-global}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Sum Eq.~(\ref{eq:cor-per-client}) weighted by $\lambda_n$ and use
+$\sum_n \lambda_n = 1$ and Fact~5.
+\end{proof}
+
+\begin{remark}[Consistency check against full participation]
+\label{rem:consistency}
+Setting $K = N$ (full participation) in Eq.~(\ref{eq:cor-global}) recovers
+$\mathcal{O}(N/(NR)) = \mathcal{O}(1/R)$, matching FedTSKD's original
+full-participation rate. This is a necessary consistency check: at $K=N$
+every client is selected every round regardless of policy, so SCOPE-FD's
+selector has nothing to do, and the bound must degenerate back to
+\cite{mu2024fedtskd}'s own rate. It does.
+
+\authorflag{The bash script prepared alongside this note
+(\texttt{scripts/run\_convergence\_reference.sh}) runs exactly this
+$K{=}N{=}30$ configuration, plus an intermediate $K{=}20$ point, so that
+Eq.~(\ref{eq:cor-global})'s predicted $N/(KR)$ scaling can be checked
+empirically against the already-available $K \in \{1,3,5,10\}$ points. This
+is confirmatory evidence for the reader, not a dependency of the proof above
+--- Corollaries~\ref{cor:per-client}--\ref{cor:global} are unconditional
+given Assumptions~1--4 and $\alpha_u+\alpha_d<1$, both already assumed
+elsewhere in the manuscript.}
+\end{remark}
+
+% =============================================================================
+\section{Assumption audit --- resolved}
+\label{sec:audit}
+% =============================================================================
+
+This is the section Reviewer~2 (Comment~3) and the attached review
+(Comment~1) explicitly ask for. With \cite{mu2024fedtskd} verified directly
+(\S\ref{sec:source-facts}), the audit is no longer conditional:
+
+\begin{enumerate}[label=(\alph*), leftmargin=2em]
+\item \textbf{Smoothness (Assumption 1) and convexity (Assumption 2).}
+Properties of $L_n$ and $Q_n$ alone (Fact~2). SCOPE-FD changes nothing about
+any loss function --- it only changes which clients are handed a training
+opportunity in a given round. Transfers unchanged.
+\item \textbf{Bounded variance and bounded gradient (Assumptions 3--4).}
+Also properties of $L_n$, $Q_n$, and within-client minibatch sampling
+(Fact~2), unrelated to the selection of $\mathcal{S}_r$. Transfers unchanged.
+\item \textbf{The aggregation rule.} FedTSKD's proof uses $\mathcal{S}_r$
+only through the manuscript's own aggregation Eq.~(\ref{eq:agg}); SCOPE-FD
+uses the identical rule. Transfers unchanged.
+\item \textbf{The sampling-scheme question --- resolved, not merely
+audited.} FedTSKD's Theorem~1 is proved under full participation, with no
+selection mechanism, no distributional assumption on $\mathcal{S}_r$, and no
+step in its proof (Lemmas~1--2, Corollaries~1--2, Appendices B--F of
+\cite{mu2024fedtskd}) that references any client other than $n$ itself
+(Facts~1 and~3). There is therefore no sampling assumption for a
+deterministic rule like SCOPE-FD's to satisfy or violate --- the question the
+attached review poses has a clean answer: \emph{all four assumptions
+transfer unchanged, because none of them, nor the proof built on them,
+was ever about how clients are chosen.} Corollary~\ref{cor:global} is an
+unconditional corollary of Theorem~1 of \cite{mu2024fedtskd} composed with
+the manuscript's own Proposition~1, not a hedged parallel result.
+\end{enumerate}
+
+% =============================================================================
+\section{Proposed reply text for the three pending comments}
+\label{sec:replies}
+% =============================================================================
+
+\subsection*{R1, Comment 1}
+\textit{``...the analytical contribution of Section V-B is minimal.''}
+
+\textbf{Reply.} We thank the Reviewer for this comment, and on reflection we
+agree that the original Remark understated what needed proving and overstated
+what it had shown. The Remark as written was a statement about a single
+client's local optimization trajectory, which indeed does not depend on the
+selection policy and requires no new argument, exactly as the Reviewer
+observes: FedTSKD's Theorem~1 is proved under full participation with no
+selection mechanism of any kind, so no step of its proof could have depended
+on one. The substantive question is different: how the bound behaves as a
+function of communication rounds once participation is partial, since a
+client's own local-update clock and the wall-clock round counter are no
+longer the same thing once some rounds pass without that client being
+selected. We have replaced the Remark with Proposition~\ref{cor:global}
+\authorflag{[cite as the manuscript's new Proposition/Corollary number once
+inserted]}, which composes FedTSKD's unmodified per-client bound with our own
+participation-balance guarantee (Proposition~1) to give a round-indexed rate
+that holds uniformly across every client, not merely on average, and which
+recovers FedTSKD's original full-participation rate exactly when $K=N$. The
+derivation is short, as the Reviewer anticipated --- its value is in making
+explicit a composition the original manuscript asserted without stating.
+
+\subsection*{R2, Comment 3}
+\textit{``...provide a clearer theorem for the partial-participation setting,
+or state more modestly that SCOPE-FD is compatible with the FedTSKD pipeline
+under the assumptions of [13].''}
+
+\textbf{Reply.} We thank the Reviewer for offering both paths explicitly. We
+have taken the first, and can report that it did not require weakening to the
+second: FedTSKD's Assumptions~1--4 are stated entirely in terms of the local
+loss functions $L_n,Q_n$ and within-client minibatch sampling, with no
+reference to how clients are selected into a round, and its convergence proof
+is carried out under full participation with no selection mechanism at all.
+Consequently SCOPE-FD's deterministic rotation does not need to be reconciled
+with any sampling assumption in [13] --- there isn't one to reconcile with.
+Proposition~\ref{cor:global} states, precisely, that composing FedTSKD's
+unmodified per-client bound with our own participation-balance guarantee
+(already Proposition~1 in the manuscript) gives a round-indexed rate of
+$\mathcal{O}(N/(KR))$, which recovers FedTSKD's original $\mathcal{O}(1/R)$
+rate exactly at $K=N$ (Remark~\ref{rem:consistency}), verified as a
+consistency check rather than assumed.
+
+\subsection*{Attached review, Comment 1}
+\textit{``...it would be helpful to clarify whether the assumptions required
+in the original convergence analysis of FedTSKD remain satisfied.''}
+
+\textbf{Reply.} We thank the Reviewer for this request and address it
+directly. Section~\authorflag{[X]} of the revised manuscript now walks
+through FedTSKD's Assumptions~1--4 individually and confirms each transfers
+unchanged: the smoothness and convexity assumptions concern only the local
+loss functions $L_n$ and $Q_n$; the bounded-variance and bounded-gradient
+assumptions concern only within-client minibatch sampling; and the
+aggregation-rule step of the proof uses the selected subset only through the
+data-size-weighted aggregation, which SCOPE-FD leaves unchanged. Most
+directly relevant to the Reviewer's question: FedTSKD's convergence proof
+is carried out under full participation and contains no assumption at all
+about \emph{how} clients are selected into a round, since the original
+algorithm has no such mechanism. There is therefore no sampling assumption
+for SCOPE-FD's deterministic rotation to satisfy or violate, and
+Section~\authorflag{[X]} states this explicitly rather than leaving it
+implicit.
+
+% =============================================================================
+\section*{What still needs a human before this goes anywhere}
+% =============================================================================
+\begin{enumerate}[leftmargin=2em]
+\item Decide where Corollary~\ref{cor:global} is placed in Section~V-B of the
+manuscript (replacing or following the current Remark), and give it a proper
+number; the three reply texts and Remark~\ref{rem:consistency} need that
+number substituted in.
+\item Confirm whether the manuscript's own $K_r$ (local-training steps per
+round) is held constant across the revision's experiments or follows
+FedTSKD's original decreasing schedule $K_1\ge K_2\ge\cdots$ --- either way
+Corollary~\ref{cor:per-client} holds as stated (it only needs $K_{\min}>0$),
+but the manuscript's own text describing $K_r$ should say which.
+\item Once \texttt{scripts/run\_convergence\_reference.sh} has been run, add
+its five new data points (K=20, K=30=N, five seeds each) to the existing
+K-sweep log-log fit and report the empirical exponent alongside
+Remark~\ref{rem:consistency}'s predicted $-1$.
+\end{enumerate}
+
+\begin{thebibliography}{9}
+\bibitem{mu2024fedtskd}
+Y.~Mu, N.~Garg, and T.~Ratnarajah, ``Federated Distillation in Massive MIMO
+Networks: Dynamic Training, Convergence Analysis, and Communication
+Channel-Aware Learning,'' \emph{IEEE Transactions on Cognitive
+Communications and Networking}, vol.~10, no.~4, pp.~1535--1550, Aug.~2024.
+doi: 10.1109/TCCN.2024.3378215.
+\end{thebibliography}
+
+\end{document}

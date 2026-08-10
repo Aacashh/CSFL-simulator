@@ -187,6 +187,24 @@ families:
       public_label_noise: [0.0, 0.1, 0.3]
     seeds: [11, 22, 33]
 
+  # X2 from CLAIM_AUDIT.md. The convergence claim (Reviewers 1-C1, 2-C3, and
+  # comment 1 of the attached review) is about replacing FedTSKD's full
+  # participation with SCOPE-FD's deterministic partial participation, but no
+  # run at K=N (full participation) exists anywhere in the campaign to compare
+  # against -- the highest ratio ever run is K/N=33% (K=10, N=30). K=20 gives
+  # an intermediate point on the way to K=N; K=30=N is full participation,
+  # where every selector is identical by construction, so it also serves as a
+  # sanity check that scope_fd and random converge to the same trajectory
+  # there. Five seeds to match the headline/RP-2 protocol, since this feeds a
+  # reviewer-facing convergence claim rather than an exploratory sweep.
+  convergence_full_participation:
+    methods:
+      - heuristic.random
+      - fd_native.scope_fd
+    axes:
+      clients_per_round: [20, 30]
+    seeds: [11, 22, 33, 44, 55]
+
   audio_fsdd:
     methods:
       - heuristic.random
