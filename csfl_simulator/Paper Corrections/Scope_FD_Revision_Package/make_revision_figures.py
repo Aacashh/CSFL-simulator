@@ -409,8 +409,12 @@ def _sweep(G, CFG, family, xkey, xlabel, out, extra=(), logx=False, xticks=None)
         bot.tick_params(labelsize=6.2)
         bot.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(3))
         panel_tag(top, tag)
+        # Both panels need their own legend. They are separate axes, so a
+        # legend on the accuracy panel alone leaves the Gini panel unlabelled.
         if c == 0:
             top.legend(loc="lower right", ncol=1)
+        else:
+            top.legend(loc="upper right", ncol=1)
 
     fig.subplots_adjust(left=0.075, right=0.99, top=0.975, bottom=0.135)
     save(fig, out)
