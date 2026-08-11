@@ -392,7 +392,7 @@ def _sweep(G, CFG, family, xkey, xlabel, out, extra=(), logx=False, xticks=None)
                          textcoords="offset points", zorder=5)
 
         top.set_ylabel(ylab)
-        top.tick_params(axis="x", labelbottom=False)
+        top.tick_params(axis="x", which="both", labelbottom=False)
         bot.set_ylabel(strip_lab, fontsize=6.2, labelpad=1.5, linespacing=1.0)
         bot.set_xlabel(xlabel)
         for ax in (top, bot):
@@ -403,7 +403,7 @@ def _sweep(G, CFG, family, xkey, xlabel, out, extra=(), logx=False, xticks=None)
                 if ax is bot:
                     ax.set_xticklabels([str(t) for t in xticks])
             frame(ax)
-        top.tick_params(axis="x", labelbottom=False)
+        top.tick_params(axis="x", which="both", labelbottom=False)
         span = max(d.max() - min(d.min(), 0.0), 1e-6)
         bot.set_ylim(min(d.min(), 0.0) - 0.30 * span, d.max() + 0.42 * span)
         bot.tick_params(labelsize=6.2)
@@ -515,7 +515,7 @@ def fig_scale(G, CFG):
                markerfacecolor="white", markeredgewidth=0.95, label="rolling window"),
     ]
     ax.legend(handles=handles, ncol=2, loc="upper right",
-              bbox_to_anchor=(0.995, 0.995), borderaxespad=0.3, columnspacing=0.7)
+              bbox_to_anchor=(0.995, 0.965), borderaxespad=0.3, columnspacing=0.7)
     ax.text(0.012, 0.012, "*  $K \\nmid N$", transform=ax.transAxes,
             fontsize=6.2, color=MUTED, ha="left", va="bottom")
     fig.subplots_adjust(left=0.20, right=0.975, top=0.985, bottom=0.105)
