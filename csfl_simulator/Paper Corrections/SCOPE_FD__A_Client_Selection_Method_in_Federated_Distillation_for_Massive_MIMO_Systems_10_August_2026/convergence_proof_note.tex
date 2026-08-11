@@ -199,13 +199,14 @@ Corollaries~\ref{cor:per-client}--\ref{cor:global}, the consistency check and
 the assumption audit are now in Section~V-B of the manuscript, and the three
 reviewer replies that depended on them are written.
 
-One item remains, and it is confirmatory rather than load-bearing. The script
-\texttt{scripts/run\_convergence\_reference.sh} runs $K{=}N{=}30$ plus an
-intermediate $K{=}20$ point over five seeds. Once it completes, those points
-can be added to the existing $K\in\{1,3,5,10\}$ sweep and the empirical
-log-log exponent reported against the $-1$ that
-Corollary~\ref{cor:global} predicts. The corollaries hold regardless, given
-Assumptions~1--4 and $\alpha_u+\alpha_d<1$.
+Nothing further is outstanding. Corollaries~\ref{cor:per-client}
+and~\ref{cor:global} are unconditional given Assumptions~1--4 of
+\cite{mu2024fedtskd} and $\alpha_u+\alpha_d<1$, so they need no experiment to
+support them. A full-participation reference run at $K{=}N{=}30$ would let the
+empirical log-log exponent of the $K$ sweep be reported against the $-1$ that
+Corollary~\ref{cor:global} predicts, but that is a confirmation of a bound
+already proved rather than evidence the bound depends on, and the submitted
+version does not rely on it.
 
 \begin{thebibliography}{9}
 \bibitem{mu2024fedtskd}
