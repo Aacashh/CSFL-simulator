@@ -38,7 +38,7 @@
 \maketitle
 
 \begin{abstract}
-\rev{Federated distillation lets edge devices train a shared model by exchanging only their predictions on a public dataset, which costs far less over a wireless link than sending weights. A base station can serve only a few of its devices per round, so it must choose which ones. Client selection has been studied at length for federated learning, where devices are ranked by a utility signal such as local loss or gradient magnitude. Federated distillation averages predictions rather than weights, which flattens those per-device signals, so the same rules do not carry over. Published federated distillation systems for massive MIMO networks avoid the question by assuming that every device participates in every round. No selector for this setting can state how evenly participation will be spread, and choosing at random leaves some devices served many times more often than others. This paper proposes SCOPE-FD, a deterministic selector that rotates devices by how far each has fallen behind a uniform participation target, and breaks ties towards devices holding classes the server currently predicts poorly. The participation imbalance it produces depends only on the pool size, the number served per round, and the training horizon, so it can be calculated before training starts. That prediction held in every run of a large experimental study, while accuracy matched the random baseline. Participation fairness is therefore constructible, not merely achievable, which turns a property machine learning usually imposes as a penalty and verifies afterwards into one an operator can commit to in advance.}
+\rev{Federated distillation lets edge devices train a shared model by exchanging only their predictions on a public dataset, which costs far less over a wireless link than sending weights. A base station can serve only a few of its devices per round, so it must choose which ones. Client selection has been studied at length for federated learning, where devices are ranked by a utility signal such as local loss or gradient magnitude. Federated distillation averages predictions rather than weights, which flattens those per-device signals, so the same rules do not carry over. Published federated distillation systems for massive MIMO networks avoid the question by assuming that every device participates in every round. No selector for this setting can state how evenly participation will be spread, and choosing at random leaves some devices served many times more often than others. This paper proposes SCOPE-FD, a deterministic selector that rotates devices by how far each has fallen behind a uniform participation target, and breaks ties towards devices holding classes the server currently predicts poorly. The participation imbalance it produces depends only on the pool size, the number served per round, and the training horizon, so it can be calculated before training starts. That prediction held in every run of a large experimental study, while accuracy stayed level with the random baseline and led it where participation was sparsest. Participation fairness is therefore constructible, not merely achievable, which turns a property machine learning usually imposes as a penalty and verifies afterwards into one an operator can commit to in advance.}
 
 %The framework applies to healthcare-wearable, vehicular-sensing, and Internet-of-Things deployments where equitable participation and tight communication budgets are operational requirements.}
 \end{abstract}
@@ -187,7 +187,7 @@ None of the existing works simultaneously addresses these three concerns togethe
 \draw[dashed, gray!60] (pub.east) -| ($(dist.north)+(0, 0.4)$);
 
 \end{tikzpicture}
-\caption{Architecture of the proposed SCOPE-FD framework over an mMIMO wireless backbone. $\mathcal{D}_n$ and $\mathcal{D}_p$ are the private and public datasets. Here $\bm{z}_{n,r}$, $\hat{\bm{z}}_{n,r}$, and $\tilde{\bm{z}}_r$ denote the uplink logits, the ZF-equalized logits at the BS, and the post-distillation logits broadcast over the downlink, respectively. The cloud workstation is the back-end compute node co-located with the BS over a wired (non-communication-budgeted) link, hosting the server-side model, the distillation step, and the SCOPE-FD selector. The only over-the-air segment is the BS-to-client wireless interface. Solid blue arrows denote the uplink streams, dashed red arrows the downlink broadcast, and dashed orange arrows the control path that returns the next-round subset $\mathcal{S}_r$ to the BS.}
+\caption{Architecture of the proposed SCOPE-FD framework over an mMIMO wireless backbone. Here $\bm{z}_{n,r}$, $\hat{\bm{z}}_{n,r}$ and $\tilde{\bm{z}}_r$ are the uplink logits, the ZF-equalized logits at the BS, and the post-distillation logits broadcast downlink. The cloud workstation is co-located with the BS over a wired link and hosts the server model, the distillation step and the selector, so the only over-the-air segment is the BS-to-client interface. Solid blue arrows are uplink streams, dashed red the downlink broadcast, and dashed orange the control path returning $\mathcal{S}_r$ to the BS.}
 \label{fig:system_model}
 \end{figure*}
 
@@ -471,67 +471,46 @@ SCOPE-FD coefficients & $\alpha_u = 0.3,\ \alpha_d = 0.1$ \\
 \end{tabular}
 \end{table}
 
-\subsection{Ablation of the Score Terms}
+\subsection{Score Terms and Comparison with Ported Selectors}
 \label{ssec:exp-ablation}
 
-\rev{The score (\ref{eq:score}) combines three terms, so the first question is how much each one contributes. Four variants are compared at the headline configuration $N=30$, $K=5$, $\alpha=0.5$ over five seeds. The variants are the participation debt alone, the debt with the under-prediction bonus, the debt with the class-coverage penalty, and the complete score. The results are listed in Table~\ref{tab:ablation4}.}
+\rev{Two questions are settled at the headline configuration $N=30$, $K=5$, $\alpha=0.5$ over five seeds. The first is how much each of the three score terms contributes, which is answered by the four variants in the upper block of Table~\ref{tab:headline}. The second is how the selector compares against published methods ported into the FD pipeline as described in Section~\ref{ssec:rw-fl-selection}, which is the lower block. The complete score returns $71.21 \pm 0.99$ in both experiment families, so the two blocks share a common anchor.}
 
 \begin{table}[t]
 \centering
-\caption{\rev{Ablation of the score terms. FMNIST, $N=30$, $K=5$, $\alpha=0.5$, five seeds, mean $\pm$ standard deviation.}}
-\label{tab:ablation4}
+\caption{\rev{Score-term ablation (upper) and selector comparison (lower). FMNIST, $N=30$, $K=5$, $\alpha=0.5$, five seeds, mean $\pm$ standard deviation.}}
+\label{tab:headline}
 \renewcommand{\arraystretch}{1.15}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Variant} & \textbf{Accuracy (\%)} & \textbf{Gini (\%)} & \textbf{Rounds to $70\%$} \\
+\textbf{Selector} & \textbf{Accuracy (\%)} & \textbf{Gini (\%)} & \textbf{Rounds to $70\%$} \\
 \midrule
-Debt only              & $71.26 \pm 1.14$ & $1.33$ & $71.0$ \\
-Debt $+$ under-pred.   & $70.55 \pm 1.19$ & $1.33$ & $83.5$ \\
-Debt $+$ coverage      & $71.56 \pm 0.98$ & $1.33$ & $71.8$ \\
-Complete SCOPE-FD      & $71.21 \pm 0.99$ & $1.33$ & $69.8$ \\
+Debt only              & $71.26 \pm 1.14$ & $1.33$  & $71.0$ \\
+Debt $+$ under-pred.   & $70.55 \pm 1.19$ & $1.33$  & $83.5$ \\
+Debt $+$ coverage      & $71.56 \pm 0.98$ & $1.33$  & $71.8$ \\
+Complete SCOPE-FD      & $71.21 \pm 0.99$ & $1.33$  & $69.8$ \\
+\midrule
+UnionFL \cite{castillo2025subtrunc}  & $71.18 \pm 1.40$ & $1.33$  & $71.0$ \\
+Uniform random      & $70.99 \pm 1.38$ & $12.49$ & $74.8$ \\
+DivFL \cite{balakrishnan2022divfl}   & $69.88 \pm 0.83$ & $36.84$ & $76.0$ \\
+SubTrunc \cite{castillo2024subtrunc} & $69.40 \pm 1.00$ & $38.65$ & $86.0$ \\
+Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\rev{Two observations follow. First, the participation-debt term supplies the entire fairness result. All four variants reach a Gini coefficient of $1.33\%$, the value (\ref{eq:gini_exact}) specifies for this configuration, and removing either information term leaves it unchanged, exactly as Proposition~1 predicts since those terms act only inside a debt-equal cohort. Second, the four variants are statistically indistinguishable in final accuracy, with the standard deviations in Table~\ref{tab:ablation4} overlapping in every pair. The only measurable effect of the two information terms is on convergence speed, where the complete score reaches $70\%$ absolute accuracy in $69.8$ rounds against $71.0$ for the debt term alone, a margin small relative to its spread across seeds. The fairness guarantee is therefore the primary result and the information terms refine the convergence path rather than the final accuracy. Repeating the comparison across $K \in \{1, 3, 5, 10\}$ leaves the spread between variants between $0.46$ and $1.58$ percentage points at every $K$ with no variant leading consistently, so the conclusion is not specific to the headline configuration.}
+\rev{The participation-debt term supplies the entire fairness result. All four variants reach a Gini coefficient of $1.33\%$, the value (\ref{eq:gini_exact}) specifies for this configuration, and removing either information term leaves it unchanged, exactly as Proposition~1 predicts since those terms act only inside a debt-equal cohort. The four are also statistically indistinguishable in final accuracy, with the standard deviations overlapping in every pair. The only measurable effect of the two information terms is on convergence speed, where the complete score reaches $70\%$ absolute accuracy in $69.8$ rounds against $71.0$ for the debt term alone, a margin small relative to its spread across seeds. The fairness guarantee is therefore the primary result and the information terms refine the convergence path rather than the final accuracy. Repeating the comparison across $K \in \{1, 3, 5, 10\}$ leaves the spread between variants between $0.46$ and $1.58$ percentage points at every $K$ with no variant leading consistently, so the conclusion is not specific to the headline configuration.}
 
-\subsection{Comparison with Ported Selectors}
-\label{ssec:exp-baselines}
+\rev{Against the ported selectors the proposed method improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points in final accuracy, and it lowers their participation Gini coefficient by more than an order of magnitude. Against uniform random selection and against UnionFL the accuracy difference lies inside one standard deviation, so the three are treated as tied on that axis and the separation is in participation fairness alone. The two submodular methods concentrate participation heavily, reaching Gini coefficients above $36\%$, because their diversity objective is evaluated per round and carries no memory of which clients have already been served.}
 
-\rev{The selector is next compared against four published methods ported into the FD pipeline as described in Section~\ref{ssec:rw-fl-selection}, together with uniform random selection and the debt-only variant. Table~\ref{tab:baselines} reports the results at the headline configuration over five seeds.}
-
-\begin{table}[t]
-\centering
-\caption{\rev{Selector comparison. FMNIST, $N=30$, $K=5$, $\alpha=0.5$, five seeds, mean $\pm$ standard deviation.}}
-\label{tab:baselines}
-\renewcommand{\arraystretch}{1.15}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-\textbf{Selector} & \textbf{Accuracy (\%)} & \textbf{Gini (\%)} \\
-\midrule
-SCOPE-FD (proposed) & $71.21 \pm 0.99$ & $1.33$ \\
-Debt only           & $71.03 \pm 1.00$ & $1.33$ \\
-UnionFL \cite{castillo2025subtrunc}  & $71.18 \pm 1.40$ & $1.33$ \\
-Uniform random      & $70.99 \pm 1.38$ & $12.49$ \\
-DivFL \cite{balakrishnan2022divfl}   & $69.88 \pm 0.83$ & $36.84$ \\
-SubTrunc \cite{castillo2024subtrunc} & $69.40 \pm 1.00$ & $38.65$ \\
-Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\rev{The proposed selector improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points in final accuracy, and it lowers their participation Gini coefficient by more than an order of magnitude. Against uniform random selection and against UnionFL the accuracy difference lies inside one standard deviation, so the three are treated as tied on that axis, and the separation is in participation fairness alone. The two submodular methods concentrate participation heavily, reaching Gini coefficients above $36\%$, because their diversity objective is evaluated per round and carries no memory of which clients have already been served.}
-
-\rev{The Oort result is the most informative entry in the table and quantifies the argument of Section~\ref{ssec:rw-fd}. Transferring a utility-based FL selector into FD without modification lowers final accuracy to $21.14 \pm 0.60$ and raises the Gini coefficient to $83.33\%$. The mechanism is the aggregation rule in (\ref{eq:agg}). A utility-driven rule returns repeatedly to the same high-loss clients, which in FD narrows the set contributing to the averaged logits and biases the distillation target itself toward a small subset. This measurement therefore supports, rather than asserts, the claim that FL selection rules do not transfer to FD.}
+\rev{The Oort result is the most informative entry in the table and quantifies the argument of Section~\ref{ssec:rw-fd}. Transferring a utility-based FL selector into FD without modification lowers final accuracy to $21.14 \pm 0.60$ and raises the Gini coefficient to $83.33\%$, and the $70\%$ threshold is never reached. The mechanism is the aggregation rule in (\ref{eq:agg}). A utility-driven rule returns repeatedly to the same high-loss clients, which in FD narrows the set contributing to the averaged logits and biases the distillation target itself toward a small subset. This measurement therefore supports, rather than asserts, the claim that FL selection rules do not transfer to FD.}
 
 \subsection{Sensitivity to the Selector Coefficients}
 \label{ssec:exp-coefgrid}
 
-\rev{The magnitude argument of Section~\ref{ssec:three-term-score} predicts that any setting with $\alpha_u + \alpha_d < 1$ preserves the debt ordering. This is tested directly on a grid of $\alpha_u \in \{0, 0.1, 0.2, 0.3, 0.5, 0.8\}$ against $\alpha_d \in \{0, 0.05, 0.1, 0.2, 0.4\}$, giving thirty settings, each repeated over three seeds. The outcome is shown in Fig.~\ref{fig:coefgrid}.}
+\rev{The magnitude argument of Section~\ref{ssec:penalty-term} predicts that any setting with $\alpha_u + \alpha_d < 1$ preserves the debt ordering. This is tested directly on a grid of $\alpha_u \in \{0, 0.1, 0.2, 0.3, 0.5, 0.8\}$ against $\alpha_d \in \{0, 0.05, 0.1, 0.2, 0.4\}$, giving thirty settings, each repeated over three seeds. The outcome is shown in Fig.~\ref{fig:coefgrid}.}
 
 \begin{figure}[!t]
 \centering
@@ -554,7 +533,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
 \label{fig:dirichlet}
 \end{figure*}
 
-\rev{Severe heterogeneity lowers accuracy for every selector alike. At $\alpha = 0.05$ the proposed selector reaches $26.74 \pm 4.19$ and uniform random reaches $27.07 \pm 4.24$, while at $\alpha = 5.0$ the two reach $84.67 \pm 0.11$ and $84.60 \pm 0.18$ respectively. Across the whole range the accuracy difference between the two remains inside one standard deviation. The participation Gini coefficient, in contrast, is $1.33\%$ for the proposed selector and $12.49\%$ for uniform random at every value of $\alpha$ tested. The fairness guarantee is therefore invariant to the degree of heterogeneity, as Proposition~1 predicts, since the debt term reads participation counts and not the data distribution. The two submodular baselines degrade on both axes as $\alpha$ falls, because their per-round diversity objective becomes less informative when each client holds few classes. At the extreme setting $\alpha = 0.01$ every selector collapses towards chance. Uniform random reaches $13.47 \pm 1.33$, the proposed selector $13.11 \pm 1.20$, and the two submodular baselines $12.95 \pm 0.96$. With most clients holding a single class the task is close to unlearnable under this budget, and no selection rule recovers it. The fairness separation nonetheless persists unchanged, at $1.33\%$ for the proposed selector against $12.16\%$ for uniform random and $53.37\%$ for the submodular baselines. As an upper anchor, an independent and identically distributed partition gives $85.68 \pm 0.07$ against $85.61 \pm 0.09$ for uniform random, with the same $1.33\%$ against $12.49\%$ fairness separation, so the gap persists even when the partition carries no heterogeneity at all.}
+\rev{Severe heterogeneity lowers accuracy for every selector alike. At $\alpha = 0.05$ the proposed selector reaches $26.74 \pm 4.19$ and uniform random reaches $27.07 \pm 4.24$, while at $\alpha = 5.0$ the two reach $84.67 \pm 0.11$ and $84.60 \pm 0.18$ respectively. Across the whole range the accuracy difference between the two remains inside one standard deviation. The participation Gini coefficient, in contrast, is $1.33\%$ for the proposed selector at every value of $\alpha$ tested, against $12.16\%$ to $12.64\%$ for uniform random. The fairness guarantee is therefore invariant to the degree of heterogeneity, as Proposition~1 predicts, since the debt term reads participation counts and not the data distribution. The two submodular baselines degrade on both axes as $\alpha$ falls, because their per-round diversity objective becomes less informative when each client holds few classes. At the extreme setting $\alpha = 0.01$ every selector collapses towards chance. Uniform random reaches $13.47 \pm 1.33$, the proposed selector $13.11 \pm 1.20$, and the two submodular baselines $12.95 \pm 0.96$. With most clients holding a single class the task is close to unlearnable under this budget, and no selection rule recovers it. The fairness separation nonetheless persists unchanged, at $1.33\%$ for the proposed selector against $12.16\%$ for uniform random and $53.37\%$ for the submodular baselines. As an upper anchor, an independent and identically distributed partition gives $85.68 \pm 0.07$ against $85.61 \pm 0.09$ for uniform random, with the same $1.33\%$ against $12.49\%$ fairness separation, so the gap persists even when the partition carries no heterogeneity at all.}
 
 \subsection{Sparsity Sweep}
 \label{ssec:exp-sparsity}
@@ -634,7 +613,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig_r6_scale_fairness}
-\caption{\rev{Participation fairness across client-pool and cohort sizes on FMNIST over five seeds. Each configuration carries one bar per selector. The filled circle is the cycle-aligned Gini coefficient at $R = 100$ and the open diamond is the rolling-window Gini coefficient measured over a window offset from the participation cycle, so the length of a bar shows how much the fairness reading depends on where the window is placed. Starred labels mark configurations in which $K$ does not divide $N$. The cycle-aligned coefficient of the proposed selector is zero exactly when $N$ divides $KR$, which is why $50/3$ reaches zero despite the star while $53/7$ and $47/6$ do not. Every value matches (\ref{eq:gini_exact}) to three decimal places.}}
+\caption{\rev{Participation fairness across client-pool and cohort sizes on FMNIST over five seeds, one bar per selector. Filled circles are the cycle-aligned Gini coefficient at $R = 100$; open diamonds the rolling-window coefficient over a window offset from the participation cycle, so bar length shows how much the reading depends on window placement. Stars mark $K \nmid N$. Every value matches (\ref{eq:gini_exact}).}}
 \label{fig:scale}
 \end{figure}
 
@@ -645,7 +624,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig_r8_ratio_gap}
-\caption{\rev{Final accuracy relative to uniform random selection on FMNIST at $\alpha = 0.5$, for every matched configuration in the campaign, ordered by the participation ratio. Each row pairs the complete score with the debt-only variant on the same seeds, and the grey connector is the distance between them. Whiskers are one standard deviation of the paired difference over seeds, with five seeds per configuration except at $30/1$, $30/3$ and $30/10$, where three are used. The advantage of the complete score shrinks as the ratio grows and turns negative in the three configurations with a cohort of at least twenty clients, while the debt-only variant stays on the positive side of zero throughout.}}
+\caption{\rev{Final accuracy relative to uniform random selection on FMNIST at $\alpha = 0.5$, for every matched configuration, ordered by participation ratio. Each row pairs the complete score with the debt-only variant on the same seeds, the grey connector being the distance between them. Whiskers are one standard deviation of the paired difference over seeds, five per configuration except at $30/1$, $30/3$ and $30/10$, where three are used.}}
 \label{fig:ratio}
 \end{figure}
 
@@ -671,9 +650,9 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
 
 \rev{Taken together the experiments above support a stronger statement than that the proposed selector is fair. The campaign spans seventeen experiment families, so it is large enough to test (\ref{eq:gini_exact}) as a prediction rather than to report fairness one setting at a time.}
 
-\rev{The test is direct. For every run, $N$, $K$ and $R$ are known before the run starts, so (\ref{eq:gini_exact}) fixes the participation Gini coefficient in advance. Across the campaign it is correct in $457$ of $457$ cases, covering $275$ runs of the proposed selector and $182$ of the debt-only variant, with a largest deviation below $10^{-4}$ percentage points. Held out from that count are the eighteen dropout runs, where a selected client may fail to return and the realised participation is therefore not the intended participation. The measured value is also independent of the seed, with a standard deviation of exactly zero over seeds at every configuration, which is what a deterministic rule should give.}
+\rev{The test is direct. For every run, $N$, $K$ and $R$ are known before the run starts, so (\ref{eq:gini_exact}) fixes the participation Gini coefficient in advance. Across the campaign it is correct in $459$ of $459$ cases, covering $276$ runs of the proposed selector and $183$ of the debt-only variant, with no deviation at all rather than a small one. Held out from that count are the eighteen dropout runs, where a selected client may fail to return and the realised participation is therefore not the intended participation. The measured value is also independent of the seed, with a standard deviation of exactly zero over seeds at every configuration, which is what a deterministic rule should give.}
 
-\rev{The law holds across every condition reported in Sections~\ref{ssec:exp-coefgrid} to~\ref{ssec:exp-cross-dataset}, that is across all three datasets, all seven heterogeneity levels, the whole SNR sweep, every privacy mechanism, both staleness windows, every public-set variation and all thirty cells of the coefficient grid. The value $1.33\%$ is returned in $202$ runs spanning fifteen of the seventeen families, because those runs share the headline arithmetic, and every remaining run returns the value the law specifies for its own triple.}
+\rev{The law holds across every condition reported in Sections~\ref{ssec:exp-coefgrid} to~\ref{ssec:exp-cross-dataset}, that is across all three datasets, all seven heterogeneity levels, the whole SNR sweep, every privacy mechanism, both staleness windows, every public-set variation and all thirty cells of the coefficient grid. The value $1.33\%$ is returned in $313$ of these runs, spanning fifteen of the seventeen families, because those runs share the headline arithmetic, and every remaining run returns the value the law specifies for its own triple.}
 
 \rev{This follows from the structure of the score. The right-hand side of (\ref{eq:gini_exact}) contains only $N$, $K$ and $R$, because the participation-debt term reads participation counts alone, so no perturbation that leaves those three fixed can move the coefficient whatever it does to the data, the channel, the public set or the privacy mechanism. Fairness can therefore be predicted from the deployment parameters instead of being re-validated for each deployment condition, which is what a penalty-based or stochastic fairness objective cannot offer. The one condition under which it degrades, a hard resource constraint that renders clients unselectable, is characterised in Section~\ref{ssec:exp-channel-aware}. Dropout is the milder form of the same effect, and the coefficient then varies from run to run between $0.42\%$ and $2.12\%$.}
 
@@ -684,7 +663,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ \\
 \label{sec:conclusion}
 This paper has proposed SCOPE-FD, a deterministic, fairness-first client selector for federated distillation over massive MIMO networks under partial participation, built on the FedTSKD substrate of \cite{mu2024fedtskd}. The selector acts on the over-round composition of the client subset through a debt-dominated three-term score with fixed non-negative coefficients.
 
-\rev{The central result is that the fairness of the selector is predictable rather than merely good. The cumulative participation Gini coefficient is $m(N-m)/(NKR)$ with $m = KR \bmod N$, so it follows from the pool size, the cohort size and the horizon alone, and that value was returned in all $457$ selector runs of the study free of client dropout. At the headline configuration it falls from $12.49\%$ under uniform random selection to $1.33\%$ while accuracy is matched at $71.21 \pm 0.99$ against $70.99 \pm 1.38$. Against published selectors ported into FD the proposed method improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points, while a utility-based FL selector transferred unchanged reaches only $21.14 \pm 0.60$.}
+\rev{The central result is that the fairness of the selector is predictable rather than merely good. The cumulative participation Gini coefficient is $m(N-m)/(NKR)$ with $m = KR \bmod N$, so it follows from the pool size, the cohort size and the horizon alone, and that value was returned in all $459$ selector runs of the study free of client dropout. At the headline configuration it falls from $12.49\%$ under uniform random selection to $1.33\%$ while accuracy is matched at $71.21 \pm 0.99$ against $70.99 \pm 1.38$. Against published selectors ported into FD the proposed method improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points, while a utility-based FL selector transferred unchanged reaches only $21.14 \pm 0.60$.}
 
 \rev{That guarantee also carries the convergence statement. Composed with the per-client bound of \cite{mu2024fedtskd} it gives a rate of $\mathcal{O}(N/(KR))$ in communication rounds that holds for every client at every finite horizon, adds no assumption to those of \cite{mu2024fedtskd}, and returns their full-participation rate once the cohort is the whole pool.}
 
