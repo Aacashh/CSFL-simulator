@@ -105,7 +105,7 @@ The enlarged study also lets us characterise where the accuracy advantage holds.
 \noindent
 \textbf{Reply 1:} {We thank the Reviewer for this comment. We have added the debt-only selector and the two partial variants, and the complete four-way ablation now runs at the headline configuration, across the participation sweep and across the channel sweep, with five seeds.
 
-At the headline configuration the debt-only selector reaches $71.26 \pm 1.14$, debt plus under-prediction $70.55 \pm 1.19$, debt plus coverage $71.56 \pm 0.98$ and the complete score $71.21 \pm 0.99$, with a participation Gini of $1.33\%$ for all four. The four variants are statistically indistinguishable in final accuracy, and the fairness guarantee comes entirely from the participation-debt term. The measurable contribution of the two auxiliary terms is to convergence speed: the complete score reaches seventy percent absolute accuracy in $69.8$ rounds against $71.0$ for debt only and $71.8$ for debt plus coverage.
+At the headline configuration the debt-only selector reaches $71.26 \pm 1.14$, debt plus under-prediction $70.55 \pm 1.19$, debt plus coverage $71.56 \pm 0.98$ and the complete score $71.21 \pm 0.99$, with a participation Gini of $1.33\%$ for all four. The four variants are statistically indistinguishable in final accuracy, and the fairness guarantee comes entirely from the participation-debt term. The measurable contribution of the two auxiliary terms is to convergence speed: the complete score reaches sixty percent absolute accuracy in $13.0$ rounds against $14.0$ for debt only, and uniform random needs $19.0$.
 
 We have accordingly rewritten the claims in the Abstract, in Section~I-A and in Section~VII so that the deterministic fairness guarantee is presented as the main result and the two auxiliary terms as a convergence refinement. The ablation is in Section~VI-B and Table~II of the revised manuscript.}\\
 
@@ -134,7 +134,7 @@ What partial participation does change is the time index. In [13] the index $t$ 
 
 All results now use multiple seeds, five for the main configurations and three for the sweeps. Every table entry is a mean and a standard deviation, every figure carries confidence bands or error bars, and the number of seeds is stated in each table.
 
-We added both metrics requested. The paper reports a plain final-accuracy table, and it reports the number of rounds needed to reach fixed absolute accuracy thresholds of sixty, seventy and eighty percent in place of the relative rounds-to-eighty-percent-of-final metric alone.
+We added both metrics requested. The paper reports a plain final-accuracy table, and it replaces the relative rounds-to-eighty-percent-of-final metric with rounds to a fixed absolute accuracy. The threshold reported in Table~II is sixty percent, which every seed of every selector except Oort attains, so the column is a mean over the full set rather than over the subset that happened to cross it. At the stricter seventy percent threshold not every seed finishes within the hundred-round budget, so we report attainment counts there instead of a mean.
 
 We added the four sensitivity studies: a grid of $\alpha_u$ and $\alpha_d$ with $30$ cells, Dirichlet $\alpha$ from $0.05$ to $5.0$ together with the independent and identically distributed case, and participation covering $K \in \{1, 3, 5, 10\}$ at $N = 30$ and ratios of five, ten and twenty percent at $N$ up to $200$.
 
@@ -247,7 +247,7 @@ We gave particular attention to the two cases the Reviewer highlights. For the c
 \noindent
 \textbf{Reply 4:} {We thank the Reviewer for this suggestion, which matches the first comment of Reviewer 2. We have added the exact four-way comparison. Over five seeds at the headline configuration, participation debt only reaches $71.26 \pm 1.14$, debt plus the under-prediction bonus $70.55 \pm 1.19$, debt plus the class-coverage penalty $71.56 \pm 0.98$ and the complete score $71.21 \pm 0.99$, with a participation Gini of $1.33\%$ for all four.
 
-The ablation shows that the participation-debt term alone provides the entire fairness guarantee, and that the contribution of the two auxiliary terms is confined to convergence speed, where the complete score reaches seventy percent absolute accuracy in $69.8$ rounds against $71.0$ for debt only. The claims in the manuscript have been adjusted to match. Please refer to Section~VI-B and Table~II of the revised manuscript.}\\
+The ablation shows that the participation-debt term alone provides the entire fairness guarantee, and that the contribution of the two auxiliary terms is confined to convergence speed, where the complete score reaches sixty percent absolute accuracy in $13.0$ rounds against $14.0$ for debt only. The claims in the manuscript have been adjusted to match. Please refer to Section~VI-B and Table~II of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 5 (Privacy discussion):} \textit{The proposed method requires each client to upload its normalized label histogram. Although the manuscript briefly discusses possible privacy-preserving alternatives, a slightly more detailed discussion of the practical implications of sharing these statistics would further improve the completeness of the paper.} \\
