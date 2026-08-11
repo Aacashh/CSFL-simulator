@@ -218,7 +218,7 @@ where $\bm{Y}^{(\text{UL})}_{r} \in \mathbb{C}^{N_{BS} \times N_D}$ stacks the $
 \hat{\bm{z}}_{n,r} = \bm{z}_{n,r} + \bm{\omega}^{(\text{UL})}_{n,r},
 \label{eq:ul_zf}
 \end{equation}
-where the variance of the post-equalization noise $\bm{\omega}^{(\text{UL})}_{n,r}$ is suppressed by a factor proportional to $N_{BS}$, owing to the channel hardening property of the mMIMO array \cite{mu2024fedtskd}, \cite{vu2020cell}.
+where the variance of the post-equalization noise $\bm{\omega}^{(\text{UL})}_{n,r}$ is suppressed by a factor proportional to $N_{BS}$, owing to the channel hardening property of the mMIMO array \cite{mu2024fedtskd}, \cite{vu2020cell}. \rev{Recovering the $K$ per-client streams by ZF requires the composite uplink channel $[\bm{H}_{1,r}\,\cdots\,\bm{H}_{K,r}] \in \mathbb{C}^{N_{BS} \times K}$ to have full column rank, so the cohort size is bounded by the array, $K \le N_{BS}$. The per-round budget is therefore set by the spatial dimensions the BS can separate rather than by the size of the client pool.}
 
 \subsection{FD Aggregation under Partial Participation}
 \label{ssec:fd-aggregation}
@@ -608,7 +608,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \subsection{Client Scale, Divisibility and Window Alignment}
 \label{ssec:exp-scale}
 
-\rev{The fairness guarantee is finally stressed along the three directions where its derivation is least immediate, namely a larger client pool, a cohort size that does not divide the pool, and an evaluation window that does not align with a participation cycle. Configurations with $N$ up to $200$ are used, including the non-divisible cases $N=47$ with $K=6$ and $N=53$ with $K=7$. Alongside the cycle-aligned Gini coefficient, a rolling-window Gini coefficient is computed over a window deliberately offset from the cycle length $\lceil N/K \rceil$. Fig.~\ref{fig:scale} shows both.}
+\rev{The fairness guarantee is finally stressed along the three directions where its derivation is least immediate, namely a larger client pool, a cohort size that does not divide the pool, and an evaluation window that does not align with a participation cycle. Configurations with $N$ up to $200$ and $K$ up to $40$ are used, including the non-divisible cases $N=47$ with $K=6$ and $N=53$ with $K=7$. The largest cohort occupies $40$ of the $N_{BS}=64$ spatial dimensions the array can separate, so the sweep covers most of the range the physical layer admits under (\ref{eq:ul_zf}). Alongside the cycle-aligned Gini coefficient, a rolling-window Gini coefficient is computed over a window deliberately offset from the cycle length $\lceil N/K \rceil$. Fig.~\ref{fig:scale} shows both.}
 
 \begin{figure}[!t]
 \centering
