@@ -523,7 +523,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \subsection{Data Heterogeneity}
 \label{ssec:exp-heterogeneity}
 
-\rev{The effect of the partition severity is examined by sweeping the Dirichlet concentration over $\alpha \in \{0.05, 0.1, 0.3, 0.5, 1.0, 5.0\}$ at $N=30$, $K=5$. Fig.~\ref{fig:dirichlet} shows the outcome.}
+\rev{The effect of the partition severity is examined by sweeping the Dirichlet concentration over $\alpha \in \{0.01, 0.05, 0.1, 0.3, 0.5, 1.0, 5.0\}$ at $N=30$, $K=5$. Fig.~\ref{fig:dirichlet} shows the outcome. A separate IID run provides an upper anchor for the same pool and cohort.}
 
 \begin{figure*}[!t]
 \centering
@@ -565,9 +565,9 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \subsection{Public-Dataset Sensitivity}
 \label{ssec:exp-publicset}
 
-\rev{Federated distillation requires a shared public dataset, so the sensitivity of the method to that choice is examined along three axes, namely the identity of the public set, its size, and the level of label noise injected into it.}
+\rev{Federated distillation requires a shared public dataset, so the sensitivity of the method to that choice is examined along three axes, namely the identity of the public set, its size, and the level of label noise injected into it. Every cell in this study uses three seeds, and the baseline the cells are read against is $71.75 \pm 0.81$.}
 
-\rev{Identity has the largest effect. Replacing the held-out public set with MNIST lowers the accuracy of the proposed selector from $71.75 \pm 0.81$ to $67.10 \pm 1.05$, reflecting the mismatch between the public inputs on which the consensus logits are formed and the private inputs the clients train on. That cell is also the disjoint-corpus control, since MNIST shares no input with the evaluation split. The ordering survives it, with the debt-only variant at $67.14 \pm 0.95$ and uniform random at $66.72 \pm 0.89$, so the accuracy level depends on the public set but the comparison does not.}
+\rev{Identity has the largest effect. Replacing the held-out public set with MNIST lowers the accuracy of the proposed selector to $67.10 \pm 1.05$, reflecting the mismatch between the public inputs on which the consensus logits are formed and the private inputs the clients train on. That cell is also the disjoint-corpus control, since MNIST shares no input with the evaluation split. The ordering survives it, with the debt-only variant at $67.14 \pm 0.95$ and uniform random at $66.72 \pm 0.89$, so the accuracy level depends on the public set but the comparison does not.}
 
 \rev{Size matters up to a threshold. Reducing the public set from $2000$ to $500$ samples costs about $2.5$ percentage points, giving $69.22 \pm 0.84$, while reducing it further to $100$ costs only $0.17$ more, giving $69.05 \pm 1.16$. A few hundred public samples therefore suffice, which matters because every participant must hold the set.}
 
@@ -647,11 +647,11 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \subsection{Invariance of the Fairness Guarantee}
 \label{ssec:exp-invariance}
 
-\rev{Because (\ref{eq:gini_exact}) fixes the coefficient from quantities known before a run starts, it can be treated as a prediction and tested against the measurement.}
+\rev{The campaign spans seventeen experiment families, which allows (\ref{eq:gini_exact}) to be tested as a prediction rather than reported one setting at a time.}
 
-\rev{For every run $N$, $K$ and $R$ are known before it starts, so (\ref{eq:gini_exact}) fixes the participation Gini coefficient in advance. Across the campaign it is exact, with no deviation in any run. Held out from that count are the eighteen dropout runs, where a selected client may fail to return and the realised participation is therefore not the intended participation. The measured value is also seed-independent, with a standard deviation of exactly zero at every configuration.}
+\rev{For every run $N$, $K$ and $R$ are known before it starts, so (\ref{eq:gini_exact}) fixes the participation Gini coefficient in advance. Across the campaign it is correct in $459$ of $459$ cases, covering $276$ runs of the proposed selector and $183$ of the debt-only variant, with no deviation in any run. Held out are the eighteen dropout runs, where a selected client may fail to return and the realised participation is therefore not the intended participation. The measured value is also seed-independent, with a standard deviation of exactly zero at every configuration.}
 
-\rev{The law holds across every condition reported in Sections~\ref{ssec:exp-coefgrid} to~\ref{ssec:exp-cross-dataset}, covering all three datasets, all seven heterogeneity levels, the SNR sweep, every privacy mechanism, both staleness windows, every public-set variation and all thirty coefficient cells. Each configuration returns the value its own triple specifies.}
+\rev{The law holds across every condition reported in Sections~\ref{ssec:exp-coefgrid} to~\ref{ssec:exp-cross-dataset}, covering all three datasets, all seven heterogeneity levels, the SNR sweep, every privacy mechanism, both staleness windows, every public-set variation and all thirty coefficient cells. The value $1.33\%$ is returned in $313$ of these runs across fifteen of the seventeen families, and every remaining run returns the value its own triple specifies.}
 
 \rev{This follows from the structure of the score, since the right-hand side of (\ref{eq:gini_exact}) contains only $N$, $K$ and $R$. Fairness can therefore be predicted from the deployment parameters instead of being re-validated for each condition, which a penalty-based or stochastic fairness objective cannot offer. The one condition under which it degrades, a hard resource constraint that renders clients unselectable, is characterised in Section~\ref{ssec:exp-channel-aware}. Dropout is the milder form of the same effect, and the coefficient then varies from run to run between $0.42\%$ and $2.12\%$.}
 
@@ -662,7 +662,7 @@ Oort \cite{lai2021oort}              & $21.14 \pm 0.60$ & $83.33$ & --- \\
 \label{sec:conclusion}
 This paper has proposed SCOPE-FD, a deterministic, fairness-first client selector for federated distillation over massive MIMO networks under partial participation, built on the FedTSKD substrate of \cite{mu2024fedtskd}. The selector acts on the over-round composition of the client subset through a debt-dominated three-term score with fixed non-negative coefficients.
 
-\rev{The central result is that the fairness of the selector is predictable rather than merely good. The cumulative participation Gini coefficient is $m(N-m)/(NKR)$ with $m = KR \bmod N$, so it follows from the pool size, the cohort size and the horizon alone, and it was returned exactly wherever every selected client responds. At the headline configuration it falls from $12.49\%$ under uniform random selection to $1.33\%$ while accuracy is matched at $71.21 \pm 0.99$ against $70.99 \pm 1.38$. Against published selectors ported into FD the proposed method improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points, while a utility-based FL selector transferred unchanged reaches only $21.14 \pm 0.60$.}
+\rev{The central result is that the fairness of the selector is predictable rather than merely good. The cumulative participation Gini coefficient is $m(N-m)/(NKR)$ with $m = KR \bmod N$, so it follows from the pool size, the cohort size and the horizon alone, and that value was returned in all $459$ selector runs of the study free of client dropout. At the headline configuration it falls from $12.49\%$ under uniform random selection to $1.33\%$ while accuracy is matched at $71.21 \pm 0.99$ against $70.99 \pm 1.38$. Against published selectors ported into FD the proposed method improves on DivFL by $1.33$ and on SubTrunc by $1.81$ percentage points, while a utility-based FL selector transferred unchanged reaches only $21.14 \pm 0.60$.}
 
 \rev{Three limits bound the result. The accuracy advantage belongs to the sparse regime, declining with $K/N$ at a rank correlation of $-0.815$ and turning negative once the cohort reaches twenty clients, where the debt-only variant should be preferred. Label-histogram disclosure is removable at no measured cost. A hard energy budget, in contrast, breaks the guarantee, because filtering clients on a criterion uncorrelated with participation debt violates the assumption of Proposition~1 that every client remains selectable.}
 
