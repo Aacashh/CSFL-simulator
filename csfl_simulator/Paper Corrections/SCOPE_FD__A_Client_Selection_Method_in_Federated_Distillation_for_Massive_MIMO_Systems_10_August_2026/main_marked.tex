@@ -92,7 +92,7 @@ Existing FL client-selection work spans several directions. Resource-aware metho
 
 In all of the above the aggregation rule is FedAvg \cite{mcmahan2017communication}, where each selected update enters the aggregate directly, which is what makes a per-client quality score meaningful at the server. That property does not survive the FD aggregation rule.
 
-\rev{Four of these selectors are used as comparison points in Section~\ref{sec:experiments}, and each is ported into the FD pipeline. A client in FD does not upload a gradient, so any selector whose native signal is a model update requires a substitute signal that FD actually produces. Two such signals are available, namely the static label histogram and the per-round logit vector on the public dataset. DivFL \cite{balakrishnan2022divfl} performs facility-location submodular maximization over client gradients, and is ported by replacing the gradient with the public-set logit vector, which preserves the submodular greedy procedure and changes only the representation it acts on. SubTrunc \cite{castillo2024subtrunc} performs truncated submodular maximization diversified by client loss, and ports directly because the loss on the shared public set is already computed every round. UnionFL \cite{castillo2025subtrunc} diversifies by historical participation, which maps onto the participation counts the selector already maintains. Oort \cite{lai2021oort} is a utility-based FL selector and is run without modification, which serves as a direct measurement of what happens when an FL selection rule is transferred to FD unchanged.}
+\rev{Four of these selectors are used as comparison points in Section~\ref{sec:experiments}, and each is ported into the FD pipeline. A client in FD does not upload a gradient, so any selector whose native signal is a model update requires a substitute signal that FD actually produces. Two such signals are available, namely the static label histogram and the per-round logit vector on the public dataset. DivFL \cite{balakrishnan2022divfl} performs facility-location submodular maximization over client gradients, and is ported by replacing the gradient with the public-set logit vector, which preserves the submodular greedy procedure and changes only the representation it acts on. SubTrunc \cite{castillo2024subtrunc} performs truncated submodular maximization diversified by client loss, and ports directly because the loss on the shared public set is already computed every round. UnionFL \cite{castillo2024unionfl} diversifies by historical participation, which maps onto the participation counts the selector already maintains. Oort \cite{lai2021oort} is a utility-based FL selector and is run without modification, which serves as a direct measurement of what happens when an FL selection rule is transferred to FD unchanged.}
 
 \subsection{Federated Distillation Algorithms and Wireless Physical Layer Integration}
 \label{ssec:rw-fd}
@@ -491,7 +491,7 @@ Debt $+$ under-pred.   & $70.55 \pm 1.19$ & $1.33$  & $14.0$ \\
 Debt $+$ coverage      & $71.56 \pm 0.98$ & $1.33$  & $13.0$ \\
 Complete SCOPE-FD      & $71.21 \pm 0.99$ & $1.33$  & $13.0$ \\
 \midrule
-UnionFL \cite{castillo2025subtrunc}  & $71.18 \pm 1.40$ & $1.33$  & $13.0$ \\
+UnionFL \cite{castillo2024unionfl}  & $71.18 \pm 1.40$ & $1.33$  & $13.0$ \\
 Uniform random      & $70.99 \pm 1.38$ & $12.49$ & $19.0$ \\
 DivFL \cite{balakrishnan2022divfl}   & $69.88 \pm 0.83$ & $36.84$ & $16.0$ \\
 SubTrunc \cite{castillo2024subtrunc} & $69.40 \pm 1.00$ & $38.65$ & $16.0$ \\
