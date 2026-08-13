@@ -242,3 +242,38 @@ Bash heredocs collapse `\\` to `\` even when quoted with `<<'EOF'`. This has
 caused `re.PatternError: bad escape` repeatedly. Build regex backslashes with
 `chr(92)*2`, or locate bib entries by key rather than by matching their accented
 bodies.
+
+## Resync of 13 August, after the figure consolidation
+
+The consolidation from seven floats to three left three files behind. A future
+session that changes figures again must check all of these, because none of
+them is caught by a LaTeX compile.
+
+- `response_to_reviewers.tex` hard-codes figure numbers, it does not use
+  `\ref`. It pointed at Fig. 2 through Fig. 7. Remapped to Fig. 2(a) to (d) and
+  Fig. 3(a) to (c). **Quoted Reviewer text keeps the original numbering and must
+  stay verbatim**, so leave the "gains in Fig. 3" and "resolution of Figure 1"
+  comments alone.
+- The Associate Editor reply claimed fifteen pages. It now states thirteen and
+  explains the consolidation, so nobody wonders where four figures went.
+- `README.txt` ships inside the zip and described six figures, forty-five cited
+  references, an estimated rather than compiled page count, and three
+  unresolved `[PENDING]` replies. There are now zero PENDING markers.
+
+## arXiv citations
+
+Advait asked for none, because unreviewed work is a weak citation. Status:
+
+- `hsu2019measuring` for the Dirichlet partition was replaced by
+  `yurochkin2019bayesian`, ICML 2019, pp. 7252--7261, which introduces the same
+  construction and is peer reviewed.
+- **`castillo2024unionfl` is still arXiv:2408.13683 and this is deliberate.**
+  That preprint proposes both SubTrunc and UnionFL. The peer-reviewed CDC 2024
+  paper by the same four authors, `castillo2024subtrunc`, covers SubTrunc only.
+  UnionFL therefore has no published venue. Citing the CDC paper for it would be
+  a misattribution, and dropping the citation means dropping a baseline that
+  Table II reports and that the letter promises to the Associate Editor. Awaiting
+  Advait's call. Do not silently remove it.
+
+The bibliography carries 45 entries of which 33 are cited. The 12 orphans do not
+print and are kept as spares.
