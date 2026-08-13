@@ -63,11 +63,13 @@ only advances on rounds it is selected. This is the one place a new
 statement is needed, not a violated assumption.
 
 \textbf{Fact 5.} The problem statement in \cite{mu2024fedtskd} is $N$
-separate per-client minimizations, $\bm w^{*}=\arg\min_{\bm w}L_n(\bm
-w),\,\forall n$. The manuscript's additive objective
-$F(\{\bm w_n\})=\sum_n\lambda_n L_n(\bm w_n)$ (its Eq.~2) inherits this
-directly, so $F^{*}=\sum_n\lambda_n L_n^{*}$ is not a simplification
-introduced here.
+separate per-client minimizations, one for each $n$,
+\[
+  \bm w^{*}=\arg\min_{\bm w}L_n(\bm w).
+\]
+The manuscript's additive objective $F(\{\bm w_n\})=\sum_n\lambda_n
+L_n(\bm w_n)$, its Eq.~2, inherits this directly, so
+$F^{*}=\sum_n\lambda_n L_n^{*}$ is not a simplification introduced here.
 
 \section{Given}
 
