@@ -132,8 +132,16 @@ area. Higher slack means more free space.
 | ten paragraph merges | 15 | 628 | +18 |
 | references 35 → 33 | 15 | 646 | +18 |
 | abbreviated 17 author lists to et al. | **14** | 1 | crossed |
+| merged Figs. 4, 5 and 6 into one three-panel row | 14 | 181 | +180 |
+| conclusion cut to one paragraph, introduction trimmed | 14 | 341 | +160 |
+| contributions block trimmed | 14 | 413 | +72 |
+| eleven paragraphs tightened | 14 | 493 | +80 |
+| three large paragraphs trimmed | 14 | 574 | +81 |
+| four more paragraphs tightened | 14 | 628 | +54 |
+| final wording pass, Fig. 1 caption | 14 | 655 | +27 |
+| abbreviated 12 venue strings in the bib | **13** | 3 | crossed |
 
-**Landed at 14 pages, not 13.** See the next section for why.
+**Target met. 13 pages, 0 errors, 0 undefined references, 0 overfull boxes.**
 
 Rejected after measurement:
 
@@ -144,7 +152,28 @@ Rejected after measurement:
   Only the two full-width 2-panel figures were worth merging, and that one
   change produced the single largest gain of the whole exercise.
 
-## Why 13 is not reachable by layout work
+## What actually worked, ranked
+
+1. **Merging figures into shared rows.** The two full-width 2-panel sweep
+   figures merged into one four-panel row gave +368 pt. The three
+   single-column robustness figures merged into one three-panel row gave
+   +180 pt. Together this was more than half the whole saving.
+2. **Abbreviating the bibliography.** Author lists to et al. gave the jump from
+   15 to 14. Venue strings gave the jump from 14 to 13. Neither drops a
+   reference.
+3. **Prose tightening**, roughly 25 paragraphs, gave about 470 pt in total.
+
+Note the ordering. Layout beat prose by a wide margin, and prose beat paragraph
+merging by a wide margin. Ten paragraph merges gave 18 pt. Do the figures first.
+
+## Superseded, kept for the record
+
+The section below was written when the target looked unreachable at 14 pages.
+It was wrong about the ceiling, because it did not account for the three-figure
+row or for bibliography abbreviation. It is kept because the cost table is
+still the right guide if the paper ever has to go below 13.
+
+## Why 13 looked unreachable at the 14-page stage
 
 A page is about 1400 pt of column space. At 14 pages the last page is full,
 slack 1 pt, so reaching 13 means freeing a further ~1400 pt. What is left:
