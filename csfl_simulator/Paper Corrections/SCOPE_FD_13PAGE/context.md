@@ -272,8 +272,8 @@ Advait asked for none, because unreviewed work is a weak citation. Status:
   paper by the same four authors, `castillo2024subtrunc`, covers SubTrunc only.
   UnionFL therefore has no published venue. Citing the CDC paper for it would be
   a misattribution, and dropping the citation means dropping a baseline that
-  Table II reports and that the letter promises to the Associate Editor. Awaiting
-  Advait's call. Do not silently remove it.
+  Table II reports and that the letter promises to the Associate Editor.
+  **Advait decided on 13 August to keep it.** Do not remove it.
 
 The bibliography carries 45 entries of which 33 are cited. The 12 orphans do not
 print and are kept as spares.
