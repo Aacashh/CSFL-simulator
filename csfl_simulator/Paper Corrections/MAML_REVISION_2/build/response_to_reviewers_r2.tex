@@ -46,9 +46,9 @@ This revision does not include a supplementary file. Every item the Reviewer rai
 \noindent
 \textbf{Comment 1:} \textit{The main manuscript and the supplementary material describe different optimization procedures for the same method.}\\
 \noindent
-\textbf{Reply 1:} {We thank the Reviewer for identifying this. We checked both descriptions against the selector source and corrected the manuscript to match the code on five points. The outer meta-update acts on the query set. Both meta-updates occur at the start of the round, before any client is scored. The support set is the cohort of round $t-2$ and the query set is the cohort of round $t-1$, so $\mathcal{D}_{sup}(t)=\mathcal{D}_{query}(t-1)$. The exploration step is deterministic and gives one slot to the stalest and least-used available client. The six state features are standardized across the available pool every round.
+\textbf{Reply 1:} {We thank the Reviewer for identifying this. We checked both descriptions against the selector source and corrected the manuscript to match the code on five points. The outer meta-update acts on the query set. Both meta-updates occur at the start of the round, before any client is scored. The support set is the cohort of round $t-2$ and the query set is the cohort of round $t-1$, so $\mathcal{D}_{sup}(t)=\mathcal{D}_{query}(t-1)$. The exploration step is deterministic and gives one slot to the available client of largest staleness, with the lowest selection frequency breaking ties. The six state features are standardized across the available pool every round.
 
-The lag between the two sets is what makes the procedure a meta-learning problem rather than online regression. The inner step adapts on an older round and the meta-gradient is measured on a newer one, so the outer update rewards initializations from which one adaptation step transfers forward in time. Please refer to Eq.~(4) for the standardization, Eq.~(5) for the lag, the opening of Section~IV-A for the phase ordering, and Algorithm~1 of the revised manuscript.}\\
+The lag between the two sets is what makes the procedure a meta-learning problem rather than online regression. The inner step adapts on an older round and the meta-gradient is measured on a newer one, so the outer update rewards initializations from which one adaptation step transfers forward in time. Please refer to Eq.~(4) for the standardization, Eq.~(5) for the lag, the opening of Section~IV-C for the phase ordering, and Algorithm~1 of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 2:} \textit{The latency-cost function is defined inconsistently between the two documents.}\\
@@ -59,7 +59,9 @@ c_{i,t}=\lambda\,\frac{\bigl(T_{i,t}-T_{target}\bigr)_{+}}{T_{target}}-\Delta_{i
 \]
 and every reported number was produced with this form. The submitted equation omitted the division by $T_{target}$, and the revised manuscript uses the normalized form throughout.
 
-The normalization also carries meaning. It makes the deadline overrun a dimensionless fraction, so both terms of the cost are on the same scale and a single value of $\lambda$ transfers across datasets with different round times. We have also removed the earlier ambiguity in $T_{target}$, which is the mean expected round latency of the Tier-2 devices in the available pool, recomputed each round, with the pool median as a fallback when no Tier-2 device is available. Please refer to Eq.~(8) and Section~IV of the revised manuscript.}\\
+The normalization also carries meaning. It makes the deadline overrun a dimensionless fraction, so both terms of the cost are on the same scale and a single value of $\lambda$ transfers across datasets with different round times. We have also removed the earlier ambiguity in $T_{target}$, which is the mean expected round latency of the Tier-2 devices in the available pool, recomputed each round, with the pool median as a fallback when no Tier-2 device is available.
+
+Checking the latency definitions against the simulator in the same pass showed that the submitted computation time carried a per-sample model cost the simulator does not apply, and that the energy accumulates over the whole per-round latency rather than over the computation time alone. Both definitions now match the code. Please refer to Eq.~(5) for the computation time, Eq.~(7) for the cost, and Eq.~(13) for the energy of the revised manuscript.}\\
 
 \noindent
 \textbf{Comment 3:} \textit{The per-client ranking score is not derived from the cohort-level objective it is supposed to serve.}\\
@@ -73,21 +75,21 @@ The result is a modular cohort surrogate, and Proposition~1 proves by an exchang
 \noindent
 \textbf{Comment 4:} \textit{Because the supplementary reveals a forced client-coverage stage, the fairness and coverage results must be re-evaluated.}\\
 \noindent
-\textbf{Reply 4:} {We agree that this had to be answered with data. We discarded the forced cold-start rounds and recomputed both metrics over the policy-driven rounds alone, across all $77$ MAML-Select runs in the study and every $\lambda$, inner-step, width and feature-ablation setting.
+\textbf{Reply 4:} {We agree that this had to be answered with data. We discarded the forced cold-start rounds and recomputed both metrics over the policy-driven rounds alone, across all $74$ distinct MAML-Select runs in the study and every $\lambda$, inner-step, width and feature-ablation setting.
 
 \begin{center}
 \begin{tabular}{lrrrrr}
 \toprule
 Dataset & Runs & Cov.\ (\%) all & Cov.\ (\%) post-start & Jain all & Jain post-start \\
 \midrule
-Fashion-MNIST & 49 & 100 & 100 & 0.755 & 0.737 \\
-CIFAR-10      & 23 & 100 & 100 & 0.420 & 0.377 \\
-CIFAR-100     & 5  & 100 & 100 & 0.796 & 0.779 \\
+Fashion-MNIST & 48 & 100 & 100 & 0.755 & 0.737 \\
+CIFAR-10      & 22 & 100 & 100 & 0.411 & 0.367 \\
+CIFAR-100     & 4  & 100 & 100 & 0.802 & 0.785 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Coverage is $100\%$ with and without the cold start, and this holds in every individual run rather than on average. Jain's index falls by at most $0.043$. Proposition~2 shows why this is not a coincidence. One slot per round goes to the client of maximal staleness, and a client that takes that slot has its staleness reset, so each of the other $N-1$ clients can block a given client at most once and every client is selected within any window of $N$ consecutive rounds. At $N=100$ and $T=200$ the condition is met twice over.
+Coverage is $100\%$ with and without the cold start, and this holds in every individual run rather than on average. Jain's index falls by at most $0.044$. Proposition~2 shows why this is not a coincidence. One slot per round goes to the client of maximal staleness, and a client that takes that slot has its staleness reset, so each of the other $N-1$ clients can block a given client at most once and every client is selected within any window of $N-1$ consecutive rounds. At $N=100$ and $T=200$ the condition is met twice over.
 
 The revised manuscript also separates the two metrics rather than presenting them as equivalent evidence. Coverage is a structural property guaranteed by the exploration slot. Jain's index measures how evenly the remaining places are distributed, is genuinely lower than for the uniform selectors, and reflects a latency-aware selector preferring faster devices. Both full-run and post-cold-start values are reported. Please refer to Section~V-C and Proposition~2 of the revised manuscript.}\\
 
