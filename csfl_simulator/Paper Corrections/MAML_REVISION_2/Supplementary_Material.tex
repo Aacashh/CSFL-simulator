@@ -9,7 +9,7 @@
 \usepackage{array}
 \usepackage{caption}
 
-\graphicspath{{./}{supplementary_assets_v2/}{supplementary_assets/}}
+\graphicspath{{images/}{./}}
 \captionsetup{font=footnotesize,labelfont=bf}
 \setlength{\textfloatsep}{7pt}
 \setlength{\floatsep}{7pt}
@@ -29,7 +29,7 @@
 
 \section*{S1. Experimental Protocol}
 
-This supplement records the additional evidence used to support the revised letter.  The focus is deliberately compact: reproducibility settings, MAML-Select resource savings, statistical support, sensitivity and ablation evidence, and selector-scaling behaviour.  The complete baseline table is retained in the main manuscript; here we highlight the results most directly connected to the reviewers' requests.
+This supplement records the additional evidence used to support the revised letter.  The focus is deliberately compact and covers reproducibility settings, MAML-Select resource savings, statistical support, sensitivity and ablation evidence, and selector-scaling behaviour.  The complete baseline table is retained in the main manuscript; here we highlight the results most directly connected to the reviewers' requests.
 
 \begin{table}[!ht]
 \centering
@@ -41,19 +41,19 @@ This supplement records the additional evidence used to support the revised lett
 Component & Setting \\
 \midrule
 Clients / selected clients & $N=100$, $K=10$ \\
-Communication rounds & $200$ for Fashion-MNIST/CIFAR-10; $150$ for CIFAR-100 analysis \\
+Communication rounds & $200$ for Fashion-MNIST and CIFAR-10, $150$ for CIFAR-100 \\
 Local training & $E=5$ epochs, batch size $32$, client LR $0.01$ \\
 Data heterogeneity & Dirichlet non-IID split, $\alpha=0.5$ \\
-Models & LightCNN-9 for Fashion-MNIST; ResNet-18 for CIFAR-10/100 \\
+Models & LightCNN-9 for Fashion-MNIST, ResNet-18 for CIFAR-10 and CIFAR-100 \\
 MAML-Select policy & MLP $6$--$64$--$64$--$1$ with $4{,}673$ parameters \\
-Meta optimization & One inner look-ahead step, $\beta=0.01$; Adam outer update, $\eta=0.001$ \\
+Meta optimization & One inner look-ahead step at $\beta=0.01$, Adam outer update at $\eta=0.001$ \\
 Default trade-off weight & $\lambda=0.5$ \\
 Seeds & $42$, $123$, $2026$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The heterogeneous-client model uses three device tiers with fixed seeded assignment: low-end clients ($20\%$), mid-range clients ($50\%$), and high-end clients ($30\%$).  Per-round wall-clock time is straggler-bound by the slowest selected client.  Energy is accumulated from the selected clients' tier power and modeled training time, and carbon is obtained from the declared grid intensity of $475$~g\,CO$_2$/kWh.  Since all methods select $K=10$ clients per round, MAML-Select's resource improvements come from adaptive client choice rather than from reducing the number of participating clients.
+The heterogeneous-client model uses three device tiers with fixed seeded assignment, low-end clients ($20\%$), mid-range clients ($50\%$), and high-end clients ($30\%$).  Per-round wall-clock time is straggler-bound by the slowest selected client.  Energy is accumulated from the selected clients' tier power and modeled training time, and carbon is obtained from the declared grid intensity of $475$~g\,CO$_2$/kWh.  Since all methods select $K=10$ clients per round, MAML-Select's resource improvements come from adaptive client choice rather than from reducing the number of participating clients.
 
 \section*{S2. Resource and Statistical Evidence}
 
@@ -77,7 +77,7 @@ CIFAR-100 & $58.15 \pm 0.51$ & $1.7\%$ & $4.7\%$ & $4.7\%$ & $100\%$ \\
 
 \begin{table}[!ht]
 \centering
-\caption{Paired statistical support for MAML-Select resource reductions versus FedAvg.  Reported $p$ values are two-sided paired $t$-tests over shared seeds; $|d_z|$ is the standardized paired effect size.}
+\caption{Paired statistical support for MAML-Select resource reductions versus FedAvg.  Reported $p$ values are two-sided paired $t$-tests over shared seeds, and $|d_z|$ is the standardized paired effect size.}
 \label{tab:supp_stats}
 \small
 \begin{tabular}{@{}llrrr@{}}
@@ -108,7 +108,7 @@ CIFAR-100 & TFLOPs & $107.80$ & $5.15$ & $0.012$ \\
 
 \section*{S3. Sensitivity and State-Feature Ablation}
 
-The sensitivity study evaluates the cost trade-off weight $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST.  The selected value $\lambda=0.5$ gives a balanced operating point: accuracy remains close to the best observed value while compute, energy, and carbon are reduced relative to the low-penalty setting.  The ablation study verifies that the six-dimensional state vector gives stable behaviour; removing one feature at a time changes accuracy only modestly, which indicates that the learned selector is not dependent on a single fragile signal.
+The sensitivity study evaluates the cost trade-off weight $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST.  The selected value $\lambda=0.5$ gives a balanced operating point, since accuracy remains close to the best observed value while compute, energy, and carbon fall relative to the low-penalty setting.  The ablation study verifies that the six-dimensional state vector gives stable behaviour.  Removing one feature at a time changes accuracy only modestly, which indicates that the learned selector does not depend on a single fragile signal.
 
 \begin{figure}[!ht]
 \centering
@@ -123,7 +123,7 @@ The sensitivity study evaluates the cost trade-off weight $\lambda\in\{0.1,0.5,1
 \includegraphics[width=\linewidth]{fig_feature_ablation_trimmed_boxed}
 \caption*{(b) State-feature ablation.}
 \end{minipage}
-\caption{Design evidence for MAML-Select.  The $\lambda$ sweep shows the accuracy--resource trade-off, and the ablation plot shows that the policy remains stable under single-feature removals.}
+\caption{Design evidence for MAML-Select.  The $\lambda$ sweep shows the trade-off between accuracy and resources, and the ablation plot shows that the policy remains stable under single-feature removals.}
 \label{fig:supp_lambda_ablation}
 \end{figure}
 
@@ -164,9 +164,56 @@ w/o staleness & $90.37 \pm 0.19$ & 122.7 \\
 \end{minipage}
 \end{table}
 
-\section*{S4. Selector Scaling}
+\section*{S4. Task Dependence and Inner-Step Count}
 
-The selector-scaling probe runs MAML-Select for $50$ rounds while increasing $N=\{20,40,80,100\}$ and keeping $K/N=0.1$.  The measured per-round selection overhead stays in the millisecond range and is small compared with local training time.  This supports the complexity argument in the main paper: scoring all available clients with a fixed-size MLP is linear in the client pool, $O(Nd)$, and selecting the top-$K$ clients adds only the ranking step.
+The $\lambda$ sweep in the main paper is run on Fashion-MNIST, where accuracy is
+almost flat across the sweep.  Repeating it on CIFAR-10 gives a different
+picture, so we report both.  On the harder task the accuracy spread across
+$\lambda$ is $8.56$ percentage points against $1.02$ on Fashion-MNIST, and the
+Jain index falls further.  The practical reading is that $\lambda$ should be
+tuned per task rather than carried over at a fixed value.
+
+Table~\ref{tab:supp_inner} reports the inner-step count on CIFAR-10.  One step
+is the setting used throughout the paper.  Two and five steps cost more
+selector compute and did not improve accuracy, which is why the single-step
+look-ahead is retained.
+
+\begin{table}[!ht]
+\centering
+\caption{CIFAR-10 $\lambda$ sweep and inner-step count, three seeds each.}
+\label{tab:supp_inner}
+\small
+\begin{minipage}{0.48\textwidth}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+$\lambda$ & Acc. (\%) & TFLOPs & Jain \\
+\midrule
+0.1 & $64.86 \pm 0.98$ & 3541 & 0.558 \\
+0.5 & $63.84 \pm 1.75$ & 3155 & 0.441 \\
+1.0 & $58.27 \pm 1.30$ & 2751 & 0.213 \\
+5.0 & $56.30 \pm 2.73$ & 2634 & 0.222 \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Inner steps & Acc. (\%) & TFLOPs & Jain \\
+\midrule
+1 & $63.84 \pm 1.75$ & 3155 & 0.441 \\
+2 & $63.07 \pm 1.82$ & 3172 & 0.524 \\
+5 & $62.15 \pm 2.42$ & 3119 & 0.409 \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\end{table}
+
+\section*{S5. Selector Scaling}
+
+The selector-scaling probe runs MAML-Select over $10$ rounds at each pool size while increasing $N$ from $20$ to $1000$ and keeping $K/N=0.1$.  The measured per-round selection overhead stays in the tens of milliseconds across a fiftyfold increase in pool size and is small compared with local training time.  This supports the complexity argument in the main paper, since scoring all available clients with a fixed-size MLP is linear in the client pool, $O(Nd)$, and selecting the top-$K$ clients adds only the ranking step.
 
 \begin{figure}[!ht]
 \centering
@@ -177,14 +224,14 @@ The selector-scaling probe runs MAML-Select for $50$ rounds while increasing $N=
 
 \begin{table}[!ht]
 \centering
-\caption{Mean MAML-Select selection overhead in seconds.}
+\caption{Mean MAML-Select selection overhead in milliseconds per round, over $10$ rounds at each pool size.}
 \label{tab:supp_scaling}
 \small
-\begin{tabular}{@{}lrrrr@{}}
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
-Method & $N=20$ & $N=40$ & $N=80$ & $N=100$ \\
+Method & $N=20$ & $N=40$ & $N=80$ & $N=100$ & $N=200$ & $N=500$ & $N=1000$ \\
 \midrule
-MAML-Select & 0.012689 & 0.011160 & 0.011907 & 0.011871 \\
+MAML-Select & 21.90 & 21.89 & 19.57 & 19.69 & 24.93 & 22.27 & 25.80 \\
 \bottomrule
 \end{tabular}
 \end{table}
