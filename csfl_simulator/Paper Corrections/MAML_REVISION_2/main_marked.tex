@@ -55,7 +55,7 @@
 % ABSTRACT
 % =====================================================================
 \begin{abstract}
-\revision{Federated Learning (FL) enables collaborative model training across distributed edge data, but client selection remains difficult when devices differ in data distribution, compute capacity, energy state, and communication latency. Selecting only the fastest or most statistically useful clients can slow convergence, increase resource cost, or reduce participation coverage. System-aware selectors such as FedCS and TiFL address stragglers, while utility-aware methods such as Oort, FedCor, CriticalFL, and FedGCS use loss, correlation, critical-period, or generative signals to improve training. However, many existing methods rely on fixed scoring rules, costly modelling stages, or feedback that does not explicitly adapt the selector before every round. The remaining gap is a lightweight policy that can rapidly re-rank clients as their utility and system state change during FL. We propose \textbf{MAML-Select}, an online adaptive selector that treats each FL round as a meta-learning task. A compact $6$-$64$-$64$-$1$ MLP is adapted with a first-order MAML-style support update from recent local-loss and latency feedback, then used to score available clients before a query-set meta-update. Across Fashion-MNIST, CIFAR-10, and CIFAR-100 with $100$ clients, $K=10$, Dirichlet $\alpha=0.5$, and three seeds, MAML-Select reduces cumulative TFLOPs by $12.8\%$, $21.5\%$, and $1.7\%$ relative to FedAvg, with corresponding energy/carbon reductions of $16.4\%$, $24.7\%$, and $4.7\%$. Accuracy remains competitive with FedAvg and FedGCS, with the largest trade-off on CIFAR-10. These findings suggest that meta-adaptive client selection can make edge AI deployments more resource-conscious while retaining broad client coverage.}
+\revision{Federated Learning (FL) enables collaborative model training across distributed edge data, but client selection remains difficult when devices differ in data distribution, compute capacity, energy state, and communication latency. Selecting only the fastest or most statistically useful clients can slow convergence, increase resource cost, or reduce participation coverage. System-aware selectors such as FedCS and TiFL address stragglers, while utility-aware methods such as Oort, FedCor, CriticalFL, and FedGCS use loss, correlation, critical-period, or generative signals to improve training. However, many existing methods rely on fixed scoring rules, costly modelling stages, or feedback that does not explicitly adapt the selector before every round. The remaining gap is a lightweight policy that can rapidly re-rank clients as their utility and system state change during FL. We propose \textbf{MAML-Select}, an online adaptive selector that treats each FL round as a meta-learning task. A compact $6$-$64$-$64$-$1$ MLP is adapted with a first-order MAML-style support update from recent local-loss and latency feedback, then used to score available clients before a query-set meta-update. Across Fashion-MNIST, CIFAR-10, and CIFAR-100 with $100$ clients, $K=10$, Dirichlet $\alpha=0.5$, and three seeds, MAML-Select reduces cumulative TFLOPs by $12.8\%$, $21.5\%$, and $1.7\%$ relative to FedAvg, with corresponding energy/carbon reductions of $16.4\%$, $24.7\%$, and $4.7\%$. Accuracy remains competitive with FedAvg and FedGCS, with the largest trade-off on CIFAR-10. Meta-adaptive selection can therefore make edge deployments more resource-conscious while retaining broad client coverage.}
 \end{abstract}
 \renewcommand\IEEEkeywordsname{Impact Statement}
 \begin{IEEEkeywords}
@@ -75,7 +75,7 @@ Federated learning, client selection, meta-learning, and computational efficienc
 
 \IEEEPARstart{F}{ederated} Learning (FL) has emerged as \revision{an important} framework for privacy-preserving distributed intelligence~\cite{mcmahan2017communication}. \revision{Clients train models locally and share only model updates. However, they differ in hardware, network conditions, and local data. This creates statistical drift under non-IID data and straggler delays under synchronous training}~\cite{karimireddy2020scaffold,mai2024study,tapwal2026stragglers,forootani2026asynchronous,borazjani2026redefining}. Despite these advances, the problem of \textit{whom to select} each round remains open.
 
-Client selection chooses a subset $\revision{\mathcal{S}_t} \subset \{1, \ldots, N\}$ each round. \revision{Client utility is non-stationary: a useful client can become redundant, while an overlooked client can later become important.} System-aware methods improve feasible participation but may bias selection away from slow yet data-rich clients~\cite{nishio2019client,chai2020tifl}. Utility-aware methods prioritize information gain, but may incur high latency or expensive server-side modelling~\cite{lai2021oort,tang2022fedcor,xu2024federated,yan2023criticalfl,ning2024fedgcs}. Learning-based selectors use histories, features, or reinforcement signals~\cite{wang2020optimizing,pan2024contextual,kazemi2026robust}. \revision{An efficient round-by-round mechanism for adapting the ranking policy to evolving utility remains underexplored.}
+Client selection chooses a subset $\revision{\mathcal{S}_t} \subset \{1, \ldots, N\}$ each round. \revision{Client utility is non-stationary. A useful client can become redundant, while an overlooked client can later become important.} System-aware methods improve feasible participation but may bias selection away from slow yet data-rich clients~\cite{nishio2019client,chai2020tifl}. Utility-aware methods prioritize information gain, but may incur high latency or expensive server-side modelling~\cite{lai2021oort,tang2022fedcor,xu2024federated,yan2023criticalfl,ning2024fedgcs}. Learning-based selectors use histories, features, or reinforcement signals~\cite{wang2020optimizing,pan2024contextual,kazemi2026robust}. \revision{An efficient round-by-round mechanism for adapting the ranking policy to evolving utility remains underexplored.}
 
 \revision{We propose MAML-Select, a client-selection framework based on a MAML-style fast adaptation step}~\cite{finn2017model}. \revision{It learns an initialization for a policy network and adapts the policy from recent feedback before the next ranking decision. Unlike RL-based or contextual-bandit selectors, MAML-Select uses rapid gradient-based policy adaptation. Unlike FL personalization}~\cite{fallah2020personalized}, \revision{it adapts the selector, not the client model. This is useful when devices have limited compute, strict deadlines, or intermittent connectivity.} The major contributions can be summarized as follows.
 \begin{enumerate}
@@ -83,10 +83,10 @@ Client selection chooses a subset $\revision{\mathcal{S}_t} \subset \{1, \ldots,
 \setlength{\topsep}{1pt}
 		\item We formulate the FL client selection problem as a meta-learning task and introduce the \textbf{MAML-Select} algorithm with \revision{rapid gradient-based} adaptation for online client selection.
 		\item We demonstrate that MAML-Select \revision{\textit{lowers cumulative training TFLOPs} by up to $21.5\%$ and modelled energy/carbon by up to $24.7\%$ relative to FedAvg, with reductions observed on all three datasets}.
-	\item \revision{Experiments on Fashion-MNIST, CIFAR-10, and CIFAR-100 under non-IID settings ($\alpha = 0.5$, three seeds) show that MAML-Select delivers accuracy competitive with FedAvg and FedGCS at lower computational cost, and higher accuracy than FedCS, Oort, TiFL, and FedCor in the reported runs; $\lambda$-sensitivity and feature-ablation studies support the design choices.}
+	\item \revision{Experiments on Fashion-MNIST, CIFAR-10, and CIFAR-100 at $\alpha = 0.5$ show accuracy competitive with FedAvg and FedGCS at lower cost, and higher accuracy than FedCS, Oort, TiFL, and FedCor. Sensitivity and ablation studies support the design choices.}
 \end{enumerate}
 
-\textit{Organization:} The rest of this paper is organized as follows. Section~II reviews related work on client selection in FL. Section~III details the system model and problem formulation. The proposed MAML-Select algorithm is described in Section~IV, followed by evaluation and results in Section~V. Section~VI concludes this paper and discusses future research directions.
+The rest of this paper is organized as follows. Section~II reviews related work on client selection in FL. Section~III details the system model and problem formulation. The proposed MAML-Select algorithm is described in Section~IV, followed by evaluation and results in Section~V. Section~VI concludes this paper and discusses future research directions.
 
 % =====================================================================
 % II. RELATED WORK
@@ -99,7 +99,7 @@ System-aware selection addresses stragglers. FedCS selects feasible clients unde
 Data-aware methods select clients for model utility rather than only speed. Oort prioritizes useful and fast clients, and FedCor models correlations between client losses~\cite{lai2021oort,tang2022fedcor}. CriticalFL uses critical learning periods, while FedGCS searches for client combinations in a learned continuous space~\cite{yan2023criticalfl,ning2024fedgcs}. Other work couples selection with compression or aggregation design~\cite{xu2024federated,tran2026fedimp}. MAML-Select instead targets rapid adaptation of the ranking policy as client utility evolves.
 
 \subsubsection{Learning-Based and Meta-Learning Approaches}
-Learning-based selectors improve from observed feedback. FAVOR uses deep Q-learning, while neural contextual bandits learn from client features and rewards~\cite{wang2020optimizing,pan2024contextual}. Recent work also studies deep-RL selection for robustness and fairness-aware inclusive participation~\cite{kazemi2026robust,arisdakessian2026vox}. Personalized FL is related but adapts models to clients; MAML-Select adapts the server-side ranking policy~\cite{fallah2020personalized}.
+Learning-based selectors improve from observed feedback. FAVOR uses deep Q-learning, while neural contextual bandits learn from client features and rewards~\cite{wang2020optimizing,pan2024contextual}. Recent work also studies deep-RL selection for robustness and fairness-aware inclusive participation~\cite{kazemi2026robust,arisdakessian2026vox}. Personalized FL is related but adapts models to clients, whereas MAML-Select adapts the server-side ranking policy~\cite{fallah2020personalized}.
 
 \revision{Table~\ref{tab:related_work_comparison} consolidates these distinctions. For methods without a stated closed-form selection complexity, it reports the dominant server-side operation.}
 
@@ -131,7 +131,7 @@ Learning-based selectors improve from observed feedback. FAVOR uses deep Q-learn
     \end{tabularx}
 \end{table*}
 
-\revision{\textbf{Difference from prior work:} MAML-Select meta-learns the selection policy $h_\phi$. Unlike heuristic, RL, contextual-bandit, and generative selectors, it uses a MAML inner update to adapt the ranking policy from recent feedback before the next decision. Its contribution is rapid policy adaptation under evolving client utility, not personalized model training.}
+\revision{\textbf{Difference from prior work.} MAML-Select meta-learns the selection policy $h_\phi$. Unlike heuristic, RL, contextual-bandit, and generative selectors, it uses a MAML inner update to adapt the ranking policy from recent feedback before the next decision. Its contribution is rapid policy adaptation under evolving client utility, not personalized model training.}
 
 % =====================================================================
 % III. SYSTEM MODEL AND PROBLEM FORMULATION
@@ -146,7 +146,7 @@ Learning-based selectors improve from observed feedback. FAVOR uses deep Q-learn
 
 \revision{At round $t$, let $\mathcal{A}_t \subseteq \mathcal{N}$ denote the available clients and $\mathcal{S}_t \subseteq \mathcal{A}_t$ the selected cohort. The server maintains the global model and the selection policy, while clients keep their data locally and return only model updates, local loss summaries, and resource-state feedback. Selection is therefore a server-side decision made before each broadcast, under the usual cross-device FL constraint that only a small fraction of available clients can train in a round.}
 
-\revision{Client $i$ has latency $T_{i,t}=T_{i,t}^{comp}+T_{i,t}^{comm}$, where $T_{i,t}^{comp} = \frac{E n_i C_{model}}{f_{i,t}}$ and $T_{i,t}^{comm} = \frac{M}{B_{i,t}} + \delta_{i,t}$. Here, $E$ is the number of local epochs, $C_{model}$ is the number of FLOPs per sample, $f_{i,t}$ is the compute rate, $M$ is the update size, $B_{i,t}$ is the uplink bandwidth, and $\delta_{i,t}$ is the propagation delay. In synchronous FL, the slowest selected client determines the round latency:}
+\revision{Client $i$ has latency $T_{i,t}=T_{i,t}^{comp}+T_{i,t}^{comm}$, where $T_{i,t}^{comp} = \frac{E n_i C_{model}}{f_{i,t}}$ and $T_{i,t}^{comm} = \frac{M}{B_{i,t}} + \delta_{i,t}$. Here, $E$ is the number of local epochs, $C_{model}$ is the number of FLOPs per sample, $f_{i,t}$ is the compute rate, $M$ is the update size, $B_{i,t}$ is the uplink bandwidth, and $\delta_{i,t}$ is the propagation delay. In synchronous FL the slowest selected client sets the round latency,}
 \begin{equation}
 	\color{blue}
 	T_t^{round} = \max_{i \in \mathcal{S}_t} T_{i,t},
@@ -165,18 +165,18 @@ Learning-based selectors improve from observed feedback. FAVOR uses deep Q-learn
 	\end{aligned}
 	\label{eq:bi_objective}
 \end{equation}
-\revision{Here, $K$ is the cohort size, $T$ is the number of rounds, and $\lambda \geq 0$ controls the latency--loss trade-off. A larger $\lambda$ places more emphasis on latency, while $\lambda=0$ yields loss-only selection. We assume $|\mathcal{A}_t|\geq K$. The model $\theta_{t+1}$ results from local training and aggregation over $\mathcal{S}_t$. The problem remains challenging because the action space is combinatorial and client utility evolves during training.}
+\revision{Here, $K$ is the cohort size, $T$ is the number of rounds, and $\lambda \geq 0$ balances latency against loss. A larger $\lambda$ places more emphasis on latency, while $\lambda=0$ yields loss-only selection. We assume $|\mathcal{A}_t|\geq K$. The model $\theta_{t+1}$ results from local training and aggregation over $\mathcal{S}_t$. The problem remains challenging because the action space is combinatorial and client utility evolves during training.}
 
 % =====================================================================
 % IV. METHODOLOGY: MAML-SELECT
 % =====================================================================
-\section{Methodology: MAML-Select Algorithm}
+\section{The MAML-Select Method}
 \revision{Building on~\eqref{eq:bi_objective}, MAML-Select treats client selection as a meta-learning problem. Client utility changes as training progresses. However, the mechanism for selecting useful clients from recent feedback can be learned.}
 
 \subsubsection{State Space}
 \revision{The server constructs a state vector $\bm{s}_{i,t} \in \mathbb{R}^6$ for each client $i$ at round $t$. It contains local training loss $\hat{L}_{i,t}$, gradient norm $\|\nabla F_i\|_2$, estimated latency $\hat{T}_{i,t}$, battery level $b_{i,t}$, selection frequency $q_{i,t}$, and staleness $\tau_{i,t}$ (rounds since last selected)}~\cite{pan2024contextual,xu2024federated}. \revision{Loss and gradient norm characterize statistical utility. Latency and battery level characterize system constraints. Selection frequency and staleness expose participation imbalance. Each FL round $t$ is treated as a task $\mathcal{T}_t$. The goal is to rank clients so that the top-$K$ cohort minimizes the per-round cost.}
 
-MAML-Select trains a meta-policy network $h_\phi(\bm{s}_{i,t})$, parameterized by $\phi$, that learns an initialization adaptable to the current round using data from the preceding round. \revision{The policy is a $6$-$64$-$64$-$1$ multilayer perceptron with ReLU activations and 4,673 trainable parameters.} The support set represents the past experience: $\mathcal{D}_{sup}(t) = \{(\bm{s}_{i,t-1}, c_{i,t-1}) \mid i \in \revision{\mathcal{S}_{t-1}}\}$, containing client states and observed costs from round $t-1$. \revision{The candidate set represents the current decision: $\mathcal{D}_{cand}(t) = \{\bm{s}_{i,t} \mid i \in \mathcal{A}_t\}$, containing the states of available clients.}
+MAML-Select trains a meta-policy network $h_\phi(\bm{s}_{i,t})$, parameterized by $\phi$, that learns an initialization adaptable to the current round using data from the preceding round. \revision{The policy is a $6$-$64$-$64$-$1$ multilayer perceptron with ReLU activations and 4,673 trainable parameters.} The support set $\mathcal{D}_{sup}(t) = \{(\bm{s}_{i,t-1}, c_{i,t-1}) \mid i \in \revision{\mathcal{S}_{t-1}}\}$ holds the client states and observed costs from round $t-1$. \revision{The candidate set $\mathcal{D}_{cand}(t) = \{\bm{s}_{i,t} \mid i \in \mathcal{A}_t\}$ holds the states of the currently available clients.}
 
 \subsubsection{Cost Function}
 \revision{The per-client cost $c_{i,t}$ supplies feedback to the ranking policy. Consistent with~\eqref{eq:bi_objective}, it is defined as}
@@ -188,10 +188,10 @@ MAML-Select trains a meta-policy network $h_\phi(\bm{s}_{i,t})$, parameterized b
 \revision{Here, $\Delta_{i,t}=\hat{L}_{i,t}^{before}-\hat{L}_{i,t}^{after}$ is the observed local loss reduction for selected client $i$. It is a client-level proxy for statistical utility and does not require a server-held validation set. The target $T_{target}$ is a soft deadline. Minimizing $c_{i,t}$ favors lower latency and larger local loss reduction.}
 
 \subsection{The MAML-Select Algorithm}
-The algorithm proceeds in three phases per round:
+The algorithm proceeds in three phases per round.
 
-\textbf{Phase~1 (Inner Loop Adaptation (Look-Ahead)):}
-At the start of round $t$, \revision{the server adapts the meta-policy $\phi_t$ on $\mathcal{D}_{sup}(t)$ using one gradient-descent step:}
+\textbf{Phase~1, inner-loop adaptation.}
+At the start of round $t$, \revision{the server adapts the meta-policy $\phi_t$ on $\mathcal{D}_{sup}(t)$ with one gradient-descent step,}
 \begin{equation}
 	\color{blue}
 		\phi'_t = \phi_t - \beta \nabla_{\phi_t} \mathcal{L}_{sup}(h_{\phi_t};\mathcal{D}_{sup}(t)),
@@ -211,16 +211,16 @@ g_t(\phi'_t) \leq g_t(\phi_t)
 This standard descent bound shows why recent feedback can improve the round-specific policy before ranking current candidates. It motivates rapid adaptation. It is not a global FL convergence guarantee.
 }
 
-\textbf{Phase~2 (Client Selection):}
-\revision{The adapted policy $h_{\phi'_t}$ scores the available clients and selects the $K$ clients with the lowest predicted costs:}
+\textbf{Phase~2, client selection.}
+\revision{The adapted policy $h_{\phi'_t}$ scores the available clients and takes the $K$ with the lowest predicted cost,}
 \begin{equation}
 	\color{blue}
 	\mathcal{S}_t = \operatorname{Top-}K_{i \in \mathcal{A}_t} \left( -h_{\phi'_t}(\bm{s}_{i,t}) \right).
 	\label{eq:selection}
 \end{equation}
 
-\textbf{Phase~3 (FL Execution and Outer Loop Update):}
-\revision{The selected clients perform standard FL training. Their observed costs form $\mathcal{D}_{query}(t)=\{(\bm{s}_{i,t},c_{i,t})\mid i\in\mathcal{S}_t\}$. The query loss is also mean squared error. The meta-policy is updated on this query set:}
+\textbf{Phase~3, FL execution and outer-loop update.}
+\revision{The selected clients perform standard FL training. Their observed costs form $\mathcal{D}_{query}(t)=\{(\bm{s}_{i,t},c_{i,t})\mid i\in\mathcal{S}_t\}$. The query loss is also mean squared error, and the meta-policy is updated on this query set,}
 \begin{equation}
 		\color{blue}
 		\phi_{t+1} \leftarrow \phi_t - \eta \nabla_{\phi'_t} \mathcal{L}_{query}(h_{\phi'_t}; \mathcal{D}_{query}(t)),
@@ -278,14 +278,14 @@ This standard descent bound shows why recent feedback can improve the round-spec
 	\mathcal{O}\!\left(NP + N\log K + 2KP\right).
 	\label{eq:selector_complexity}
 \end{equation}
-\revision{Since $P$ and $K$ are fixed in the experimental protocol ($P=4{,}673$, $K=10$), MAML-Select scales linearly with the client pool size $N$. The memory cost is $\mathcal{O}(P+N+K)$ for the policy parameters, client scores, and selected cohort. This contrasts with correlation-matrix or Gaussian-Process selection stages whose covariance operations can grow superlinearly, and in common FedCor-style implementations cubically, with $N$.}
+\revision{Since $P$ and $K$ are fixed in the experimental protocol ($P=4{,}673$, $K=10$), MAML-Select scales linearly with the client pool size $N$. The memory cost is $\mathcal{O}(P+N+K)$ for the policy parameters, client scores, and selected cohort. Correlation-matrix and Gaussian-Process selection stages grow superlinearly with $N$, and cubically in common FedCor-style implementations.}
 
 % =====================================================================
 % V. EVALUATION AND RESULTS
 % =====================================================================
 \section{Evaluation and Results}
 
-\revision{We evaluate on three benchmarks: Fashion-MNIST using LightCNN-9~\cite{wu2018light} (lightweight IoT task), CIFAR-10 using ResNet18~\cite{he2016deep} (complex vision task), and CIFAR-100 using ResNet18 (100-class fine-grained task).} $N = 100$ clients are simulated with non-IID data partition (Dirichlet $\alpha = 0.5$), selecting $K = 10$ clients per round for $T = 200$ rounds (\revision{$150$ rounds for CIFAR-100}) with $E = 5$ local epochs and batch size 32. \revision{Table~\ref{tab:main_summary} reports mean $\pm$ standard deviation over repeated runs; paired MAML-Select/FedAvg tests use seeds $42$, $123$, and $2026$.} \revision{Local models use PyTorch default initialization and SGD with learning rate $0.01$, momentum $0.9$, weight decay $10^{-4}$, and a constant scheduler. The meta-policy uses one inner step with $\beta=0.01$ and Adam for the outer update with $\eta=0.001$; the selector seed is fixed to 2026.} \revision{Compute rates follow three device tiers inspired by mobile benchmarking studies~\cite{ignatov2018ai}: Tier~1 (20\%, $1.0\times$), Tier~2 (50\%, $2.0\times$), and Tier~3 (30\%, $4.0\times$).} The target latency deadline $T_{target}$ is set to the average round latency of Tier~2 clients, and the trade-off parameter $\lambda = 0.5$. \revision{Baselines include FedAvg (random selection), FedCS (system-aware deadline-constrained), Oort (utility-based with importance sampling), TiFL (tier-based), FedCor (correlation-based via Gaussian Processes), FedGCS (generative selection), and CriticalFL (critical-period cohort scaling).}
+\revision{We evaluate on three benchmarks. Fashion-MNIST uses LightCNN-9~\cite{wu2018light} as a lightweight IoT task, CIFAR-10 uses ResNet18~\cite{he2016deep} as a complex vision task, and CIFAR-100 uses ResNet18 as a $100$-class fine-grained task.} $N = 100$ clients are simulated with non-IID data partition (Dirichlet $\alpha = 0.5$), selecting $K = 10$ clients per round for $T = 200$ rounds (\revision{$150$ rounds for CIFAR-100}) with $E = 5$ local epochs and batch size 32. \revision{Table~\ref{tab:main_summary} reports mean $\pm$ standard deviation over repeated runs. Paired MAML-Select and FedAvg tests use seeds $42$, $123$, and $2026$.} \revision{Local models use PyTorch default initialization and SGD with learning rate $0.01$, momentum $0.9$, weight decay $10^{-4}$, and a constant scheduler. The meta-policy uses one inner step with $\beta=0.01$ and Adam for the outer update with $\eta=0.001$. The selector seed is fixed to 2026.} \revision{Compute rates follow three device tiers inspired by mobile benchmarking studies~\cite{ignatov2018ai}. Tier~1 holds $20\%$ of clients at $1.0\times$, Tier~2 holds $50\%$ at $2.0\times$, and Tier~3 holds $30\%$ at $4.0\times$.} The target latency deadline $T_{target}$ is set to the average round latency of Tier~2 clients, and the trade-off parameter $\lambda = 0.5$. \revision{The baselines are FedAvg, FedCS, Oort, TiFL, FedCor, FedGCS, and CriticalFL, described in Section~II.}
 
 \subsection{\revision{Accuracy and Resource Cost}}
 \revision{We estimate the client-training computation per round as}
@@ -293,13 +293,13 @@ This standard descent bound shows why recent feedback can improve the round-spec
 	\text{TFLOPs}_{total} = \sum_{t=1}^{T} \sum_{i \in \mathcal{S}_t} E \cdot n_i \cdot C_{model} \times 10^{-12},
 	\label{eq:tflops}
 \end{equation}
-\revision{where $C_{model}$ is the per-sample cost; for ResNet18 on CIFAR-10 a client round is approximately $4.13$ TFLOPs. Modelled energy and carbon scale this cost by per-tier device power and a declared grid intensity; carbon-accounting metadata and emission units follow CodeCarbon v2.4.1~\cite{courty2024codecarbon}.}
+\revision{where $C_{model}$ is the per-sample cost. For ResNet18 on CIFAR-10 a client round is about $4.13$ TFLOPs. Modelled energy and carbon scale this cost by per-tier device power and a declared grid intensity, and the accounting metadata and emission units follow CodeCarbon v2.4.1~\cite{courty2024codecarbon}.}
 
-\revision{Table~\ref{tab:main_summary} summarises all methods. MAML-Select attains accuracy on par with FedAvg and FedGCS on Fashion-MNIST ($90.1\%$ vs.\ $90.2\%$ and $90.7\%$) and CIFAR-100 ($58.2\%$ vs.\ $59.7\%$ and $58.7\%$), and has higher accuracy than FedCS, Oort, TiFL, and FedCor in the reported runs. On CIFAR-10 it trades an accuracy reduction ($75.6\%$ vs.\ FedAvg $79.4\%$) for substantially lower cost. Overall, the results place MAML-Select in the resource-efficient region of the comparison: it remains close to the strongest accuracy-oriented methods while reducing TFLOPs, modelled energy, and carbon against higher-cost selection strategies. The meta-update overhead ($\varepsilon \approx 0.001$ GFLOPs per round) is negligible relative to client training; extended communication accounting is reported in the supplementary material.}
+\revision{Table~\ref{tab:main_summary} summarises all methods. MAML-Select matches FedAvg and FedGCS on Fashion-MNIST at $90.1\%$ against $90.2\%$ and $90.7\%$, and on CIFAR-100 at $58.2\%$ against $59.7\%$ and $58.7\%$. It leads FedCS, Oort, TiFL, and FedCor on every dataset. On CIFAR-10 it gives up accuracy, $75.6\%$ against $79.4\%$, for substantially lower cost. MAML-Select therefore sits in the resource-efficient region of the comparison, close to the strongest accuracy-oriented methods and below the higher-cost selectors on compute, modelled energy, and carbon. The meta-update overhead of about $0.001$ GFLOPs per round is negligible next to client training. Communication accounting is reported in the supplementary material.}
 
 \begin{table*}[!t]
 \centering
-\caption{Benchmark summary across non-IID datasets. Accuracy, precision, recall, F1, and coverage are in percent; energy is in Watt-hour (Wh) and carbon is in Grams of Carbon Dioxide Equivalent (gCO$_2$e).}
+\caption{\revision{Benchmark summary across non-IID datasets, reported as mean $\pm$ standard deviation over seeds. Accuracy, precision, recall, F1, and coverage are in percent, energy is in Watt-hour (Wh), and carbon is in Grams of Carbon Dioxide Equivalent (gCO$_2$e). Fashion-MNIST and CIFAR-10 use three seeds throughout. On CIFAR-100, FedAvg, CriticalFL, and MAML-Select use three seeds and the remaining methods use two. Recall equals accuracy under this evaluation protocol, so the two columns carry the same deviation.}}
 \label{tab:main_summary}
 \begingroup
 \scriptsize % slightly larger than \tiny
@@ -333,9 +333,9 @@ FedGCS        & 77.88$\pm$1.75 & 78.93$\pm$1.50 & 77.88$\pm$1.75 & 77.69$\pm$1.5
 FedAvg        & 59.66$\pm$0.29 & 60.90$\pm$0.48 & 59.66$\pm$0.29 & 59.13$\pm$0.40 & 6331$\pm$6      & 3626$\pm$18     & 1722$\pm$9     & 0.94$\pm$0.00 & 100$\pm$0 \\
 FedCS         & 27.52$\pm$0.29 & 27.93$\pm$0.10 & 27.52$\pm$0.29 & 26.39$\pm$0.09 & 5334$\pm$23     & 2659$\pm$12     & 1263$\pm$6     & 0.10$\pm$0.00 & 10$\pm$0  \\
 Oort          & 29.41$\pm$1.73 & 29.82$\pm$1.77 & 29.41$\pm$1.73 & 28.13$\pm$1.73 & 5955$\pm$189    & 3421$\pm$181    & 1625$\pm$86    & 0.10$\pm$0.00 & 10$\pm$0  \\
-TiFL          & 32.12$\pm$0.30 & 33.07$\pm$0.50 & 32.12$\pm$0.33 & 31.02$\pm$0.42 & 5986$\pm$28      & 3499$\pm$14      & 1662$\pm$5     & 0.11$\pm$0.00 & 12$\pm$0  \\
-FedCor        & 34.18$\pm$0.24 & 33.89$\pm$0.26 & 34.18$\pm$0.60 & 32.93$\pm$0.20 & 6428$\pm$32      & 3668$\pm$18      & 1742$\pm$3    & 0.12$\pm$0.00 & 14$\pm$0  \\
-CriticalFL    & 48.84$\pm$1.58 & 60.56$\pm$1.89 & 48.84$\pm$1.58 & 48.07$\pm$2.32 & 9469$\pm$392    & 5438$\pm$214    & 2583$\pm$102   & 0.97$\pm$0.00 & 100$\pm$0 \\
+TiFL          & 28.52$\pm$5.08 & 28.74$\pm$6.12 & 28.52$\pm$5.08 & 27.22$\pm$5.37 & 5961$\pm$35     & 3480$\pm$27     & 1653$\pm$13    & 0.11$\pm$0.00 & 12$\pm$0  \\
+FedCor        & 30.86$\pm$4.70 & 30.15$\pm$5.29 & 30.86$\pm$4.70 & 29.39$\pm$5.00 & 6473$\pm$64     & 3663$\pm$8      & 1740$\pm$4     & 0.12$\pm$0.00 & 14$\pm$1  \\
+CriticalFL    & 45.37$\pm$6.13 & 55.74$\pm$8.45 & 45.37$\pm$6.13 & 44.29$\pm$6.75 & 10235$\pm$1354  & 5879$\pm$779    & 2793$\pm$370   & 0.98$\pm$0.01 & 100$\pm$0 \\
 FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.20 & 6140$\pm$24     & 3526$\pm$4      & 1675$\pm$2     & 0.82$\pm$0.02 & 100$\pm$0 \\
 \textbf{MAML-Select} & 58.15$\pm$0.51 & 59.87$\pm$0.55 & 58.15$\pm$0.51 & 57.66$\pm$0.33 & 6224$\pm$20  & 3457$\pm$6      & 1642$\pm$3     & 0.78$\pm$0.03 & 100$\pm$0 \\
 \bottomrule
@@ -343,7 +343,7 @@ FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.2
 \endgroup
 \end{table*}
 
-\revision{Fig.~\ref{fig:convergence} summarises the CIFAR-100 round-wise behaviour. MAML-Select remains close to FedAvg and FedGCS on accuracy, precision, and loss while staying in the efficient carbon cluster. CriticalFL is costlier without an accuracy advantage in this setting.}
+\revision{Fig.~\ref{fig:convergence} summarises the CIFAR-100 round-wise behaviour. MAML-Select remains close to FedAvg and FedGCS on accuracy, precision, and loss while staying in the efficient carbon cluster. CriticalFL costs about $64\%$ more compute than MAML-Select and still trails it by more than twelve percentage points here. The four selectors that admit only part of the pool vary widely across seeds on this task, which is why their deviations are large.}
 
 \begin{figure}[!t]
 \centering
@@ -352,19 +352,44 @@ FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.2
 \label{fig:convergence}
 \end{figure}
 
-\revision{Fig.~\ref{fig:tradeoff} shows the efficiency--accuracy trade-off relative to FedAvg. Points to the left of $x=1$ use less cumulative training compute; points above $y=0$ improve accuracy. MAML-Select is consistently in the lower-compute region. Relative to FedAvg over shared seeds, it lowers cumulative TFLOPs by $12.8\%$/$21.5\%$/$1.7\%$ and modelled energy and carbon by $16.4\%$/$24.7\%$/$4.7\%$ on Fashion-MNIST/CIFAR-10/CIFAR-100. The corresponding accuracy changes are $-0.1$/$-3.8$/$-1.5$ percentage points. Thus the main empirical gain is resource efficiency with competitive, not universally superior, accuracy. This is the desired operating region for resource-constrained FL: the selector keeps broad data coverage while operating at a lower compute point than several utility-driven alternatives.}
+\revision{Fig.~\ref{fig:tradeoff} shows the efficiency and accuracy trade-off relative to FedAvg. Points to the left of $x=1$ use less cumulative training compute, and points above $y=0$ improve accuracy. MAML-Select is consistently in the lower-compute region. Relative to FedAvg over shared seeds, it lowers cumulative TFLOPs by $12.8\%$/$21.5\%$/$1.7\%$ and modelled energy and carbon by $16.4\%$/$24.7\%$/$4.7\%$ on Fashion-MNIST/CIFAR-10/CIFAR-100. The corresponding accuracy changes are $-0.1$/$-3.8$/$-1.5$ percentage points. The main empirical gain is therefore resource efficiency at competitive rather than universally superior accuracy, which is the operating region resource-constrained FL asks for.}
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=0.72\columnwidth]{fig_tradeoff_boxed.pdf}
-\caption{\revision{Efficiency--accuracy trade-off relative to FedAvg. $x<1$ indicates lower cumulative training compute, while $y$ reports accuracy change in percentage points.}}
+\caption{\revision{Efficiency and accuracy trade-off relative to FedAvg. $x<1$ indicates lower cumulative training compute, while $y$ reports accuracy change in percentage points.}}
 \label{fig:tradeoff}
 \end{figure}
 
-\revision{MAML-Select reaches $100\%$ client coverage on every dataset. Its Jain index ($0.61$--$0.78$) is below FedAvg and FedGCS, so we do not claim improved fairness; the coverage result instead shows that the policy does not permanently exclude clients.}
+\revision{MAML-Select reaches $100\%$ client coverage on every dataset. Its Jain index of $0.61$ to $0.78$ is below FedAvg and FedGCS, so we do not claim improved fairness. The coverage result instead shows that the policy does not permanently exclude clients. Each run opens with $\lceil N/K \rceil$ rounds of round-robin coverage, which by itself reaches every client once, so we recomputed both metrics over the later rounds alone. Coverage stays at $100\%$ on all three datasets and the Jain index falls by about $0.02$. Broad participation is therefore a property of the learned policy rather than of the opening rounds.}
+
+\subsection{\revision{Selector Convergence and Non-Stationarity}}
+\revision{Statement~1 bounds a single inner step, so we instrumented one full run on each dataset and logged the quantities it involves for every round. The support objective never rose. It fell in every round that took an inner step, on all three datasets.}
+
+\revision{Whether the adapted policy makes a better decision is a separate question. We therefore evaluated the query objective twice per round, once at the stored initialization and once after the inner step, and took the difference as the adaptation gain. Adaptation helps in close to three rounds out of five rather than in every round, and its mean is positive on all three datasets. To measure how far the objective itself travels, we evaluated the previous and the current round objective at one parameter and summed the absolute per-round increments. This path variation $V_T$ is the standard way to quantify a moving objective.}
+
+\revision{Table~\ref{tab:drift} reports both. The mean gain follows the same order as $V_T$ across the three datasets, so adaptation contributes most where the objective moves most. That is the behaviour a meta-learned initialization is meant to produce, and it is the empirical content of the claim that the formulation suits non-stationary selection. Three datasets support an ordering and not a significance result, and we report it as such.}
+
+\begin{table}[!t]
+\centering
+\caption{\revision{Selector diagnostics over $199$ rounds of one instrumented run per dataset. Descent counts the rounds in which the inner step lowered the support objective. Gain counts the rounds in which the adapted policy lowered the query objective, and $V_T$ is the path variation of the round objective.}}
+\label{tab:drift}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.92}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccccc@{}}
+\toprule
+Dataset & Descent & Mean descent & Gain & Mean gain & $V_T$ \\
+\midrule
+Fashion-MNIST & 198/198 & $-0.0027$ & 117/199 & $0.0006$ & $8.42$ \\
+CIFAR-10      & 198/198 & $-0.0090$ & 122/199 & $0.0037$ & $21.32$ \\
+CIFAR-100     & 198/198 & $-0.0340$ & 117/199 & $0.0056$ & $59.62$ \\
+\bottomrule
+\end{tabular*}
+\end{table}
 
 \subsection{\revision{Selector Scaling}}
-\revision{To verify~\eqref{eq:selector_complexity}, we measured MAML-Select selection overhead for $50$ rounds while increasing $N=\{20,40,80,100\}$ and keeping $K/N=0.1$. Fig.~\ref{fig:scaling_overhead} focuses on the proposed selector: the measured server-side overhead remains about $11$--$13$ ms per round, while the normalized analytical work follows the expression $NP+N\log K+2KP$. Under the main experimental setting with fixed $K=10$ and fixed policy size $P=4{,}673$, the dominant term is linear in $N$. This cost is small relative to local client training.}
+\revision{To verify~\eqref{eq:selector_complexity}, we measured selection overhead for $50$ rounds while increasing $N=\{20,40,80,100\}$ at fixed $K/N=0.1$. Measured server-side overhead stays near $11$ to $13$ ms per round and the normalized analytical work follows $NP+N\log K+2KP$. With $K$ and $P$ fixed the dominant term is linear in $N$, and the cost stays small next to local client training.}
 
 \begin{figure}[H]
 \centering
@@ -377,7 +402,7 @@ FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.2
 \end{figure}
 
 \subsection{\revision{Sensitivity and Ablation}}
-\revision{Fig.~\ref{fig:lambda_sensitivity} analyses $\lambda$ on Fashion-MNIST using four normalized curves: accuracy, compute, energy, and fairness. Final accuracy remains stable across $\lambda \in \{0.1, 0.5, 1, 5\}$, with about a $1.0$ percentage-point spread, while compute and energy decrease as the latency/resource term receives more weight. Fairness decreases more sharply for very large $\lambda$, indicating a stronger efficiency--fairness trade-off. We therefore use $\lambda=0.5$ as a balanced operating point: it keeps accuracy close to the best observed value while reducing computation relative to $\lambda=0.1$.}
+\revision{Fig.~\ref{fig:lambda_sensitivity} analyses $\lambda$ on Fashion-MNIST with four normalized curves for accuracy, compute, energy, and fairness. Final accuracy remains stable across $\lambda \in \{0.1, 0.5, 1, 5\}$, with about a $1.0$ percentage-point spread, while compute and energy decrease as the latency/resource term receives more weight. Fairness decreases more sharply for very large $\lambda$, which is a sharper trade-off between efficiency and fairness. We therefore use $\lambda=0.5$ as a balanced operating point, since it keeps accuracy close to the best observed value while reducing computation relative to $\lambda=0.1$. The spread depends on the task. Repeating the sweep on CIFAR-10 gives an accuracy spread of $8.56$ percentage points against $1.02$ on Fashion-MNIST, so $\lambda$ needs tuning on harder tasks rather than transfer at a fixed value.}
 
 \begin{figure}[H]
 \centering
@@ -386,14 +411,8 @@ FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.2
 \label{fig:lambda_sensitivity}
 \end{figure}
 
-\revision{Fig.~\ref{fig:feature_ablation} and Table~\ref{tab:ablation} show the state-feature ablation. Removing a single feature changes Fashion-MNIST accuracy by less than about $0.35$ percentage points. The largest negative shifts occur when battery and loss information are removed, showing that the policy benefits from both system and statistical feedback. Removing frequency or staleness can slightly increase accuracy but lowers fairness/coverage behaviour, so these features remain important for stable participation.}
+\revision{Table~\ref{tab:ablation} shows the state-feature ablation. Removing a single feature changes Fashion-MNIST accuracy by less than about $0.35$ percentage points. The largest negative shifts occur when battery and latency information are removed, showing that the policy benefits from both system and statistical feedback. One inner step is used throughout. Two and five steps reach $63.07\%$ and $62.15\%$ on CIFAR-10 against $63.84\%$ for one step, so further steps did not pay for themselves. Removing frequency or staleness can slightly increase accuracy but lowers fairness/coverage behaviour, so these features remain important for stable participation.}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.72\columnwidth]{fig_feature_ablation_trimmed_boxed.pdf}
-\caption{\revision{State-feature ablation on Fashion-MNIST. Each bar reports the accuracy change relative to the full six-feature state vector.}}
-\label{fig:feature_ablation}
-\end{figure}
 
 \begin{table}[H]
 \vspace{1mm}
@@ -426,7 +445,7 @@ w/o staleness & 90.37\,$\pm$\,0.19 & 123 & 0.78 \\
 % =====================================================================
 \FloatBarrier
 \section{Conclusion and Future Work}
-\revision{We introduced MAML-Select, an online adaptive client-selection framework for heterogeneous FL. It learns a lightweight ranking policy and adapts it from recent feedback before each selection decision. Across Fashion-MNIST, CIFAR-10, and CIFAR-100, MAML-Select delivers competitive accuracy while lowering cumulative computation, modelled energy, and carbon. The $\lambda$-sensitivity and feature-ablation studies support the design choices; future work will add analysis on sound datasets with large-scale benchmarks.}
+\revision{We introduced MAML-Select, an online adaptive client-selection framework for heterogeneous FL. It learns a lightweight ranking policy and adapts it from recent feedback before each selection decision. Across Fashion-MNIST, CIFAR-10, and CIFAR-100, MAML-Select delivers competitive accuracy while lowering cumulative computation, modelled energy, and carbon. The sensitivity and ablation studies support the design choices. Future work will extend the study to audio tasks and larger benchmarks.}
 
 % =====================================================================
 % REFERENCES
