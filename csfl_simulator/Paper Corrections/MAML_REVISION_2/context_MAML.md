@@ -309,3 +309,66 @@ Writing `Fig.~\ref{...}` inside a `<<'PY'` heredoc produced `Fig.~<CR>ef{...}`
 and three LaTeX errors, because the heredoc collapsed the pair and Python then
 read `\r` as a carriage return. **Use the Write tool for any script containing a
 backslash.** This is the third time across the two papers.
+
+## No supplementary material, 14 August 2026
+
+Advait withdrew the supplement. **The paper must stand alone.** The supplement
+now sits in `not_submitted/` and is not part of the package.
+
+Three things existed only outside the paper and had to move in.
+
+1. **The energy model was alluded to but never stated.** The paper kept saying
+   "the stated device-tier power and grid-intensity assumptions" without
+   stating them. They are tier power **4, 7 and 12 W** for Tiers 1 to 3 and a
+   declared grid intensity of **475 g CO2 per kWh**, from
+   `modelled_energy_assumptions` in any result.json. Reviewer 2 comment 7 was
+   about exactly this, so leaving it implicit was the weakest point in the paper.
+2. **The paired significance tests**, which Reviewer 2 comment 5 asked for.
+   Now Table III.
+3. **Communication accounting**, which the paper had deferred. The answer is
+   better than the deferral. Communication is fixed by the cohort size, so
+   every selector at `K=10` moves the same **129 GB** over 150 CIFAR-100 rounds
+   and only CriticalFL differs at **182 +- 24 GB** because it enlarges the
+   cohort. The savings are compute-side, not communication-side. Say so.
+
+The CIFAR-10 lambda sweep and the inner-step count were promoted from prose to
+**Table V**, since prose was their only home once the supplement went.
+
+### Table numbering after this change
+
+| | |
+|---|---|
+| Table I | comparison of representative methods |
+| Table II | benchmark summary |
+| Table III | paired significance tests, **new** |
+| Table IV | selector diagnostics |
+| Table V | CIFAR-10 lambda sweep and inner-step count, **new** |
+| Table VI | state-feature ablation |
+
+`Response_to_Reviewers.tex` hard-codes these numbers and had eleven references
+to the supplement. All were rewritten. **The letter does not use `\ref`, so a
+table added to the paper silently breaks it. Always re-check.**
+
+### Which paired numbers are re-derivable
+
+`paired.py` reproduces the CIFAR-100 row exactly, at 107.80 / 5.15 / 0.012 and
+169.65 / 10.89 / 0.003. The Fashion-MNIST and CIFAR-10 rows cannot be
+re-derived, because those benchmark runs are not on this machine, but their
+mean reductions all recompute correctly from Table II as printed, and the
+method is validated by the CIFAR-100 row matching to the last digit.
+
+Carbon is a fixed multiple of energy, so its effect size and p value are
+identical to energy's by construction. The table says this and shows energy
+only, which is why it has six columns rather than nine.
+
+**n is three.** Two degrees of freedom. The text leads with the effect sizes
+and treats the p values as supporting evidence, which is the honest ordering at
+this sample size. Do not restate it the other way round.
+
+### Final state
+
+Manuscript **7 pages** against the agreed ceiling of 8, response letter 8. Zero
+errors, zero undefined references, zero overfull boxes, zero BibTeX warnings.
+`MAML_Select_Revision2.zip` is 202.0 KB with 10 entries and builds from a bare
+extract. `audit.py` passes 20 of 20. Zero mentions of a supplement remain in
+either document.

@@ -93,23 +93,23 @@ We also addressed the second half of the comment, which asks why a meta-learning
 \ReviewerReply{Reply 3}{We added both explanation and evidence. The manuscript states that $\lambda$ balances latency against utility, and that a larger $\lambda$ favours latency and resource efficiency. The sensitivity analysis sweeps $\lambda\in\{0.1,0.5,1.0,5.0\}$ on Fashion-MNIST over three seeds. Accuracy stays within $1.02$ percentage points across the sweep while compute falls from $128$ to $108$ TFLOPs and the Jain index falls from $0.909$ to $0.498$. We use $\lambda=0.5$ because it keeps accuracy near the best observed value at lower compute than $\lambda=0.1$.
 
 We repeated the sweep on CIFAR-10 and report the outcome even though it is less favourable. There the accuracy spread is $8.56$ percentage points. The manuscript now states that $\lambda$ is task dependent and needs tuning on harder tasks rather than transferring at a fixed value.}
-\ManuscriptChange{The System Model explains $\lambda$. The manuscript now reports the $\lambda$ sweep next to the corresponding sensitivity text, and the supplementary material gives the extended numeric sweep.}
+\ManuscriptChange{The System Model explains $\lambda$. The Evaluation reports the Fashion-MNIST sweep in Fig.~5 and the CIFAR-10 sweep in Table~V.}
 
 \ReviewerComment{Comment 4}{The experimental validation is limited to small-scale datasets. Add larger or more realistic FL benchmarks.}
 \ReviewerReply{Reply 4}{We expanded the evaluation from two datasets to three by adding CIFAR-100 with ResNet18, analysed at a matched horizon of $150$ rounds. On that benchmark MAML-Select reaches $58.15 \pm 0.51$ against $59.66 \pm 0.29$ for FedAvg and $58.66 \pm 0.11$ for FedGCS, at $4.7\%$ lower modelled energy than FedAvg, and it leads every partial-coverage baseline by more than twenty-three percentage points. We also added a selector-overhead scaling probe up to $N=100$.}
-\ManuscriptChange{The Evaluation now includes Fashion-MNIST, CIFAR-10, and CIFAR-100. The main manuscript now includes the selector time-complexity proof and a selector-overhead scaling plot; the supplementary material retains the full scaling view.}
+\ManuscriptChange{The Evaluation now includes Fashion-MNIST, CIFAR-10, and CIFAR-100, together with the selector time-complexity argument and the scaling measurement in Fig.~4.}
 
 \ReviewerComment{Comment 5}{Include standard deviation across multiple runs and statistical significance analysis.}
 \ReviewerReply{Reply 5}{We agree, and we have made the seed count explicit rather than implicit. Table~II reports mean $\pm$ standard deviation, and its caption states how many seeds stand behind each block. Fashion-MNIST and CIFAR-10 use three seeds throughout. On CIFAR-100, FedAvg, CriticalFL, and MAML-Select use three seeds and the remaining methods use two.
 
 While preparing this revision we ran additional CIFAR-100 seeds for TiFL, FedCor, and CriticalFL so that every row rests on repeated runs. Those rows have been recomputed and now read $28.52 \pm 5.08$, $30.86 \pm 4.70$, and $45.37 \pm 6.13$. The direction of every comparison in the paper is unchanged and the margins are wider. We also computed paired tests over shared seeds, where the MAML-Select resource reductions against FedAvg are significant for TFLOPs and modelled energy and carbon on all three datasets.}
-\ManuscriptChange{Table~II reports accuracy, weighted precision, recall, F1, TFLOPs, modelled energy and carbon, Jain fairness, and coverage, each with a standard deviation, and its caption states the seed count per block. The supplementary material reports paired tests for MAML-Select against FedAvg.}
+\ManuscriptChange{Table~II reports accuracy, weighted precision, recall, F1, TFLOPs, modelled energy and carbon, Jain fairness, and coverage, each with a standard deviation, and its caption states the seed count per block. Table~III reports the paired tests against FedAvg.}
 
 \ReviewerComment{Comment 6}{Evaluate fairness across heterogeneous clients using participation fairness, client coverage, or tier-level selection rates.}
 \ReviewerReply{Reply 6}{We added fairness and coverage metrics. MAML-Select reaches $100\%$ client coverage on all three datasets. Its Jain index is between $0.61$ and $0.78$, below FedAvg and FedGCS, so we report fairness transparently and do not claim fairness superiority.
 
 We also tested the coverage result against an obvious objection. Each run opens with $\lceil N/K \rceil$ rounds of round-robin coverage, which by itself touches every client once, so full-run coverage could be an artifact of the warm start. We recomputed both metrics over the later rounds alone. Coverage remains $100\%$ on all three datasets and the Jain index falls by about $0.02$. Broad participation is therefore a property of the learned policy rather than of the opening rounds.}
-\ManuscriptChange{Table~II reports Jain fairness and coverage. The Evaluation section states that MAML-Select is not the fairest method and reports the metrics recomputed without the opening round-robin rounds. The supplementary material gives the tier-coverage view.}
+\ManuscriptChange{Table~II reports Jain fairness and coverage, and the Evaluation states that MAML-Select is not the fairest method and reports both metrics recomputed without the opening round-robin rounds.}
 
 \ReviewerComment{Comment 7}{The claims regarding energy efficiency and Green AI are indirect. Moderate the wording or provide stronger evidence.}
 \ReviewerReply{Reply 7}{We clarified the measurement model while preserving the efficiency evidence. The revised paper reports TFLOPs and model-based energy/carbon estimates derived from the stated client-tier power and grid-intensity assumptions. This makes the evaluation scope clear while keeping the resource-efficiency contribution explicit.}
@@ -119,10 +119,10 @@ We also tested the coverage result against an obvious objection. Each run opens 
 \ReviewerReply{Reply 8}{We added a feature rationale and an ablation study over three seeds. Loss and gradient norm represent statistical utility. Latency and battery represent system constraints. Selection frequency and staleness expose participation imbalance. Removing any single feature moves final Fashion-MNIST accuracy by at most $0.33$ percentage points, so no single feature dominates. The largest negative shifts come from removing battery and latency. Removing frequency raises accuracy slightly but lowers the Jain index from $0.78$ to $0.65$, which is why that feature is retained.
 
 We also report an ablation on the number of inner steps, since the choice of one step was previously asserted rather than shown. On CIFAR-10, two and five steps reach $63.07\%$ and $62.15\%$ against $63.84\%$ for one step.}
-\ManuscriptChange{The State Space paragraph explains the role of each feature and Table~IV reports the ablation. The plot of the same seven numbers has been consolidated into that table to avoid duplication, and the supplementary material retains the visual version.}
+\ManuscriptChange{The State Space paragraph explains the role of each feature, Table~VI reports the feature ablation, and Table~V reports the inner-step count.}
 
 \ReviewerComment{Comment 9}{Fig. 2 has small font sizes and unclear axis scaling.}
-\ReviewerReply{Reply 9}{We regenerated the figures with larger fonts and cleaner axes. The main manuscript now uses compact evidence figures for convergence, efficiency--accuracy trade-off, $\lambda$ sensitivity, feature ablation, and selector-overhead scaling. The supplementary material retains the broader fairness and full scaling views.}
+\ReviewerReply{Reply 9}{We regenerated every figure with larger fonts and cleaner axes. The manuscript now carries four evidence figures, for convergence, the efficiency and accuracy trade-off, selector scaling, and $\lambda$ sensitivity. The feature ablation is reported as a table instead, because the plot showed the same seven numbers. We also rebuilt the scaling figure, whose panel labels overlapped and whose measurement range did not match the text.}
 \ManuscriptChange{The earlier figure package is replaced by compact main evidence figures for convergence, the efficiency and accuracy trade-off, selector scaling, and $\lambda$ sensitivity, with publication-quality source graphics retained in the package.}
 
 \ReviewerComment{Comment 10}{The definition of ``Time (Units)'' is unclear.}
@@ -130,8 +130,8 @@ We also report an ablation on the number of inner steps, since the choice of one
 \ManuscriptChange{The Evaluation defines TFLOPs and modelled energy/carbon directly. The ambiguous time-unit row has been removed from the main table.}
 
 \ReviewerComment{Comment 11}{Include recent baselines such as CriticalFL and FedGCS.}
-\ReviewerReply{Reply 11}{We added both methods to the benchmark table, the related-work discussion, and the supplementary comparison material. On CIFAR-100, FedGCS reaches $58.66 \pm 0.11$ against $58.15 \pm 0.51$ for MAML-Select at comparable cost, and CriticalFL reaches $45.37 \pm 6.13$ while using about $64\%$ more compute than MAML-Select. We report the FedGCS result plainly because it is the closest competitor on that benchmark.}
-\ManuscriptChange{Related Work, Table~I, Table~II, the main evidence figures, and the supplementary material now include FedGCS and CriticalFL.}
+\ReviewerReply{Reply 11}{We added both methods to the benchmark table and the related-work discussion. On CIFAR-100, FedGCS reaches $58.66 \pm 0.11$ against $58.15 \pm 0.51$ for MAML-Select at comparable cost, and CriticalFL reaches $45.37 \pm 6.13$ while using about $64\%$ more compute than MAML-Select. We report the FedGCS result plainly because it is the closest competitor on that benchmark.}
+\ManuscriptChange{Related Work, Table~I, Table~II, and the evidence figures now include FedGCS and CriticalFL.}
 
 \ReviewerComment{Comment 12}{Proofread the manuscript for grammar, punctuation, and sentence structure.}
 \ReviewerReply{Reply 12}{We completed a full prose pass and shortened the narrative.}
@@ -157,7 +157,7 @@ We also report an ablation on the number of inner steps, since the choice of one
 
 \ReviewerComment{Comment 5}{Provide more simulation results to ensure effectiveness.}
 \ReviewerReply{Reply 5}{We added three datasets, multiple seeds, standard deviations, paired tests, fairness and coverage metrics, $\lambda$ sensitivity on two datasets, feature and inner-step ablations, selector-overhead scaling, and a per-round diagnostic study of the selector itself.}
-\ManuscriptChange{The main paper carries the convergence and trade-off evidence, the $\lambda$-sensitivity figure, the selector-overhead scaling plot, and the selector-diagnostics table. The full extended evidence appears in \texttt{Supplementary\_Material.tex}.}
+\ManuscriptChange{The manuscript carries the convergence and trade-off evidence, the $\lambda$-sensitivity figure, the scaling measurement, the paired significance tests, and the selector-diagnostics table. It is self-contained and no separate supplement is submitted.}
 
 \ReviewerComment{Comment 6}{Remove references from the conclusion and write the conclusion as a concise single paragraph.}
 \ReviewerReply{Reply 6}{We followed this suggestion.}
@@ -186,8 +186,8 @@ We also report an ablation on the number of inner steps, since the choice of one
 \ManuscriptChange{The Conclusion is one paragraph, has no citations, and ends with one concise future-work sentence.}
 
 \ReviewerComment{Comment 6}{Fig. 2 requires clarification, justification, and a clearer comparison with other schemes.}
-\ReviewerReply{Reply 6}{The original figure has been replaced and the presentation has been clarified. The main manuscript now presents convergence, the efficiency and accuracy trade-off, $\lambda$ sensitivity, and selector-overhead scaling with clearer axes and captions, and reports the feature ablation as a table. The supplementary figures provide the broader fairness and full scaling views.}
-\ManuscriptChange{The main evidence, $\lambda$-sensitivity, and selector-scaling figures and captions were regenerated and rewritten. Supplementary figures provide the broader visual evidence.}
+\ReviewerReply{Reply 6}{The original figure has been replaced and the presentation has been clarified. The manuscript now presents convergence, the efficiency and accuracy trade-off, selector scaling, and $\lambda$ sensitivity with clearer axes and captions, and reports the feature ablation as a table so that the same numbers are not shown twice.}
+\ManuscriptChange{Every figure and caption was regenerated and rewritten.}
 
 \vspace{1em}
 \begin{center}

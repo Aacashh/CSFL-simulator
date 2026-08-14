@@ -293,9 +293,9 @@ This standard descent bound shows why recent feedback can improve the round-spec
 	\text{TFLOPs}_{total} = \sum_{t=1}^{T} \sum_{i \in \mathcal{S}_t} E \cdot n_i \cdot C_{model} \times 10^{-12},
 	\label{eq:tflops}
 \end{equation}
-\revision{where $C_{model}$ is the per-sample cost. For ResNet18 on CIFAR-10 a client round is about $4.13$ TFLOPs. Modelled energy and carbon scale this cost by per-tier device power and a declared grid intensity, and the accounting metadata and emission units follow CodeCarbon v2.4.1~\cite{courty2024codecarbon}.}
+\revision{where $C_{model}$ is the per-sample cost. For ResNet18 on CIFAR-10 a client round is about $4.13$ TFLOPs. Modelled energy multiplies the modelled training time of each selected client by its tier power, which is $4$, $7$, and $12$ W for Tiers~1 to~3. Carbon converts that energy at a declared grid intensity of $475$ g\,CO$_2$ per kWh. Both are model-based estimates rather than hardware measurements, and the accounting metadata and emission units follow CodeCarbon v2.4.1~\cite{courty2024codecarbon}.}
 
-\revision{Table~\ref{tab:main_summary} summarises all methods. MAML-Select matches FedAvg and FedGCS on Fashion-MNIST at $90.1\%$ against $90.2\%$ and $90.7\%$, and on CIFAR-100 at $58.2\%$ against $59.7\%$ and $58.7\%$. It leads FedCS, Oort, TiFL, and FedCor on every dataset. On CIFAR-10 it gives up accuracy, $75.6\%$ against $79.4\%$, for substantially lower cost. MAML-Select therefore sits in the resource-efficient region of the comparison, close to the strongest accuracy-oriented methods and below the higher-cost selectors on compute, modelled energy, and carbon. The meta-update overhead of about $0.001$ GFLOPs per round is negligible next to client training. Communication accounting is reported in the supplementary material.}
+\revision{Table~\ref{tab:main_summary} summarises all methods. MAML-Select matches FedAvg and FedGCS on Fashion-MNIST at $90.1\%$ against $90.2\%$ and $90.7\%$, and on CIFAR-100 at $58.2\%$ against $59.7\%$ and $58.7\%$. It leads FedCS, Oort, TiFL, and FedCor on every dataset. On CIFAR-10 it gives up accuracy, $75.6\%$ against $79.4\%$, for substantially lower cost. MAML-Select therefore sits in the resource-efficient region of the comparison, close to the strongest accuracy-oriented methods and below the higher-cost selectors on compute, modelled energy, and carbon. The meta-update overhead of about $0.001$ GFLOPs per round is negligible next to client training. Communication is fixed by the cohort size rather than by the selector, so every method that selects $K=10$ clients moves the same $129$ GB over $150$ CIFAR-100 rounds. Only CriticalFL differs, at $182 \pm 24$ GB, because it enlarges the cohort during critical periods. The savings reported here are therefore compute-side and not communication-side.}
 
 \begin{table*}[!t]
 \centering
@@ -363,6 +363,28 @@ FedGCS        & 58.66$\pm$0.11 & 60.24$\pm$0.03 & 58.66$\pm$0.11 & 58.08$\pm$0.2
 
 \revision{MAML-Select reaches $100\%$ client coverage on every dataset. Its Jain index of $0.61$ to $0.78$ is below FedAvg and FedGCS, so we do not claim improved fairness. The coverage result instead shows that the policy does not permanently exclude clients. Each run opens with $\lceil N/K \rceil$ rounds of round-robin coverage, which by itself reaches every client once, so we recomputed both metrics over the later rounds alone. Coverage stays at $100\%$ on all three datasets and the Jain index falls by about $0.02$. Broad participation is therefore a property of the learned policy rather than of the opening rounds.}
 
+\begin{table}[!t]
+\centering
+\caption{\revision{Paired comparison of MAML-Select against FedAvg on the three shared seeds. Reductions are absolute, $|d_z|$ is the standardized paired effect size, and $p$ comes from a two-sided paired $t$-test on three pairs. Carbon is a fixed multiple of energy, so its test is identical to the energy test.}}
+\label{tab:paired}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.92}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrrrr@{}}
+\toprule
+ & \multicolumn{3}{c}{TFLOPs} & \multicolumn{3}{c}{Energy (Wh)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Dataset & Reduction & $|d_z|$ & $p$ & Reduction & $|d_z|$ & $p$ \\
+\midrule
+Fashion-MNIST & $17.9$ & $5.93$ & $0.009$ & $943.6$ & $6.74$ & $0.007$ \\
+CIFAR-10 & $1792.2$ & $12.68$ & $0.002$ & $1187.4$ & $18.11$ & $0.001$ \\
+CIFAR-100 & $107.8$ & $5.15$ & $0.012$ & $169.7$ & $10.89$ & $0.003$ \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\revision{Table~\ref{tab:paired} pairs MAML-Select against FedAvg on the seeds the two methods share. The compute and energy reductions hold on every dataset with large standardized effects. Three pairs give only two degrees of freedom, so we read the effect sizes as the substantive result and the $p$ values as supporting evidence rather than the other way round. The accuracy difference is not significant on Fashion-MNIST and is a measured cost on CIFAR-10 and CIFAR-100, which Table~\ref{tab:main_summary} reports directly.}
+
 \subsection{\revision{Selector Convergence and Non-Stationarity}}
 \revision{Statement~1 bounds a single inner step, so we instrumented one full run on each dataset and logged the quantities it involves for every round. The support objective never rose. It fell in every round that took an inner step, on all three datasets.}
 
@@ -402,7 +424,26 @@ CIFAR-100     & 198/198 & $-0.0340$ & 117/199 & $0.0056$ & $59.62$ \\
 \end{figure}
 
 \subsection{\revision{Sensitivity and Ablation}}
-\revision{Fig.~\ref{fig:lambda_sensitivity} analyses $\lambda$ on Fashion-MNIST with four normalized curves for accuracy, compute, energy, and fairness. Final accuracy remains stable across $\lambda \in \{0.1, 0.5, 1, 5\}$, with about a $1.0$ percentage-point spread, while compute and energy decrease as the latency/resource term receives more weight. Fairness decreases more sharply for very large $\lambda$, which is a sharper trade-off between efficiency and fairness. We therefore use $\lambda=0.5$ as a balanced operating point, since it keeps accuracy close to the best observed value while reducing computation relative to $\lambda=0.1$. The spread depends on the task. Repeating the sweep on CIFAR-10 gives an accuracy spread of $8.56$ percentage points against $1.02$ on Fashion-MNIST, so $\lambda$ needs tuning on harder tasks rather than transfer at a fixed value.}
+\revision{Fig.~\ref{fig:lambda_sensitivity} analyses $\lambda$ on Fashion-MNIST with four normalized curves for accuracy, compute, energy, and fairness. Final accuracy remains stable across $\lambda \in \{0.1, 0.5, 1, 5\}$, with about a $1.0$ percentage-point spread, while compute and energy decrease as the latency/resource term receives more weight. Fairness decreases more sharply for very large $\lambda$, which is a sharper trade-off between efficiency and fairness. We therefore use $\lambda=0.5$ as a balanced operating point, since it keeps accuracy close to the best observed value while reducing computation relative to $\lambda=0.1$. The spread depends on the task. Table~\ref{tab:design} repeats the sweep on CIFAR-10, where accuracy moves $8.56$ percentage points against $1.02$ on Fashion-MNIST, so $\lambda$ needs tuning on harder tasks rather than transfer at a fixed value. The same table reports the number of inner steps, which is one throughout this paper.}
+
+\begin{table}[!t]
+\centering
+\caption{\revision{Design choices on CIFAR-10 over three seeds. The left block sweeps the cost trade-off weight $\lambda$ at one inner step. The right block varies the inner-step count at $\lambda=0.5$. The first row is common to both blocks and is the setting used in the paper.}}
+\label{tab:design}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.92}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrr@{\hspace{10pt}}lrrr@{}}
+\toprule
+$\lambda$ & Acc. & TFLOPs & Jain & Steps & Acc. & TFLOPs & Jain \\
+\midrule
+0.1 & 64.86 & 3541 & 0.56 & 1 & 63.84 & 3155 & 0.44 \\
+0.5 & 63.84 & 3155 & 0.44 & 2 & 63.07 & 3172 & 0.52 \\
+1.0 & 58.27 & 2751 & 0.21 & 5 & 62.15 & 3119 & 0.41 \\
+5.0 & 56.30 & 2634 & 0.22 & & & & \\
+\bottomrule
+\end{tabular*}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -411,7 +452,7 @@ CIFAR-100     & 198/198 & $-0.0340$ & 117/199 & $0.0056$ & $59.62$ \\
 \label{fig:lambda_sensitivity}
 \end{figure}
 
-\revision{Table~\ref{tab:ablation} shows the state-feature ablation. Removing a single feature changes Fashion-MNIST accuracy by less than about $0.35$ percentage points. The largest negative shifts occur when battery and latency information are removed, showing that the policy benefits from both system and statistical feedback. One inner step is used throughout. Two and five steps reach $63.07\%$ and $62.15\%$ on CIFAR-10 against $63.84\%$ for one step, so further steps did not pay for themselves. Removing frequency or staleness can slightly increase accuracy but lowers fairness/coverage behaviour, so these features remain important for stable participation.}
+\revision{Table~\ref{tab:ablation} shows the state-feature ablation. Removing a single feature changes Fashion-MNIST accuracy by less than about $0.35$ percentage points. The largest negative shifts occur when battery and latency information are removed, showing that the policy benefits from both system and statistical feedback. Two and five inner steps reach $63.07\%$ and $62.15\%$ on CIFAR-10 against $63.84\%$ for one step, so further steps did not pay for themselves. Removing frequency or staleness can slightly increase accuracy but lowers fairness/coverage behaviour, so these features remain important for stable participation.}
 
 
 \begin{table}[H]
