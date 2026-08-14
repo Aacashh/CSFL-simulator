@@ -372,3 +372,65 @@ errors, zero undefined references, zero overfull boxes, zero BibTeX warnings.
 `MAML_Select_Revision2.zip` is 202.0 KB with 10 entries and builds from a bare
 extract. `audit.py` passes 20 of 20. Zero mentions of a supplement remain in
 either document.
+
+---
+
+# CORRECTION, 14 August 2026. The live paper is build/, not this folder.
+
+**Everything above this line was written against a stale manuscript.** Advait
+was working on a much more developed round-2 revision in
+`MAML_REVISION_2/build/`, which I had not seen. That is the version to edit.
+
+`build/` carries `manuscript_r2_clean.tex`, `manuscript_r2_marked.tex`,
+`response_to_reviewers_r2.tex`, its own `analyze_revision.py`, and two documents
+worth reading before touching anything, `FLAGS.md` and
+`ALGORITHM_GROUND_TRUTH.md`. The files in the `MAML_REVISION_2/` root are my
+superseded working copy. Do not submit them.
+
+## I got V_T wrong above, and the error would have shipped
+
+Above I wrote that `runs/MAML-Revision-2/COVERAGE.md` mislabels its V_T column
+because a path variation cannot be negative, and that the correct values are
+8.42, 21.32 and 59.62.
+
+**That is wrong for this paper.** Corollary 1 defines
+
+```
+V_T = sum_t ( q_{t+1}(phi_{t+1}) - q_t(phi_{t+1}) )
+```
+
+with no absolute value, and carries it in the bound as `+2 V_T / (eta T)`, so a
+negative V_T is benign rather than impossible. COVERAGE.md was right. The
+correct values are the signed sums, **-2.89, +0.51 and +1.79**. The figures I
+quoted are the total variation, a different and much larger quantity.
+
+The lesson is narrow and worth keeping. **Read the paper's own definition before
+reporting a quantity that has a standard textbook meaning.** The textbook
+definition of path variation uses absolute increments; this paper's does not.
+
+## What the round-2 build needed
+
+FLAG 2 was the flagged must-do and it is now closed. The paper told the reviewer
+that V_T was evidence rather than a measurement and that the logging had been
+added but not run. **The runs the user supplied are exactly those runs.** The
+logged `drift_increment` matches the documented `l_query_at_base - l_sup_before`
+in 198 of 198 rounds on all three datasets, so the measurement is sound.
+
+FLAG 3 is closed too. That session had no TeX install and estimated 8.2 pages.
+Compiled, it is **exactly 8**, so none of its three proposed cuts were needed.
+
+Their own `analyze_revision.py` already reported the corrected CIFAR-100 rows,
+so the script and Table II had drifted apart. Fixed, with seed counts now in the
+caption.
+
+The fairness pool moved from 74 runs to 77 because the three new convergence
+runs are themselves MAML-Select runs.
+
+## Still open
+
+- **FLAG 1.** Fashion-MNIST and CIFAR-10 benchmark runs are still not on this
+  machine. Unchanged from the original flag and from my own finding.
+- **FLAG 4.** The six reviewer comments in the round-2 letter are paraphrased.
+  `MAML__Letter/Reviews.txt` holds the round-1 comments and is **not** the
+  source for these. The verbatim round-2 text has to come from Advait.
+- The page budget is now exactly met at 8 of 8, so anything added pushes it to 9.
