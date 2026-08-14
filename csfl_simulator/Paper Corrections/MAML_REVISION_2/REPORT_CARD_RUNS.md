@@ -44,6 +44,33 @@ Stage D is optional. The CIFAR-100 shard sizes are already recoverable from the
 TFLOPs column without re-running anything, and the analysis does that
 automatically for any run that predates the new logging.
 
+## If the first run failed on `csfl_simulator.core.client`
+
+Fixed. Twelve directories under `csfl_simulator` held real modules but had no
+`__init__.py`, among them `core`, `selection/system_aware` and `selection/ml`.
+They imported only as PEP 420 namespace packages, which works when the checkout
+happens to be first on `sys.path` and fails otherwise.
+
+`setuptools.find_packages` skips any directory without `__init__.py`, so an
+installed or editable copy of the project contained **7 packages instead of 19**
+and simply did not carry `csfl_simulator.core` at all. That is why the import
+died on a machine that resolved the package through the install.
+
+Three changes cover it.
+
+- The twelve missing `__init__.py` files are added, so `find_packages` now
+  reports 19 packages and `csfl_simulator.core.__file__` is a real path rather
+  than `None`.
+- The runner exports `PYTHONPATH` with the checkout first, converted with
+  `cygpath` under Git Bash, so a stale install can no longer shadow the tree.
+- The preflight is a real file, `preflight_report_card.py`, that puts the
+  repository root on `sys.path` from its own location. It checks the layout and
+  every required module first and names what is unreachable, rather than letting
+  a bare `ModuleNotFoundError` out of a heredoc.
+
+If a stale non-editable install is still on the machine, either is enough on its
+own, but the clean state is `pip install -e .` from the checkout.
+
 ## Code changes
 
 ### `selector.py`, the control was impossible to run

@@ -84,6 +84,22 @@ export PYTORCH_ENABLE_MPS_FALLBACK="${PYTORCH_ENABLE_MPS_FALLBACK:-1}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
 
+# Put the checkout ahead of anything installed, so `python -m csfl_simulator...`
+# always runs this tree. Git Bash hands a Windows python.exe a POSIX path it
+# cannot read, so convert when cygpath is available and use the platform's own
+# separator.
+_NATIVE_ROOT="${REPO_ROOT}"
+_PATH_SEP=":"
+if command -v cygpath >/dev/null 2>&1; then
+  _NATIVE_ROOT="$(cygpath -w "${REPO_ROOT}")"
+  _PATH_SEP=";"
+fi
+if [[ -n "${PYTHONPATH:-}" ]]; then
+  export PYTHONPATH="${_NATIVE_ROOT}${_PATH_SEP}${PYTHONPATH}"
+else
+  export PYTHONPATH="${_NATIVE_ROOT}"
+fi
+
 cd "${REPO_ROOT}"
 mkdir -p "${RUNS_DIR}/logs" "${MAIN_RUNS_DIR}/logs" "${C100_RUNS_DIR}/logs" \
          "${ARTIFACTS_DIR}/analysis"
@@ -123,25 +139,12 @@ print(resolved)"
     exit 4
   fi
 
-  echo "[preflight 2/3] The inner_steps=0 path actually disables adaptation"
-  "${PYTHON_BIN}" - <<'PYCHECK'
-import numpy as np, torch
-from csfl_simulator.experiments.maml_select import selector as S
-
-model = S._seeded_policy(2026, "cpu", 64)
-before = {k: v.detach().clone() for k, v in model.named_parameters()}
-x = torch.tensor(np.random.default_rng(0).normal(size=(8, 6)).astype("float32"))
-y = torch.tensor(np.random.default_rng(1).normal(size=(8,)).astype("float32"))
-
-zero = S._adapt(model, x, y, 0.01, 0)
-one = S._adapt(model, x, y, 0.01, 1)
-
-same = all(torch.equal(zero[k], before[k]) for k in before)
-moved = any(not torch.equal(one[k], before[k]) for k in before)
-assert same, "inner_steps=0 changed the parameters, the control is not a control"
-assert moved, "inner_steps=1 did not change the parameters, the adaptation is dead"
-print("                 ok: 0 steps leaves phi untouched, 1 step moves it")
-PYCHECK
+  echo "[preflight 2/3] Package layout, imports, and the inner_steps=0 control"
+  # Run as a real file rather than through stdin. The file puts the repository
+  # root on sys.path from its own location, so this works from any directory and
+  # whether or not csfl_simulator is installed, and it names the exact module
+  # when something is unreachable instead of raising a bare ModuleNotFoundError.
+  "${PYTHON_BIN}" "${SCRIPT_DIR}/preflight_report_card.py"
 
   echo "[preflight 3/3] Datasets"
   "${PYTHON_BIN}" scripts/download_data.py --datasets fashion-mnist cifar10 cifar100 || \
