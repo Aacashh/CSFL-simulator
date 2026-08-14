@@ -1,0 +1,14 @@
+# core.autocrlf is true on the Windows checkout, which would hand a Linux or
+# macOS box shell scripts with CRLF line endings. bash then fails with
+# "bad interpreter: /usr/bin/env bash^M" before running a single line.
+# Shell scripts are checked out with LF everywhere.
+*.sh text eol=lf
+
+# Same reasoning for anything else executed by a POSIX shell or read by a tool
+# that does not tolerate carriage returns.
+*.bash text eol=lf
+Makefile text eol=lf
+
+# Windows-only launchers keep CRLF, because cmd.exe wants it.
+*.cmd text eol=crlf
+*.bat text eol=crlf

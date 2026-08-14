@@ -133,7 +133,11 @@ def _adapt(
     params: Dict[str, torch.Tensor] = dict(model.named_parameters())
     if x.numel() == 0:
         return params
-    for _ in range(max(1, int(inner_steps))):
+    # inner_steps == 0 is the no-adaptation control.  It returns the parameters
+    # untouched, which turns the method into plain online regression on the query
+    # set.  Anything >= 1 behaves exactly as before, so existing runs are
+    # bit-identical to what they were.
+    for _ in range(max(0, int(inner_steps))):
         gradients = torch.autograd.grad(_loss(model, params, x, y), tuple(params.values()))
         params = {
             name: value - float(inner_lr) * gradient
@@ -179,7 +183,7 @@ def _outer_step(
     if not query:
         return None
     base_params = {name: value.detach().clone() for name, value in model.named_parameters()}
-    if support:
+    if support and int(inner_steps) >= 1:
         sx = _as_tensor(np.stack([r.features for r in support]), device)
         sy = _as_tensor(np.asarray([r.cost for r in support], dtype=np.float32), device)
         with torch.no_grad():
@@ -220,6 +224,10 @@ def _outer_step(
         "l_query": l_query,
         "meta_grad_norm": meta_grad_norm,
         "dphi_norm": dphi_norm,
+        # Recorded so a control run is auditable from its own log rather than
+        # only from the manifest.  At 0 the support set is never touched and the
+        # outer gradient is the plain query gradient at the un-adapted weights.
+        "inner_steps": int(inner_steps),
     }
 
 

@@ -493,6 +493,15 @@ class InstrumentedFLSimulator(FLSimulator):
                     "evaluated": evaluated,
                     "selected_clients": ids,
                     "selected_count": len(ids),
+                    # Shard sizes of the selected cohort.  The cost in (7) grows
+                    # with latency, and latency grows with n_i, so a selector can
+                    # lower cumulative FLOPs simply by preferring small shards.
+                    # Logging the counts makes that testable instead of inferred.
+                    "selected_sample_counts": [int(self.clients[cid].data_size) for cid in ids],
+                    "mean_selected_samples": (
+                        float(np.mean([float(self.clients[cid].data_size) for cid in ids]))
+                        if ids else 0.0
+                    ),
                     "selection_seconds": selection_seconds,
                     "selection_overhead_seconds": selection_seconds,
                     "round_time": round_time,
@@ -579,6 +588,10 @@ class InstrumentedFLSimulator(FLSimulator):
             "method": method_key,
             "history": {"selected": list(self.history["selected"])},
             "participation_counts": [int(client.participation_count) for client in self.clients],
+            # The whole pool, so the selected shards can be compared against the
+            # population they were drawn from rather than against an assumed mean.
+            "client_sample_counts": [int(client.data_size) for client in self.clients],
+            "client_tiers": [int(client.tier if client.tier is not None else -1) for client in self.clients],
             "modelled_energy_assumptions": {
                 "unit": "Wh",
                 "duration_unit": "modeled seconds",

@@ -140,6 +140,22 @@ scenarios:
     model: LightCNN
     dirichlet_alpha: 0.1
     rounds: 200
+    report_accuracy_target: 0.70
+  # Severe non-IID on the harder task.  Same protocol as cifar10_main in every
+  # other respect, so the two are directly comparable.
+  cifar10_alpha_0p1:
+    dataset: CIFAR-10
+    model: ResNet18
+    dirichlet_alpha: 0.1
+    rounds: 200
+    report_accuracy_target: 0.88
+  # CIFAR-100 stopped at the matched horizon the paper already reports against,
+  # which saves a quarter of the compute and changes no comparison.
+  cifar100_review_150:
+    dataset: CIFAR-100
+    model: ResNet18
+    rounds: 150
+    report_accuracy_target: 0.55
   fashion_alpha_1p0:
     dataset: Fashion-MNIST
     model: LightCNN
@@ -200,9 +216,35 @@ experiments:
     seeds: [42]
 
   - id: main_benchmarks
-    profiles: [core, full]
+    profiles: [core, full, report_card_main]
     scenarios: [fashion_main, cifar10_main]
     methods_from: integrated_methods
+    seeds: [42, 123, 2026]
+
+  # ---------------------------------------------------------------------------
+  # R2 report card. Three experiments, run with --profile report_card and
+  # --profile report_card_main. See run_report_card_evidence.sh.
+  # ---------------------------------------------------------------------------
+
+  # The control the report card calls blocking. At inner_steps=0 the support set
+  # is never touched and the outer step is a plain Adam step on the query loss,
+  # which is exactly online regression with the same 6-64-64-1 network. The
+  # inner_steps=1 arm is run beside it so the pair is matched on this hardware
+  # rather than compared against a table produced elsewhere.
+  - id: no_adaptation_control
+    profiles: [report_card]
+    scenarios: [cifar10_review_100, cifar100_review_150]
+    seeds: [42, 123, 2026]
+    method_variants:
+      - {key: research.maml_select.inner_steps_0, label: "inner steps=0, online regression", params: {inner_steps: 0}}
+      - {key: research.maml_select.inner_steps_1, label: "inner steps=1", params: {inner_steps: 1}}
+
+  # Severe heterogeneity. FedAvg and FedGCS come along because a robustness
+  # claim needs something to be robust against.
+  - id: heterogeneity_alpha_0p1
+    profiles: [report_card]
+    scenarios: [fashion_alpha_0p1, cifar10_alpha_0p1]
+    methods: [baseline.fedavg, research.fedgcs, research.maml_select]
     seeds: [42, 123, 2026]
 
   - id: cifar10_reconciled
@@ -344,7 +386,7 @@ experiments:
       - {key: research.maml_select.lambda_5p0, label: "lambda=5.0", params: {lambda_latency: 5.0}}
 
   - id: feature_ablation
-    profiles: [core, full]
+    profiles: [core, full, report_card_main]
     scenarios: [fashion_main]
     seeds: [42, 123, 2026]
     method_variants:
