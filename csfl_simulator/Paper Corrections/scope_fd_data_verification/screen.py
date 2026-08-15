@@ -39,10 +39,38 @@ TELLS = [
 ]
 
 
+def blank_quotes(text):
+    """Blank out \\textit{...} spans, which hold the Reviewers' own words.
+
+    Quoted text is not ours to edit. A punctuation pass once rewrote a semicolon
+    inside a Reviewer's sentence, which changed what the letter claimed they
+    wrote. Those spans are removed before any style scan sees them.
+    """
+    out, i = [], 0
+    marker = r"\textit{"
+    while True:
+        j = text.find(marker, i)
+        if j < 0:
+            out.append(text[i:])
+            break
+        out.append(text[i:j])
+        depth, k = 1, j + len(marker)
+        while k < len(text) and depth > 0:
+            if text[k] == "{":
+                depth += 1
+            elif text[k] == "}":
+                depth -= 1
+            k += 1
+        # keep the newlines so reported line numbers stay correct
+        out.append(" QUOTED " + "\n" * text[j:k].count("\n"))
+        i = k
+    return "".join(out)
+
+
 def strip_latex(text):
     """Leave prose behind. Maths, commands, comments and citations go."""
     out = []
-    for raw in text.split("\n"):
+    for raw in blank_quotes(text).split("\n"):
         line = raw
         if line.lstrip().startswith("%"):
             out.append("")
@@ -130,6 +158,10 @@ def screen_mechanics(name, raw):
     print("-" * 74)
     print("MECHANICS,", name)
     print("-" * 74)
+    # Quoted Reviewer text is excluded here as well. One of the comments quotes
+    # a missing space, "sweeps.In every configuration", and that defect is the
+    # point of the comment rather than a defect in our letter.
+    raw = blank_quotes(raw)
     problems = 0
 
     # a full stop followed straight by a capital with no space
