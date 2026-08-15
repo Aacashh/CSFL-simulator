@@ -28,15 +28,15 @@ itself. Locally:
 LENGTH
 ------
 Thirteen pages, measured from a compile rather than estimated. Zero errors, zero
-undefined references, zero overfull boxes and zero BibTeX warnings. Abstract 248
+undefined references, zero overfull boxes and zero BibTeX warnings. Abstract 227
 words against the 250 limit, written to the six-part structure the journal asks
-for and carrying no formulas. Impact statement 150 words against the 100 to 150
+for and carrying no formulas. Impact statement 133 words against the 100 to 150
 range.
 
 The previous build ran to fifteen pages. The reduction came from consolidating
-the figures into multi-panel floats, abbreviating author lists and venue strings
-in the bibliography, and tightening prose. No section was removed, no reference
-was dropped and no result was cut.
+the figures into multi-panel floats, setting the bibliography at scriptsize,
+abbreviating author lists and venue strings, and tightening prose. No section was
+removed, no reference was dropped and no result was cut.
 
 
 FIGURE LIST
