@@ -4,6 +4,11 @@ A letter that sends a referee to the wrong section is a small error with a large
 cost, and section letters move whenever a subsection is added or removed. This
 reads the headings out of the rendered manuscript and checks each reference in
 the letter against them.
+
+It also checks the bracketed reference numbers. Those move too. The Reviewers
+cite FedTSKD as [13], its number in the original submission, but the revision
+added references ahead of it and the same paper is now [12]. Any number the
+letter types by hand is checked against the rendered reference list.
 """
 
 import io
@@ -65,8 +70,50 @@ def manuscript_floats():
     return found
 
 
+def reference_list():
+    """number -> the first sixty characters of the entry, as rendered."""
+    doc = pymupdf.open(BASE + "main.pdf")
+    text = " ".join(" ".join(p.get_text() for p in doc).split())
+    tail = text[text.rfind("REFERENCES"):]
+    out = {}
+    for m in re.finditer(r"\[(\d+)\] ([^\[]{10,})", tail):
+        out[int(m.group(1))] = " ".join(m.group(2).split())[:60]
+    return out
+
+
+def letter_reference_numbers():
+    """Bracketed numbers in our own replies, with the Reviewers' quotes removed.
+
+    A number inside \\textit{} is the Reviewer's, and it refers to the version
+    they read, so it is not ours to check or to change.
+    """
+    src = io.open(BASE + "response_to_reviewers.tex", encoding="utf-8").read()
+    quoted = [False] * len(src)
+    i = 0
+    while True:
+        j = src.find(r"\textit{", i)
+        if j < 0:
+            break
+        depth, k = 1, j + len(r"\textit{")
+        while k < len(src) and depth > 0:
+            if src[k] == "{":
+                depth += 1
+            elif src[k] == "}":
+                depth -= 1
+            k += 1
+        for x in range(j, k):
+            quoted[x] = True
+        i = k
+    return sorted({int(m.group(1)) for m in re.finditer(r"\[(\d+)\]", src)
+                   if not quoted[m.start()]})
+
+
+# The paper the letter argues about, and the words that identify it.
+EXPECTED = {12: "Mu"}
+
 sections, subs = manuscript_headings()
 floats = manuscript_floats()
+refs = reference_list()
 
 print("MANUSCRIPT HEADINGS AS RENDERED")
 for k in sorted(sections, key=lambda x: ROMAN[x]):
@@ -96,6 +143,18 @@ for ref, ctx in letter_references():
     if not ok:
         bad += 1
     print("  %-4s %-12s -> %s" % ("ok" if ok else "FAIL", ref, target))
+
+print()
+print("REFERENCE NUMBERS THE LETTER TYPES IN OUR OWN REPLIES")
+for n in letter_reference_numbers():
+    entry = refs.get(n, "NO SUCH REFERENCE")
+    want = EXPECTED.get(n)
+    ok = n in refs and (want is None or want in entry)
+    if not ok:
+        bad += 1
+    print("  %-4s [%d] -> %s" % ("ok" if ok else "FAIL", n, entry))
+if not letter_reference_numbers():
+    print("  the letter types no reference numbers of its own")
 
 print()
 print("%d pointers checked, %d broken" % (len(seen), bad))

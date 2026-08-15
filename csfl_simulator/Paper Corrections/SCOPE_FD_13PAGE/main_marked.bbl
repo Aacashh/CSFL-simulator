@@ -80,7 +80,7 @@ Z.~Wu \emph{et~al.}, ``{FedICT}: {Federated} multi-task distillation for
 
 \bibitem{mu2024fedtskd}
 Y.~Mu, N.~Garg, and T.~Ratnarajah, ``Federated distillation in massive {MIMO}
-  networks: {Dynamic} training, convergence analysis, and communication
+  networks: {Dynamic} training, convergence analysis and communication
   channel-aware learning,'' \emph{IEEE Trans. Cogn. Commun. Netw.}, vol.~10,
   no.~4, pp. 1535--1550, Aug. 2024.
 
@@ -142,16 +142,16 @@ R.~Balakrishnan \emph{et~al.}, ``Diverse client selection for federated
 L.~Liu \emph{et~al.}, ``Communication-efficient federated distillation with
   active data sampling,'' in \emph{Proc. IEEE ICC}, 2022, pp. 201--206.
 
-\bibitem{wang2019adaptive}
-S.~Wang \emph{et~al.}, ``Adaptive federated learning in resource constrained
-  edge computing systems,'' \emph{IEEE J. Sel. Areas Commun.}, vol.~37, no.~6,
-  pp. 1205--1221, Jun. 2019.
-
 \bibitem{kazemi2026robust}
 K.~Kazemi, M.~H. Badiei, and H.~Kebriaei, ``Robust peer-to-peer federated
   learning with deep reinforcement learning based client selection against data
   poisoning attacks,'' \emph{IEEE Trans. Artif. Intell.}, vol.~7, no.~1, pp.
   262--271, 2026.
+
+\bibitem{wang2019adaptive}
+S.~Wang \emph{et~al.}, ``Adaptive federated learning in resource constrained
+  edge computing systems,'' \emph{IEEE J. Sel. Areas Commun.}, vol.~37, no.~6,
+  pp. 1205--1221, Jun. 2019.
 
 \bibitem{li2020qffl}
 T.~Li \emph{et~al.}, ``Fair resource allocation in federated learning,'' in
