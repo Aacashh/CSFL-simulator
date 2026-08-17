@@ -12,6 +12,7 @@
 \usepackage{xcolor}
 \usepackage{array}
 \usepackage{booktabs}
+\usepackage{url}
 
 \oddsidemargin -0.04cm
 \evensidemargin -0.04cm
@@ -48,7 +49,7 @@ The Reviewer's assessment is written as a single paragraph. We have divided it i
 \noindent
 \textbf{Reply 1:} {We thank the Reviewer for this assessment. The inconsistency had one structural cause, which was that the method was described in two documents that had drifted apart.
 
-This revision does not include a supplementary file. Every item the Reviewer raises, and all content that previously appeared only in the supplementary material, is now in the main manuscript. The method is therefore described in exactly one place. That description was rewritten from the selector source code rather than from the earlier text, and the implementation is released publicly, so the description can be checked against the code that produced the results. The five specific corrections this uncovered are listed in Reply~2, Reply~3 and Reply~4.}\\
+This revision does not include a supplementary file. Every item the Reviewer raises, and all content that previously appeared only in the supplementary material, is now in the main manuscript. The method is therefore described in exactly one place. That description was rewritten from the selector source code rather than from the earlier text. The implementation is released at \url{github.com/Advait-Pathak9222/MAML-Select-Algorithm}. The five specific corrections this uncovered are listed in Reply~2, Reply~3 and Reply~4.}\\
 
 \noindent
 \textbf{Comment 2:} \textit{Most importantly, the main manuscript and supplementary material describe different optimization procedures, and the latency-cost function is not defined consistently.}\\
@@ -70,7 +71,7 @@ Checking the latency definitions against the simulator in the same pass showed t
 \noindent
 \textbf{Reply 3:} {We agree that this is the requirement the revision has to meet, and we treated it as the organizing task. Algorithm~1 of the revised manuscript is the definitive algorithm. We then checked each of the five artifacts the Reviewer names against it.
 
-The equations were corrected on the four points listed in Reply~2, namely the cost normalization in Eq.~(7), the computation time in Section~III, the energy in Eq.~(13), and the support and query sets in Eq.~(5). The pseudocode was rewritten so that the phase order in Algorithm~1 is the order the code executes, with both meta-updates placed before scoring. The implementation is released with the paper, so every line of Algorithm~1 can be read against the function that performs it. The experiments were re-derived from the run logs rather than carried over, and Section~V-A states the protocol that produced them. The theoretical analysis was rewritten against the same algorithm, which is what produced the correction in Reply~6, since the submitted corollary described an objective the code does not optimize.
+The equations were corrected on the four points listed in Reply~2, namely the cost normalization in Eq.~(7), the computation time in Section~III, the energy in Eq.~(13), and the support and query sets in Eq.~(5). The pseudocode was rewritten so that the phase order in Algorithm~1 is the order the code executes, with both meta-updates placed before scoring. The implementation is released. The experiments were re-derived from the run logs rather than carried over, and Section~V-A states the protocol that produced them. The theoretical analysis was rewritten against the same algorithm, which is what produced the correction in Reply~6, since the submitted corollary described an objective the code does not optimize.
 
 Two mismatches survived this audit and are now stated in the manuscript instead of being left implicit. The per-client score optimizes a surrogate and not the original cohort objective, which is the subject of Reply~4. The analysis treats the outer step as plain gradient descent, whereas the implementation passes that direction through Adam. Remark~1 records both. Please refer to Algorithm~1, Section~IV-B, Section~V-A and Remark~1 of the revised manuscript.}\\
 
@@ -132,7 +133,7 @@ Section~V-D reports the empirical checks. The inner step is non-increasing on th
 
 On validity, the corrections in Reply~2 changed how the cost and the energy are defined, so we re-derived every reported number from the run logs under the corrected definitions instead of carrying the submitted values forward. The direction of every comparison in Table~II is unchanged.
 
-On reproducibility, the implementation is released with the paper, the seeds and the full simulation configuration are stated in Section~V-A, and Algorithm~1 with those parameters specifies the simulation completely. Section~V-A also records that the CriticalFL runs on CIFAR-100 terminated at rounds $181$ and $150$ of the planned $200$, so every CIFAR-100 comparison is made at the matched horizon of round $150$, uniformly across all methods in that block.
+On reproducibility, the implementation is released, the seeds and the full simulation configuration are stated in Section~V-A, and Algorithm~1 with those parameters specifies the simulation completely. Section~V-A also records that the CriticalFL runs on CIFAR-100 terminated at rounds $181$ and $150$ of the planned $200$, so every CIFAR-100 comparison is made at the matched horizon of round $150$, uniformly across all methods in that block.
 
 On interpretation, we have added an evaluation at a Dirichlet concentration of $0.1$, which is a harder partition than the $0.5$ used elsewhere, in order to state where the contribution holds and where it does not. The compute reduction holds and grows. MAML-Select uses $55.8\pm6.3$ TFLOPs against $140.0\pm1.3$ for FedAvg on Fashion-MNIST, and $4423\pm581$ against $8342\pm89$ on CIFAR-10. These are reductions of $60\%$ and $47\%$, and both are significant over three seeds at $p=0.002$ and $p=0.007$. Accuracy falls. On Fashion-MNIST it is $83.4\pm4.3$ against $86.6\pm2.7$ for FedAvg, a gap inside the seed spread. On CIFAR-10 it is $41.2\pm6.2$ against $58.6\pm7.7$, a gap of about $17$ percentage points. The latency term concentrates selection on fast devices, and at $\alpha=0.1$ those devices hold a narrower slice of the label space, so the cohort sees fewer classes per round. Section~V-F reports this as the operating boundary of the method. Please refer to Section~V-A, Section~V-F and Table~II of the revised manuscript.}\\
 
