@@ -53,7 +53,18 @@ STAGES="${STAGES:-AB}"
 DRY_RUN="${DRY_RUN:-0}"
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
-OUT_ROOT="${OUT_ROOT:-${REPO_ROOT}/runs/MAML-R2-Gaps}"
+
+# Windows refuses to create a path longer than 260 characters, and the
+# simulator appends about 208 of its own below the output directory, because
+# the run label is repeated inside a scratch directory. Writing under a repo
+# that already sits in OneDrive\Desktop overruns that by a few characters and
+# every run fails with WinError 3 before it starts. So the default output
+# directory is short and outside the repository on Windows.
+case "${OSTYPE:-}" in
+  msys*|cygwin*|win32*) _DEFAULT_OUT="/c/maml_r2" ;;
+  *)                    _DEFAULT_OUT="${REPO_ROOT}/runs/MAML-R2-Gaps" ;;
+esac
+OUT_ROOT="${OUT_ROOT:-${_DEFAULT_OUT}}"
 LOG_DIR="${OUT_ROOT}/logs"
 ARTIFACTS="${OUT_ROOT}/artifacts"
 
@@ -79,6 +90,17 @@ fi
 cd "${REPO_ROOT}"
 mkdir -p "${LOG_DIR}" "${ARTIFACTS}/analysis"
 
+# Git Bash speaks /c/maml_r2 and a Windows python.exe does not, so everything
+# handed to Python below is the native form of the same directory.
+NATIVE_OUT="${OUT_ROOT}"
+NATIVE_ARTIFACTS="${ARTIFACTS}"
+NATIVE_SEP="/"
+if command -v cygpath >/dev/null 2>&1; then
+  NATIVE_OUT="$(cygpath -w "${OUT_ROOT}")"
+  NATIVE_ARTIFACTS="$(cygpath -w "${ARTIFACTS}")"
+  NATIVE_SEP="\\"
+fi
+
 echo "============================================================"
 echo "  MAML-Select, R2 evidence gaps"
 echo "============================================================"
@@ -91,9 +113,9 @@ echo "Logs:      ${LOG_DIR}"
 echo ""
 
 # -----------------------------------------------------------------------------
-# Preflight. Three checks, each of which has broken a campaign before.
+# Preflight. Four checks, each of which has broken a campaign before.
 # -----------------------------------------------------------------------------
-echo "[preflight 1/3] the package imports"
+echo "[preflight 1/4] the package imports"
 "${PYTHON_BIN}" - <<'PY'
 import importlib
 import sys
@@ -110,7 +132,7 @@ for name in ("csfl_simulator.core.client",
 print("  ok")
 PY
 
-echo "[preflight 2/3] the selector accepts zero inner steps"
+echo "[preflight 2/4] the selector accepts zero inner steps"
 "${PYTHON_BIN}" - <<'PY'
 import inspect
 import sys
@@ -125,7 +147,60 @@ if "max(1, int(inner_steps))" in src:
 print("  ok")
 PY
 
-echo "[preflight 3/3] device"
+echo "[preflight 3/4] output path length"
+OUT_ROOT="${NATIVE_OUT}" STAGES="${STAGES}" "${PYTHON_BIN}" - <<'PY'
+import os
+import sys
+
+# The longest label the two stages produce, and the tail the simulator writes
+# below the output directory for it.
+LABELS = {
+    "A": "no_adaptation_control_cifar100_review_150_research.maml_select"
+         ".inner_steps_0_s2026",
+    "B": "main_benchmarks_cifar10_main_criticalfl_s2026",
+}
+LIMIT = 260
+
+out = os.environ["OUT_ROOT"]
+stages = os.environ["STAGES"]
+if not os.path.isabs(out) and sys.platform == "win32":
+    out = os.path.abspath(out)
+
+worst = 0
+for stage in ("A", "B"):
+    if stage not in stages:
+        continue
+    label = LABELS[stage]
+    stamp = "_20260101-000000"
+    tail = (1 + len(label) + len(os.sep + "_scratch" + os.sep + "runs")
+            + 1 + len("maml_select_" + label + stamp))
+    projected = len(os.path.join(out, stage)) + tail
+    worst = max(worst, projected)
+
+print("  longest projected path: %d characters" % worst)
+if sys.platform != "win32":
+    print("  ok, not Windows")
+    sys.exit(0)
+if worst <= LIMIT:
+    print("  ok, under the %d character limit" % LIMIT)
+    sys.exit(0)
+
+print("")
+print("  This exceeds the Windows limit of %d by %d characters, and every run"
+      % (LIMIT, worst - LIMIT))
+print("  would fail with WinError 3 before training a single round.")
+print("")
+print("  Re-run with a shorter output directory:")
+print("")
+print("      OUT_ROOT=/c/maml_r2 bash .../run_r2_gaps.sh")
+print("")
+print("  Any absolute path of at most %d characters will do."
+      % (LIMIT - (worst - len(out))))
+sys.exit(1)
+PY
+echo ""
+
+echo "[preflight 4/4] device"
 RESOLVED_DEVICE="$(
   DEVICE_REQUEST="${DEVICE}" "${PYTHON_BIN}" - <<'PY'
 import os
@@ -169,8 +244,8 @@ run_stage () {
       --profile "${profile}" \
       --only "${experiment}" \
       --device "${RESOLVED_DEVICE}" \
-      --output-dir "${OUT_ROOT}/${tag}" \
-      --analysis-dir "${ARTIFACTS}/analysis" \
+      --output-dir "${NATIVE_OUT}${NATIVE_SEP}${tag}" \
+      --analysis-dir "${NATIVE_ARTIFACTS}${NATIVE_SEP}analysis" \
       --resume \
       "${DRY_ARGS[@]}" 2>&1 | tee "${log}"; then
     echo "  stage ${tag} finished"
