@@ -165,3 +165,60 @@ Jain quoted in Reply 5 moved from 0.972 to 0.976.
 * `THEORY_NOTES.md` and `FAIRNESS_REEVALUATION.md` are referenced by
   `ALGORITHM_GROUND_TRUTH.md` but are not present in this repository.
 * Five equation and section labels are defined but never referenced. Harmless.
+
+---
+
+## Updated 17 August 2026
+
+### FLAG 4 — CLOSED
+
+The round-2 reviewer's comment is now in the letter verbatim. It arrived as a
+single paragraph from Reviewer 2, and the letter cuts it into the seven points
+it makes. `maml_data_verification/letter_sync.py` joins the seven extracts back
+together and diffs the result against the source, so a reworded comment fails
+the check rather than reaching a referee.
+
+The letter also carried the wrong heading. It said "Response to Comments of
+Reviewer 1" for a Reviewer 2 report. Corrected.
+
+### The 74-versus-77 note above was wrong
+
+The entry under "Corrected on 14 August 2026" claims the pooled fairness figures
+moved from 74 runs to 77, with CIFAR-10 Jain at 0.420 to 0.377 and CIFAR-100 at
+0.796 to 0.779. Those numbers match no block of the data.
+`maml_data_verification/pooled_fairness.py` pools every MAML-Select run,
+including the ablation variants, whose method keys are
+`research.maml_select.<variant>` and which a match on the display name alone
+misses.
+
+| dataset | runs on this machine | Jain all | Jain post | paper |
+|---|---|---|---|---|
+| Fashion-MNIST | 34 | 0.742 | 0.723 | 48 runs, 0.755, 0.737 |
+| CIFAR-10 | **22** | **0.411** | **0.367** | **matches exactly** |
+| CIFAR-100 | **4** | **0.802** | **0.785** | **matches exactly** |
+
+Coverage is 100 percent in the worst individual run of all 60, not only on
+average. The manuscript and the letter agree with each other and with the data
+for the two blocks that are here, so the note was the outlier and the documents
+were right. The 14 Fashion-MNIST runs not on this machine are the width ablation,
+which left only `manifest_arch_ablation.json` behind, and they are covered by
+FLAG 1.
+
+### FLAG 3 — page budget, still met
+
+The alpha = 0.1 subsection was added as Section V-F and pushed the build to 9
+pages. Shrinking the three result figures from 0.94 to 0.86 column widths moved
+nothing at all, because the layout is float-constrained and page nine held the
+same 2174 characters either way. Only body text counts. Five trimming passes
+removed about 1900 characters of restatement and brought it back to **8 pages,
+0 errors, 0 overfull boxes, 0 undefined references**. Two of those cuts were
+register fixes that happened to shorten the text.
+
+### New runs, 17 August 2026
+
+`build/Runs_final` holds the alpha = 0.1 study, 18 completed runs over two
+datasets, three methods and three seeds. They bear on none of Reviewer 2's seven
+points, which are all about internal consistency and were answerable from the
+existing logs. They are reported in Section V-F and in Reply 7 as the operating
+boundary of the method, since the compute saving grows there while CIFAR-10
+accuracy falls by about 17 percentage points.

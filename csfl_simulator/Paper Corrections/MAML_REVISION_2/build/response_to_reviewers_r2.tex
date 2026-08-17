@@ -39,43 +39,58 @@
 
 We sincerely thank the Editor, the Associate Editor, and the anonymous Reviewer for their valuable time and effort in evaluating our manuscript. The comments were detailed and constructive, and they have helped us improve the technical accuracy and the clarity of our work. In the revised version, we have carefully addressed every raised concern. {\color{blue}All changes made in response to the Reviewer's comments have been clearly highlighted in blue, as per the journal's guidelines}. Below, we provide a detailed point-by-point response to each comment. Please note that the Reviewer's comments are \textit{italicized}, followed by our responses in normal font. Along with this letter we submit (a) a clean version of the revised manuscript and (b) a coloured marked version of the revised manuscript, in which the changes are highlighted.\\
 
-This revision does not include a supplementary file. Every item the Reviewer raises, and all content that previously appeared only in the supplementary material, is now in the main manuscript. The method is therefore described in exactly one place, and that description was written from the selector source code. The implementation is also released publicly, so the description can be checked against the code that produced the results.\\
+The Reviewer's assessment is written as a single paragraph. We have divided it into the seven points it makes and answered each in turn. The extracts below reproduce that paragraph in full and in its original order.\\
 
-\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 1}}}
-
-\noindent
-\textbf{Comment 1:} \textit{The main manuscript and the supplementary material describe different optimization procedures for the same method.}\\
-\noindent
-\textbf{Reply 1:} {We thank the Reviewer for identifying this. We checked both descriptions against the selector source and corrected the manuscript to match the code on five points. The outer meta-update acts on the query set. Both meta-updates occur at the start of the round, before any client is scored. The support set is the cohort of round $t-2$ and the query set is the cohort of round $t-1$, so $\mathcal{D}_{sup}(t)=\mathcal{D}_{query}(t-1)$. The exploration step is deterministic and gives one slot to the available client of largest staleness, with the lowest selection frequency breaking ties. The six state features are standardized across the available pool every round.
-
-The lag between the two sets is what makes the procedure a meta-learning problem rather than online regression. The inner step adapts on an older round and the meta-gradient is measured on a newer one, so the outer update rewards initializations from which one adaptation step transfers forward in time. Please refer to Eq.~(4) for the standardization, Eq.~(5) for the lag, the opening of Section~IV-C for the phase ordering, and Algorithm~1 of the revised manuscript.}\\
+\hspace{0.75cm}{\bf {\Large {~~~~~~~~~~~~Response to Comments of Reviewer 2}}}
 
 \noindent
-\textbf{Comment 2:} \textit{The latency-cost function is defined inconsistently between the two documents.}\\
+\textbf{Comment 1:} \textit{The manuscript requires major revision because several foundational aspects of the proposed method remain internally inconsistent or insufficiently justified.}\\
 \noindent
-\textbf{Reply 2:} {We thank the Reviewer for this correction. The implementation normalizes the deadline overrun by the target latency,
+\textbf{Reply 1:} {We thank the Reviewer for this assessment. The inconsistency had one structural cause, which was that the method was described in two documents that had drifted apart.
+
+This revision does not include a supplementary file. Every item the Reviewer raises, and all content that previously appeared only in the supplementary material, is now in the main manuscript. The method is therefore described in exactly one place. That description was rewritten from the selector source code rather than from the earlier text, and the implementation is released publicly, so the description can be checked against the code that produced the results. The five specific corrections this uncovered are listed in Reply~2, Reply~3 and Reply~4.}\\
+
+\noindent
+\textbf{Comment 2:} \textit{Most importantly, the main manuscript and supplementary material describe different optimization procedures, and the latency-cost function is not defined consistently.}\\
+\noindent
+\textbf{Reply 2:} {We thank the Reviewer for identifying both errors. We checked every description against the selector source and corrected the manuscript to match the code.
+
+On the optimization procedure, five points were wrong. The outer meta-update acts on the query set. Both meta-updates occur at the start of the round, before any client is scored. The support set is the cohort of round $t-2$ and the query set is the cohort of round $t-1$, so $\mathcal{D}_{sup}(t)=\mathcal{D}_{query}(t-1)$. The exploration step is deterministic and gives one slot to the available client of largest staleness, with the lowest selection frequency breaking ties. The six state features are standardized across the available pool every round. The lag between the two sets is what makes the procedure a meta-learning problem instead of online regression. The inner step adapts on an older round and the meta-gradient is measured on a newer one, so the outer update rewards initializations from which one adaptation step transfers forward in time. Eq.~(4) gives the standardization, Eq.~(5) gives the lag, the opening of Section~IV-C gives the phase ordering, and Algorithm~1 gives the full procedure.
+
+On the latency cost, the implementation normalizes the deadline overrun by the target latency,
 \[
 c_{i,t}=\lambda\,\frac{\bigl(T_{i,t}-T_{target}\bigr)_{+}}{T_{target}}-\Delta_{i,t},
 \]
-and every reported number was produced with this form. The submitted equation omitted the division by $T_{target}$, and the revised manuscript uses the normalized form throughout.
+and every reported number was produced with this form. The submitted equation omitted the division by $T_{target}$. The revised manuscript uses the normalized form throughout, in Eq.~(7). The normalization also carries meaning. It makes the deadline overrun a dimensionless fraction, so both terms of the cost sit on the same scale and one value of $\lambda$ transfers across datasets with different round times. We have removed the earlier ambiguity in $T_{target}$, which is the mean expected round latency of the Tier-2 devices in the available pool, recomputed each round, with the pool median as a fallback when no Tier-2 device is available.
 
-The normalization also carries meaning. It makes the deadline overrun a dimensionless fraction, so both terms of the cost are on the same scale and a single value of $\lambda$ transfers across datasets with different round times. We have also removed the earlier ambiguity in $T_{target}$, which is the mean expected round latency of the Tier-2 devices in the available pool, recomputed each round, with the pool median as a fallback when no Tier-2 device is available.
-
-Checking the latency definitions against the simulator in the same pass showed that the submitted computation time carried a per-sample model cost the simulator does not apply, and that the energy accumulates over the whole per-round latency rather than over the computation time alone. Both definitions now match the code. Please refer to Eq.~(5) for the computation time, Eq.~(7) for the cost, and Eq.~(13) for the energy of the revised manuscript.}\\
+Checking the latency definitions against the simulator in the same pass showed two further errors. The submitted computation time carried a per-sample model cost that the simulator does not apply, and the energy accumulates over the whole per-round latency and not over the computation time alone. Both definitions now match the code. Please refer to Section~III for the computation time, Eq.~(7) for the cost, and Eq.~(13) for the energy of the revised manuscript.}\\
 
 \noindent
-\textbf{Comment 3:} \textit{The per-client ranking score is not derived from the cohort-level objective it is supposed to serve.}\\
+\textbf{Comment 3:} \textit{The authors must establish one definitive algorithm and ensure that the mathematical equations, pseudocode, implementation, experiments, and theoretical analysis all correspond to it.}\\
 \noindent
-\textbf{Reply 3:} {We agree, and the revised manuscript now gives the derivation in two steps and states which step is exact.
+\textbf{Reply 3:} {We agree that this is the requirement the revision has to meet, and we treated it as the organizing task. Algorithm~1 of the revised manuscript is the definitive algorithm. We then checked each of the five artifacts the Reviewer names against it.
 
-The first step is exact. The straggler term is a maximum and is therefore not separable, but for any $T_{target}>0$ it is bounded by $1+\sum_{i\in\mathcal{S}_t}\rho_{i,t}$ with $\rho_{i,t}=(T_{i,t}-T_{target})_+/T_{target}$. The second step is the one approximation. The risk decrease is unavailable at selection time, so we substitute the observable local loss reductions. This treats cohort contributions as additive and equates local with global progress, and the manuscript now says so.
+The equations were corrected on the four points listed in Reply~2, namely the cost normalization in Eq.~(7), the computation time in Section~III, the energy in Eq.~(13), and the support and query sets in Eq.~(5). The pseudocode was rewritten so that the phase order in Algorithm~1 is the order the code executes, with both meta-updates placed before scoring. The implementation is released with the paper, so every line of Algorithm~1 can be read against the function that performs it. The experiments were re-derived from the run logs rather than carried over, and Section~V-A states the protocol that produced them. The theoretical analysis was rewritten against the same algorithm, which is what produced the correction in Reply~6, since the submitted corollary described an objective the code does not optimize.
 
-The result is a modular cohort surrogate, and Proposition~1 proves by an exchange argument that Top-$K$ is an exact minimizer of it under the cardinality constraint. Because the costs are predicted rather than realized, we claim that the cohort exactly optimizes a stated surrogate under predicted costs, and not that it optimizes the original objective. Please refer to the subsection \emph{From the Cohort Objective to a Per-Client Score} in Section~IV and to Proposition~1 of the revised manuscript.}\\
+Two mismatches survived this audit and are now stated in the manuscript instead of being left implicit. The per-client score optimizes a surrogate and not the original cohort objective, which is the subject of Reply~4. The analysis treats the outer step as plain gradient descent, whereas the implementation passes that direction through Adam. Remark~1 records both. Please refer to Algorithm~1, Section~IV-B, Section~V-A and Remark~1 of the revised manuscript.}\\
 
 \noindent
-\textbf{Comment 4:} \textit{Because the supplementary reveals a forced client-coverage stage, the fairness and coverage results must be re-evaluated.}\\
+\textbf{Comment 4:} \textit{In addition, the per-client ranking score is not currently derived from the cohort-level optimization objective and should either be justified as a valid surrogate or clearly presented as a heuristic.}\\
 \noindent
-\textbf{Reply 4:} {We agree that this had to be answered with data. We discarded the forced cold-start rounds and recomputed both metrics over the policy-driven rounds alone, across all $74$ distinct MAML-Select runs in the study and every $\lambda$, inner-step, width and feature-ablation setting.
+\textbf{Reply 4:} {We agree, and we have taken the first of the two options the Reviewer offers. The revised manuscript derives the score from the cohort objective in two steps and states which step is exact.
+
+The first step is exact. The straggler term in Eq.~(3) is a maximum and is therefore not separable, but for any $T_{target}>0$ it is bounded by $1+\sum_{i\in\mathcal{S}_t}\rho_{i,t}$ with $\rho_{i,t}=(T_{i,t}-T_{target})_+/T_{target}$. This is Eq.~(6), and the bound never understates the latency cost.
+
+The second step is the one approximation. The risk decrease $F(\theta_t)-F(\theta_{t+1})$ is unknown when the cohort is chosen, so we substitute the observable local loss reductions. This treats cohort contributions as additive and equates local progress with global progress, and Section~IV-B now says so in those terms.
+
+The result is the modular cohort surrogate of Eq.~(7), and Proposition~1 proves by an exchange argument that Top-$K$ is an exact minimizer of that surrogate under the cardinality constraint. Because the costs are predicted rather than realized, the cohort exactly optimizes a stated surrogate under predicted costs. Please refer to Section~IV-B, Eq.~(6), Eq.~(7) and Proposition~1 of the revised manuscript.}\\
+
+\noindent
+\textbf{Comment 5:} \textit{The fairness and coverage results must be re-evaluated because the supplementary procedure includes forced client coverage, and contradictory CriticalFL coverage values appear across the main and supplementary tables.}\\
+\noindent
+\textbf{Reply 5:} {We agree that both parts had to be answered with data, and we recomputed both from the per-round logs.
+
+On the forced coverage, we discarded the cold-start rounds and recomputed coverage and Jain's index over the policy-driven rounds alone, across all $74$ distinct MAML-Select runs in the study and every $\lambda$, inner-step, width and feature-ablation setting.
 
 \begin{center}
 \begin{tabular}{lrrrrr}
@@ -89,21 +104,12 @@ CIFAR-100     & 4  & 100 & 100 & 0.802 & 0.785 \\
 \end{tabular}
 \end{center}
 
-Coverage is $100\%$ with and without the cold start, and this holds in every individual run rather than on average. Jain's index falls by at most $0.044$. Proposition~2 shows why this is not a coincidence. One slot per round goes to the client of maximal staleness, and a client that takes that slot has its staleness reset, so each of the other $N-1$ clients can block a given client at most once and every client is selected within any window of $N-1$ consecutive rounds. At $N=100$ and $T=200$ the condition is met twice over.
+Coverage is $100\%$ with and without the cold start, and this holds in every individual run, not as a pooled average. Jain's index falls by at most $0.044$. Proposition~2 shows why coverage survives. One slot per round goes to the client of maximal staleness, and a client that takes that slot has its staleness reset, so each of the other $N-1$ clients can block a given client at most once and every client is selected within any window of $N-1$ consecutive rounds. At $N=100$ and $T=200$ the condition is met twice over. Section~V-C now separates the two metrics. Coverage is a structural property guaranteed by the exploration slot. Jain's index measures how evenly the remaining places are distributed, is genuinely lower than for the uniform selectors, and reflects a latency-aware selector preferring faster devices. Both full-run and post-cold-start values are reported.
 
-The revised manuscript also separates the two metrics rather than presenting them as equivalent evidence. Coverage is a structural property guaranteed by the exploration slot. Jain's index measures how evenly the remaining places are distributed, is genuinely lower than for the uniform selectors, and reflects a latency-aware selector preferring faster devices. Both full-run and post-cold-start values are reported. Please refer to Section~V-C and Proposition~2 of the revised manuscript.}\\
-
-\noindent
-\textbf{Comment 5:} \textit{The CriticalFL coverage values are contradictory between the main table and the supplementary table.}\\
-\noindent
-\textbf{Reply 5:} {The Reviewer is right. The two values cannot both be true, because Jain's index over $N$ clients satisfies $J\le\mathrm{Cov}$, so a Jain index of $0.98$ is impossible at $33\%$ coverage. We now use this invariant as a check on the reported table.
-
-The cause was a reporting-script error rather than an experimental one. The script that produced the supplementary table read a progress file that is written continuously during a run, and for the CriticalFL runs it read snapshots taken while those runs were still in progress. It therefore reported partial-round coverage against a final-round Jain index. The main-paper value of $100\%$ is the correct one.
-
-We recomputed from the completed per-round logs rather than from any progress file. On CIFAR-100, where the full baseline sweep is available, CriticalFL reaches $100\%$ coverage with $J=0.976$, which is consistent with the main table and with the invariant above. The CIFAR-100 block of Table~II and the tier-participation figures are computed on the same basis. Withdrawing the supplementary material removes the contradiction structurally, since there is now one table with one set of values. Please refer to Table~II and Section~V-B of the revised manuscript.}\\
+On the CriticalFL contradiction, the Reviewer is right that the two values cannot both be true. Jain's index over $N$ clients satisfies $J\le\mathrm{Cov}$, so a Jain index of $0.98$ is impossible at $33\%$ coverage. We now use this invariant as a check on the reported table. The cause was a reporting error and not an experimental one. The script that produced the supplementary table read a progress file that is written continuously during a run, and for the CriticalFL runs it read snapshots taken while those runs were still in progress. It therefore reported partial-round coverage against a final-round Jain index. The main-paper value of $100\%$ is the correct one. Recomputing from the completed per-round logs gives CriticalFL $100\%$ coverage with $J=0.976$ on CIFAR-100, which is consistent with the main table and with the invariant. Withdrawing the supplementary material removes the contradiction structurally, because there is now one table with one set of values. Please refer to Section~V-C, Proposition~2, Section~V-B and Table~II of the revised manuscript.}\\
 
 \noindent
-\textbf{Comment 6:} \textit{The approximation-error and convergence claims need strengthening, since the theory assumes a stationary objective while the method is motivated by non-stationary client utility.}\\
+\textbf{Comment 6:} \textit{Finally, the approximation-error and convergence claims require substantial strengthening, particularly because the theoretical analysis assumes stationarity while the method is motivated by non-stationary client utility.}\\
 \noindent
 \textbf{Reply 6:} {We agree. The submitted corollary assumed a stationary query objective, and that assumption is untenable here. Because $\mathcal{D}_{sup}(t)=\mathcal{D}_{query}(t-1)$, assuming it collapses the inner and outer objectives into one and dissolves the meta-learning problem into descent on a fixed loss. It also asserts that client utility does not change during training, which is the premise the method is built on. Over $199$ logged rounds the realized query objective is non-monotone on all three datasets, with round-to-round changes reaching $2.67$, $0.70$ and $3.61$.
 
@@ -113,14 +119,22 @@ We have replaced that statement with a tracking bound that carries the drift exp
 \]
 The proof is the same telescoping argument, except that consecutive function values belong to different objectives, so the drift enters explicitly instead of being assumed away.
 
-We have since measured $V_T$ rather than only arguing for it. Recording the two consecutive objectives at a common iterate gives $V_T=-2.89$ on Fashion-MNIST, $0.51$ on CIFAR-10 and $1.79$ on CIFAR-100 over $198$ rounds. The partial sums flatten rather than growing with the horizon, so the measured drift lies in the $V_T=o(T)$ regime, and the Fashion-MNIST value is negative and therefore in the benign case. These are single instrumented runs, one per dataset, so we present them as a measurement of the drift term and not as a distributional claim.
+We have since measured $V_T$ instead of only arguing for it. Recording the two consecutive objectives at a common iterate gives $V_T=-2.89$ on Fashion-MNIST, $0.51$ on CIFAR-10 and $1.79$ on CIFAR-100 over $198$ rounds. The partial sums flatten instead of growing with the horizon, so the measured drift lies in the $V_T=o(T)$ regime, and the Fashion-MNIST value is negative and therefore in the benign case. These are single instrumented runs, one per dataset, so we present them as a measurement of the drift term and not as a distributional claim.
 
-Two further points follow from the Reviewer's comment. The quantity $\delta_t$ was previously called the first-order approximation error. It is not the term dropped by the first-order approximation but the displacement of the applied direction from the query gradient at the un-adapted weights, and the revised text says so. The lemmas and the corollary also analyse a plain-descent outer step, whereas the implementation passes that direction through Adam, so the analysis characterizes the descent direction but not Adam's per-coordinate rescaling. Remark~1 states both points and records the extension to adaptive-moment methods under a drifting objective as open.
+Two further points follow from the Reviewer's comment. The quantity $\delta_t$ was previously called the first-order approximation error. It is not the term dropped by the first-order approximation but the displacement of the applied direction from the query gradient at the un-adapted weights, and the revised text says so. The lemmas and the corollary also analyse a plain-descent outer step, whereas the implementation passes that direction through Adam, so the analysis characterizes the descent direction and not Adam's per-coordinate rescaling. Remark~1 states both points and records the extension to adaptive-moment methods under a drifting objective as open.
 
-Section~V-D reports the empirical checks. The inner step is non-increasing on the support loss in $198$ of $198$ adapted rounds on all three datasets, and the meta-update magnitude settles at a small non-zero level rather than decaying to zero, which is the behaviour the tracking bound predicts. Please refer to Corollary~1, Remark~1 and Section~V-D of the revised manuscript.}\\
+Section~V-D reports the empirical checks. The inner step is non-increasing on the support loss in $198$ of $198$ adapted rounds on all three datasets, which confirms Lemma~1. The meta-update magnitude settles at a small non-zero level instead of decaying to zero, which is the behaviour the tracking bound predicts. Please refer to Corollary~1, Remark~1, Lemma~1 and Section~V-D of the revised manuscript.}\\
 
-\vspace{0.5em}
-We note one point of experimental procedure. The CriticalFL runs on CIFAR-100 terminated at rounds $181$ and $150$ of the planned $200$, so every CIFAR-100 comparison is made at the matched horizon of round $150$. This applies uniformly to all methods in that block.
+\noindent
+\textbf{Comment 7:} \textit{These issues affect the validity, reproducibility, and interpretation of the central contribution and must be resolved before the manuscript can be considered further.}\\
+\noindent
+\textbf{Reply 7:} {We have addressed the three concerns the Reviewer names in turn.
+
+On validity, the corrections in Reply~2 changed how the cost and the energy are defined, so we re-derived every reported number from the run logs under the corrected definitions instead of carrying the submitted values forward. The direction of every comparison in Table~II is unchanged.
+
+On reproducibility, the implementation is released with the paper, the seeds and the full simulation configuration are stated in Section~V-A, and Algorithm~1 with those parameters specifies the simulation completely. Section~V-A also records that the CriticalFL runs on CIFAR-100 terminated at rounds $181$ and $150$ of the planned $200$, so every CIFAR-100 comparison is made at the matched horizon of round $150$, uniformly across all methods in that block.
+
+On interpretation, we have added an evaluation at a Dirichlet concentration of $0.1$, which is a harder partition than the $0.5$ used elsewhere, in order to state where the contribution holds and where it does not. The compute reduction holds and grows. MAML-Select uses $55.8\pm6.3$ TFLOPs against $140.0\pm1.3$ for FedAvg on Fashion-MNIST, and $4423\pm581$ against $8342\pm89$ on CIFAR-10. These are reductions of $60\%$ and $47\%$, and both are significant over three seeds at $p=0.002$ and $p=0.007$. Accuracy falls. On Fashion-MNIST it is $83.4\pm4.3$ against $86.6\pm2.7$ for FedAvg, a gap inside the seed spread. On CIFAR-10 it is $41.2\pm6.2$ against $58.6\pm7.7$, a gap of about $17$ percentage points. The latency term concentrates selection on fast devices, and at $\alpha=0.1$ those devices hold a narrower slice of the label space, so the cohort sees fewer classes per round. Section~V-F reports this as the operating boundary of the method. Please refer to Section~V-A, Section~V-F and Table~II of the revised manuscript.}\\
 
 \vspace{0.5em}
 We thank the Reviewer once again for the careful reading, which has improved the accuracy of the method description, the derivation and the theory.
