@@ -131,7 +131,7 @@ Section~V-D reports the empirical checks. The inner step is non-increasing on th
 \noindent
 \textbf{Reply 7:} {We have addressed the three concerns the Reviewer names in turn.
 
-On validity, the corrections in Reply~2 changed how the cost and the energy are defined, so we re-derived every reported number from the run logs under the corrected definitions instead of carrying the submitted values forward. The direction of every comparison in Table~II is unchanged.
+On validity, the corrections in Reply~2 changed how the cost and the energy are defined, so we re-derived every reported number from the run logs under the corrected definitions instead of carrying the submitted values forward. The direction of every comparison in Table~II is unchanged. We also added the control that tests the central mechanism directly. At zero inner steps the support set is never touched and the outer step is a plain Adam step on the query loss, which is online regression with the same network. Over three matched seeds it reaches $62.4\pm2.3$ on CIFAR-10 against $64.8\pm2.1$ for one inner step, a gain that holds in every seed at $p=0.035$, while on CIFAR-100 no difference is detected. Section~V-E reports both.
 
 On reproducibility, the implementation is released and the link is in the footnote on the first page of the revised manuscript, the seeds and the full simulation configuration are stated in Section~V-A, and Algorithm~1 with those parameters specifies the simulation completely. Section~V-A also records that the CriticalFL runs on CIFAR-100 terminated at rounds $181$ and $150$ of the planned $200$, so every CIFAR-100 comparison is made at the matched horizon of round $150$, uniformly across all methods in that block.
 
