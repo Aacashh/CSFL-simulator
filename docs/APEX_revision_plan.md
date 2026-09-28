@@ -8,9 +8,12 @@ the baseline selectors under `csfl_simulator/selection/`, `presets/methods.yaml`
 `scripts/run_apex_v2_experiments.sh` and
 [APEX_v2_experiment_analysis.md](APEX_v2_experiment_analysis.md).
 
-The manuscript source isn't in the repository. Section, equation, table and
-figure numbers below are the reviewers' (Eq. 5 convergence bound, Eq. 12
-contextual score, Eq. 16 reward; Tables I–V; Fig. 2).
+The submitted manuscript is in
+`csfl_simulator/Paper Corrections/APEX_R1/submitted/main_v3.tex`. §13 audits it
+line by line against the code and the reviews. Equation numbers follow the
+source and match the reviewers': Eq. 3 local update, Eq. 5 convergence bound,
+Eqs. 6–7 Γ and σ², Eq. 12 contextual utility, Eq. 16 reward, Eq. 21 het,
+Eq. 24 final score. Tables I–V and Fig. 2 also match.
 
 Reviewer labels: R1.1–R1.14 follow Reviewer 1's numbering; R2.1–R2.6 are
 Reviewer 2's paragraphs in order; AE is the Associate Editor.
@@ -83,7 +86,7 @@ It runs selection only, with no training, and takes about a minute on a CPU.
 | A5 | **Reward = Δ composite score on the *test* set.** APEX's posterior is updated from it. Oort's implementation also reads it into a utility table but never uses that table in its score. | `core/simulator.py`: `eval_model(self.model, self.test_loader, …)`, then composite, then `last_reward` | Test-set leakage; paper's Eq. 16 doesn't match the code | R1.8, R1.11 |
 | A6 | **The Thompson posterior can't move selection.** Credit ≈ 10⁻³/K. The variance floor 0.1/√n gives sample std ≈ 0.02 at n = 40. The blend is 0.7·context + 0.3·sample, with context in [0, 1]. For n < 2 it falls back to Beta(1, 1) ≈ U(0, 1). | audit: good-client share 0.225 (signal on) vs 0.218 (signal off) | The TS "learning" claim is unsupported; the TS term is noise injection | R1.8, R1.11, R1.4 |
 | A7 | **Table II and Table V "full APEX" are two separate executions of one configuration.** The main benchmark ran as job `main_cifar10_a03_s*`, the ablation as `ablation_s*`. GPU execution isn't bit-reproducible: client parallelism auto-sizes CUDA streams from free VRAM (`parallel_clients=-1`), and `torch.use_deterministic_algorithms(True, warn_only=True)` only warns, with no `CUBLAS_WORKSPACE_CONFIG`. **Decisive:** at N=50, K=10, `apex_v2_no_adaptive_recency` is *code-identical* to full APEX, because max(N/K, 3) = 5.0 equals the fixed constant it replaces. It ran in the *same* job, with the same seeds, as the full model, yet Table V reports 0.7115 vs 0.6942. Het scaling multiplies the diversity weight by 0.986 at α=0.3 (see A10), so "w/o het scaling" is a near-replicate too, at 0.7143. Four near-replicates of one algorithm span 0.694–0.714. | `scripts/run_apex_v2_experiments.sh` (Exp 1 vs Exp 4); `presets/methods.yaml`; `apex_v2.py` (`C_rec`); `core/parallel.py` | The Table II/V gap **and** the Table V "improvements" are within the 3-seed replicate noise (~2 pp) | R1.2, R1.4 |
-| A8 | **Table I's complexity is wrong.** The greedy diversity loop is K steps × N candidates × min over ≤K selected × L → **O(N·K²·L)**, not O(N·L + K²·L). Measured (CPU, K = N/10): 0.9 ms at N=50, 27 ms at N=200, 376 ms at N=500, 3.1 s at N=1000. The "3.9 ms" figure holds only at N=50. | audit | Table I must be corrected; runtime table needed | R2.4 |
+| A8 | **The "3.9 ms" overhead holds only at N=50.** The paper's O(N·K²·L) (Table I, §V-D) is correct, but it grows fast in practice. Measured (CPU, K = N/10): 0.9 ms at N=50, 27 ms at N=200, 376 ms at N=500, 3.1 s at N=1000. The abstract and Discussion present 3.9 ms as the method's overhead without a scale qualifier. | audit | A runtime table across N and methods is needed; the headline number must carry its N | R2.4 |
 | A9 | **The phase detector's input depends on who was selected.** It uses the mean training loss of the last cohort. Choosing high-loss or diverse clients moves the signal, which moves the phase, which changes the cohort: a feedback loop. This is a plausible cause of the α=0.1 oscillation that hysteresis was added to suppress. | `apex_v2.py` step 3 | Needs a selection-independent signal | R1.4 (hysteresis) |
 | A10 | **The heterogeneity scalar saturates.** It's a sampled mean of √JSD divided by an ad hoc 0.6 (the true maximum is √ln2 ≈ 0.833), computed once. Measured: 1.000 at α=0.1, 0.986 at α=0.3, 0.807 at α=0.6, 0.079 IID. **So het scaling is effectively off for α ≤ 0.3.** | `apex_v2.py::_estimate_heterogeneity`; check in §2.3(b) | Explains why ablating it at α=0.3 changes nothing systematic | R1.4, R1.13 |
 | A11 | **The diversity vector concatenates [normalised loss, normalised grad-norm, histogram].** Any theory about histograms says nothing about the other two coordinates. Max–min cosine greedy has no approximation guarantee. | `apex_v2.py::_build_proxy` | Theory/implementation gap | R1.10 |
@@ -112,11 +115,13 @@ N=  500 K=  50: steady    376.4 ms
 N= 1000 K= 100: steady   3089.9 ms
 ```
 
-**Before quoting A7 in the response letter:** pull
-`artifacts/runs/main_cifar10_a03_s*` and `artifacts/runs/ablation_s*` from the
-cluster. Diff their `config.json` files to confirm identical configurations and
-the same code revision. The code-identical-variant argument doesn't depend on
-this, but the letter should state what was checked (E0c).
+**The submitted run data isn't available, and the plan doesn't need it.**
+Every table is regenerated anyway. The explanation for R1.2 rests on the code
+alone: the code-identical variant, the ≈×1 het scaling, and the
+non-deterministic execution path. The letter should state exactly that: *"the
+original run directories were not retained; the explanation follows from the
+code, and the revised protocol makes the discrepancy structurally
+impossible"*. E0c becomes optional; do it only if the data turns up.
 
 ---
 
@@ -299,7 +304,7 @@ for t = 0 … T−1:
 
 | | Submitted | Revised |
 |---|---|---|
-| Phase detector | W, τ_c, τ_u, τ_e, dwell (5) | same (5) |
+| Phase detector | W, τ_c, τ_u, τ_e, δ_min (5) | same (5; rename the dwell time to D_min, since δ is now the discount) |
 | Blend / posterior | γ, α_e, c_f, confidence rule, Beta prior | κ, δ (2) |
 | Context weights | w_l, w_g, w_s, w_q (4) | λ_ℓ, λ_g, λ_s, λ_d (4, on the simplex → 3 free) |
 | Phase weights | 3 triples (9) | β_d × 3 + β_r (4) |
@@ -435,7 +440,7 @@ hyperparameters taken from the paper, and any deviation.
 | FedCS (Nishio & Yonetani, ICC 2019) | Random resource-request pool, then greedy admission of clients that fit the round deadline (maximising count) | A1 | Faithful; with a non-binding deadline it reduces to random selection, so say so; its natural regime is E11 |
 | TiFL (Chai et al., HPDC 2020) | Latency tiers; choose a tier (static or adaptive credits), then sample **uniformly within the tier** | A2 | Faithful static + adaptive; adaptive tier accuracy uses the validation split, never the test set |
 | FedCor (Tang et al., CVPR 2022) | GP over client loss changes with a learned correlation kernel; warm-up; greedy on posterior expected loss reduction | A4 heuristic | Port the official code. If that's infeasible, rename the row "correlation-aware heuristic (FedCor-inspired)" |
-| MMR-Diverse | The repo's constructed baseline: utility × 1/(1+participation) + MMR over histogram embeddings | Not a published method under this name | Keep (it's the strongest baseline); describe it as a constructed MMR baseline citing Carbonell & Goldstein (1998) |
+| MMR-Diverse (Carbonara, Drioli & Foresti, ICASSP 2024) | Loss-sorted candidate pool, re-ranked by MMR over cosine similarity of client gradient proxies | `heuristic/mmr_diverse.py` scores 0.4·loss + 0.3·grad-norm + 0.15·speed + 0.15·channel, damps by 1/(1+participation), uses label-histogram embeddings; fidelity to the ICASSP paper unchecked | Check against the paper and align, or document every deviation. Keep it, because it's the strongest baseline |
 | **DivFL (Balakrishnan et al., ICLR 2022)** — new | Greedy facility location on client gradients/updates (stale-update practical variant) | Only an FD port exists (`fd_native/divfl_fd.py`) | Add as the gradient-based counterpart APEX's theory compares with; report its gradient-upload cost |
 | **FedAEB** — new (R2.6) | The learning-based selector already discussed in the manuscript's related work | Missing | Implement from the paper; report trainable parameters and training time next to APEX's zero |
 | Fed-CBS — optional, recommended | Class-imbalance-reducing selection from label statistics | Missing | The closest histogram-based competitor; a next-round reviewer is likely to ask for it |
@@ -539,7 +544,7 @@ methods. The test set is used only for reporting.
 |---|---|---|---|---|---|---|---|
 | E0a | Baseline fidelity tests + selection audit | CPU only | all selectors | — | 0 | R2.5, R1.6 | P0 |
 | E0b | Replicate-noise floor | S1, each (method, seed) run 3 times | APEX, FedAvg | 3 | 18 | R1.2 | P0 |
-| E0c | Forensics on the submitted runs (diff `config.json` of `main_cifar10_a03_s*` vs `ablation_s*`) | — | — | — | 0 | R1.2 | P0 |
+| E0c | Forensics on the submitted runs, *optional* (the data isn't available) | — | — | — | 0 | R1.2 | — |
 | E1 | Main benchmark | S1 | All | 10 | 110 | R1.1–3, R1.9, R2.3, R2.5–6 | P0 |
 | E2 | Heterogeneity | α ∈ {0.1, 0.6}, IID, 2-shards-per-client; N=50, K=10 | All | 5 | 220 | R1.5 | P0 (α=0.1), P1 |
 | E3 | Scale (K stated per row) | α=0.3: (N,K) = (100,10), (200,20), (500,50); plus a low-participation stress test at α=0.1, (200,10) | All | 5 | 220 | R1.7 | P1 |
@@ -604,7 +609,7 @@ The stance column is the planned position.
 |---|---|---|---|---|---|
 | AE | Reconcile discrepancies; strengthen statistics and baseline/runtime comparisons; temper theory; notation | §§1–9 | all | all | Summary paragraph listing the four workstreams, with pointers |
 | R1.1 | +0.2 pp isn't "significant superiority" | 10 seeds at S1, paired tests + Holm, CIs, last-10-round metric; language rules | E1 | Abstract, Intro, §VI rewritten; "significantly" only with tests | Agree fully. Report ties as ties |
-| R1.2 | Table II ≠ Table V | Forensics; replicate-noise floor; canonical store; determinism | E0b, E0c, A7 | Tables regenerated from one store; the ablation reuses the main-table runs | Explain honestly: two separate executions of the same configuration on non-deterministic GPU kernels. Evidence: a code-identical ablation variant differed by 1.7 pp. Now structurally impossible |
+| R1.2 | Table II ≠ Table V | Replicate-noise floor; canonical store; determinism | E0b, A7 | Tables regenerated from one store; the ablation reuses the main-table runs | Explain honestly: two separate executions of the same configuration on non-deterministic GPU kernels. Evidence: a code-identical ablation variant differed by 1.7 pp. Now structurally impossible |
 | R1.3 | Fig. 2(b) text vs curves | Correct the sentence; every figure description checked against data | claim audit | §VI | Agree; corrected |
 | R1.4 | Ablation undercuts the components; no hard-setting ablation | Ablation at 3 settings incl. α=0.1 and N=200, 5–10 seeds, paired tests; core components ablated too (TS, diversity, phases, fixed schedule); survival rule (§10); components that fail are removed | E5, E10 | New ablation table + text using R1's own precise phrasing for the old result | Agree with the reviewer's restatement. Show the old differences were within noise (A7: an identical variant moved 1.7 pp; het scaling was ≈×1 at α=0.3). Report the new ablation, and which components were removed |
 | R1.5 | α=0.3 isn't the most benign | Fix the text | — | §VI | Agree; α=0.6 is the most benign non-IID level |
@@ -777,14 +782,125 @@ errors behind R1.2, R1.3, R1.5, R1.6, R1.7 and R1.14.
 
 ## 12. Needed from you
 
-1. The manuscript LaTeX (add it under `csfl_simulator/Paper Corrections/APEX_R1/`),
-   so the notation changes, claim audit and letter pointers can be done against
-   the real text.
-2. The submitted runs from the cluster: `artifacts/runs/main_cifar10_a03_s*`,
-   `ablation_s*` and the other `*_s{42,123,456}` directories. These are for
-   E0c, and to check what the paper reported for N=200 (A12).
-3. The exact FedAEB reference as cited in the manuscript.
-4. The revision deadline and the GPU budget, to decide how much of P1/P2 to run.
+Received: the manuscript (now in `csfl_simulator/Paper Corrections/APEX_R1/submitted/`)
+and the FedAEB reference: Zheng, Sun & Ni, IEEE TVT 73(6), 2024. FedAEB is a
+Soft Actor-Critic agent for joint client selection and resource allocation;
+implement its selection policy and report its trainable parameters. The
+submitted run data isn't available, and none of the plan depends on it.
+
+Still open:
+
+1. The revision deadline and the GPU budget, to decide how much of P1/P2 to run.
+2. Whether a deterministic 200-round ResNet-18 run fits the per-run time estimate
+   (one timed run on the cluster settles it).
+
+---
+
+## 13. Manuscript audit (`main_v3.tex` against the code and the reviews)
+
+Findings from reading the submitted text against `apex_v2.py`,
+`core/simulator.py` and the figure data. "Paper vs code" rows must be fixed
+even if a reviewer never looks at the code, because the paper describes an
+algorithm that wasn't run.
+
+### 13.1 Statements that don't match the code
+
+| # | Where | Paper says | Code does | Fix |
+|---|---|---|---|---|
+| M1 | Eq. 16, §IV-B | r_i = ΔAcc/\|S_t\|, "global test accuracy" | Δ of 0.6·acc + 0.2·time + 0.1·fair + 0.1·dp, all on the test set | Replaced by §2.3(c–d); nothing on the test set |
+| M2 | Eq. 21 | Mean pairwise JSD over all N(N−1)/2 pairs, normalised to [0, 1] | Mean **√JSD** over ≤200 evenly spaced pairs, divided by 0.6, capped at 1 | Replaced by H = I(Z;Y)/H(Y) (§2.3b) |
+| M3 | §IV-C text after Eq. 22 | het ≈ 0.3 at α=0.6 (diversity weight 0.60 → 0.18); het ≈ 0.9 at α=0.1 | het = 0.81 at α=0.6 (→ 0.48) and 1.00 at α=0.1 (audit script) | The numbers in the text are wrong; state H's measured values from the store |
+| M4 | §IV-A | Window holds the "global average loss"; statistics over older/newer *halves* of W | Mean training loss of the *last selected cohort*; compares the last W rounds with the W before them | Revised detector uses a selection-independent signal (§2.3h); describe exactly what is computed |
+| M5 | §IV-B | "Posterior mean and variance" | Welford running mean/variance of EMA-smoothed credits (not a Bayesian posterior); Beta fallback updated with min(credit, 1) | Revised posterior is a real conjugate update (§2.3e) |
+| M6 | §VI-B | "APEX leads … as the Thompson posteriors become well-calibrated" | Posteriors can't move selection at this reward scale (A6) | Delete; replace with E10 diagnostics |
+| M7 | §VI-D | "These results confirm that heterogeneity-aware scaling enables robust performance" at α=0.1 | Scaling is ×1.00 at α=0.1, i.e. inactive | Delete; H-scaling is evaluated by the E5 ablation |
+| M8 | §VI-G | "Indirect evidence … at α=0.1, where heterogeneity-aware scaling activates" | Same as M7 | Delete; the new ablation runs at α=0.1 directly |
+
+### 13.2 Claims the evidence doesn't support
+
+| # | Where | Claim | Problem | Fix |
+|---|---|---|---|---|
+| M9 | §VI-B | APEX and FedAvg reach the lowest final loss | Fig. 2(b): APEX ≈ 0.82, MMR ≈ 0.84, FedAvg ≈ 0.85 at round 200 (R1.3) | Generated sentence from data |
+| M10 | §VI-C, Fig. 3 caption | APEX "uniquely occupies the Pareto frontier" | (acc, Gini): APEX (.707, .19), MMR (.705, .16), FedAvg (.695, .08). None dominates another, so all three are on the frontier | State the frontier set; drop "uniquely" |
+| M11 | §VI-B | Highest peak accuracy "with the lowest variance … highly reproducible" | Peak is selected on test data; 3 seeds; the ablation shows ~2 pp replicate spread | Peak becomes secondary; reproducibility is measured (E0b) |
+| M12 | Abstract, §I, §VI-C, §VII | "4× better participation fairness than system-aware baselines" | Comparison is against the defective baselines (A1–A3) | Recompute against faithful baselines; likely changes |
+| M13 | Abstract, §VI-D, §VII | "+14.4 pp above Oort at α=0.1" | Same | Recompute |
+| M14 | Abstract, Impact, §VI-H, §VII | "Ranks first … in 8 out of 9 settings" | Count undefined; overlapping settings (R1.14) | Friedman + CD over enumerated settings |
+| M15 | §VI-G | α=0.3 "the most benign" | α=0.6 is (R1.5) | Delete |
+| M16 | §VI-G | "Removing phase hysteresis … identifying it as the dominant stability mechanism" | −0.09 pp with 3 seeds; std .039 vs .015 is one bad seed | Re-test at 3 settings (E5) |
+| M17 | §VI-H | "A limitation is elevated seed variance under near-IID conditions" | No IID result appears in the paper | Report the IID row (E2) or remove |
+| M18 | §V-A Remark 1(a) | Loss-biased selection "is the same mechanism that gives PoC its 3× speedup" | PoC queries fresh losses; APEX uses stale ones weighted 0.4 | Drop the analogy; Prop. 1 replaces Remark 1 |
+| M19 | §V-A Remark 1(b) | "Consistent with the analysis in [zhang2026fednkrf]" | FedNK-RF is federated kernel learning; it doesn't analyse client selection | Remove the citation |
+| M20 | §V-B | O(√(NT log T)) *Bayesian* regret citing Agrawal & Goyal (2012) | That paper gives frequentist bounds for Bernoulli bandits; the Bayesian bound is Russo & Van Roy. The bound's premise fails (R1.11) | Remark per §3.6 |
+| M21 | §V-C | "Without hysteresis … accuracy drops exceeding 10 pp per round at α=0.1, as observed in our experiments" | No figure or table shows it | Show the phase trace and accuracy (E5/E10) or delete |
+| M22 | Related Work, Oort | "An exploration bonus is used to avoid selecting the same clients repeatedly" | True of Oort, but not of the implementation used, which is why it locked in | Consistent once the baseline is faithful |
+
+### 13.3 Theory and citations
+
+| # | Where | Problem | Fix |
+|---|---|---|---|
+| M23 | Eq. 5, §I, §III-B | Cited to `li2020federated`, which is **FedProx** (Li, Sahu et al., MLSys 2020). The strongly convex bound with Γ and σ² is from Li, Huang, Yang, Wang & Zhang, "On the Convergence of FedAvg on Non-IID Data", ICLR 2020 | Replace with the non-convex bound (§3.5); fix the citation wherever FedProx is cited as the FedAvg bound |
+| M24 | Eqs. 5–7 | σ² (Eq. 7) is defined as gradient *dissimilarity*. In the cited bound, σ² is stochastic-gradient variance and heterogeneity is Γ, so dissimilarity is counted twice and σ²/K is misattributed to partial participation | Rewritten in §3.5 with σ² (SGD noise) and σ_G² (dissimilarity) kept separate |
+| M25 | Eq. 8, §III-C | Objective E‖w_T − w*‖² assumes a unique optimum (strong convexity) | Non-convex objective: min_t E‖∇F(w_t)‖², or final accuracy, stated as the empirical target |
+| M26 | §III-C, constraint 3 | "Per-client selection overhead O(1) in d" | Still true for clients under the revised design. The server's O(K·d) credit computation must be stated separately |
+
+### 13.4 Notation collisions (R2.1, R2.2)
+
+| Symbol | Uses in the submitted text | Resolution |
+|---|---|---|
+| **w** | Model parameters (Eqs. 2–4); scalar weights w_l, w_g, w_s, w_q (Eq. 12); w_ts, w_div, w_rec (Eqs. 22, 24) | λ for context weights; β for term weights; w only for models |
+| **σ²** | Gradient dissimilarity (Eq. 7); posterior variance σ²_i (Eq. 13); σ²_floor (Eq. 14); σ_rw (§IV-A) | σ² = SGD variance; σ_G² dissimilarity; v_i posterior variance; s_W window std |
+| **α** | Dirichlet concentration; EMA α_e (Eq. 15); Beta parameters α_i (§IV-E) | α only for Dirichlet; the other two disappear in the revision |
+| **B** | Batch size (§III-A); constant in Eq. 5 | Constants become c_1, c_2 |
+| **L** | Local loss L_n (Eq. 1); number of classes L (Table I, §V-D) | M classes; L smoothness |
+| **γ / Γ** | Blend weight γ (Eqs. 17–18); client drift Γ (Eq. 6) | γ disappears |
+| **ρ** | Relative improvement rate (Eq. 9) | Keep; the plan's loss decrease is written ΔL_t in the paper |
+| **Δ** | Rounds since selection Δ_i (Eq. 23) | a_i; Δ_i becomes the model update |
+| **δ** | Dwell δ_min | D_min; δ is the discount |
+| **n** | Client index n (§III); observation count n_i (§IV-B) | Clients i, j, k throughout; N_i discounted count |
+| **i** | Sample index (Eq. 1) and client index (§IV) | Samples (x, y) ∈ D_i; i for clients |
+| — | "defined below" before Γ, σ² (Eq. 5) | Define immediately after each equation; add a notation table |
+
+### 13.5 Presentation
+
+- Abstract: "eight baseline methods" (seven), "zero trainable parameters",
+  "3.9 ms" without N, "4×", "14.4 pp". All are rewritten from the store.
+- Table II: F1 bold goes to MMR (correct) but the text never discusses it
+  (R1.9). Say "macro-F1". Replace "Final Acc." with the last-10-round mean.
+- Table III: no std (R2.3). Every method's Gini is identical at α = 0.1, 0.3
+  and 0.6 (APEX .19/.19/.19, PoC .53/.53/.53). For random or locked-in
+  selectors that is expected, but for APEX it means its participation doesn't
+  respond to heterogeneity at all. Check it in the new runs, and say what it
+  means if it persists.
+- Table IV: no std; caption says K=10 but N=200 used K=20 (R1.7); duplicated
+  C-10 and N=50 columns (R1.14 overlap).
+- Table V: the "Std" column duplicates the ± values.
+- Fig. 2 caption: shading "for APEX" only; shade every method or none.
+- Fig. 1 (infographic): must be redrawn for the revised components.
+- §VI-A: add the validation split, seeds (dev vs eval), determinism,
+  baseline tuning and the fidelity appendix.
+- Related Work: add Fed-CBS and the non-convex FedAvg analysis; keep FedAEB
+  (now compared, R2.6).
+- §VII/§VIII: merge Future Work into Conclusion, or keep but trim; either is
+  fine for TAI.
+
+---
+
+## 14. Section-by-section rewrite map
+
+| Section | Keep | Rewrite | New |
+|---|---|---|---|
+| Title | ✓ | — | — |
+| Abstract | Framing sentence | Every number, from the store; "ranking first" becomes a statistically qualified statement | "No gradient uploads, no server test data" |
+| Impact Statement | Opening | Remove "8 out of 9", "4×"; temper the healthcare/IoT claim (R1.13) | One sentence on drift support |
+| I. Introduction | Motivation | Fix the Eq. 5 citation (M23); contribution list rewritten to match what's proven | Contribution: Prop. 1 and Prop. 2 |
+| II. Related Work | Structure | MMR paragraph (M10-consistent); Oort paragraph | Fed-CBS, non-convex FedAvg analysis; Table I with a measured-cost column pointer |
+| III. System Model | A–B setup (Eqs. 1–4) | III-B convergence bound (M23–M25); III-C problem statement | A1–A3; validation split; what clients send; notation table |
+| IV. APEX | Phase detector idea, recency, greedy | IV-B posterior and reward (M1, M5); IV-C diversity and het (M2, M3); Algorithm 1 | Credit assignment subsection; histogram refresh; privacy paragraph with the E13 result |
+| V. Theory | — | Remark 1 → Prop. 1 + Corollary 1; Prop. 2 → Remark; complexity with measured costs | Prop. 2 (submodularity); "Where the theory stops" paragraph; appendix proofs |
+| VI. Experiments | Datasets, models | Everything else, from the store | Protocol subsection; faithful baselines; ablation at 3 settings; runtime table (R2.4); drift; E9/E10 diagnostics; F1 and worst-class discussion |
+| VII–VIII | — | From results | Limitations paragraph: A1 scope, SecAgg fallback, histogram privacy |
+| Appendix (new) | — | — | Proofs; baseline fidelity table; hyperparameters and grids; sensitivity; per-seed results; replicate noise |
 
 ---
 
@@ -820,3 +936,9 @@ and exact statement against the source.
 - Russo & Van Roy (2014/2018) for the original O(√(NT log T)) Bayesian regret
   reference in the submitted §V.B.
 - Yan et al., CriticalFL, KDD 2023.
+- Li, Huang, Yang, Wang & Zhang, "On the Convergence of FedAvg on Non-IID
+  Data", ICLR 2020. The submitted paper cites FedProx (`li2020federated`) for
+  this bound (M23).
+- Carbonara, Drioli & Foresti, "Diversity-Aware Client Selection via Maximal
+  Marginal Relevance for Federated Learning", ICASSP 2024 (MMR-Diverse).
+- Zheng, Sun & Ni, "FedAEB", IEEE TVT 73(6), 2024.
